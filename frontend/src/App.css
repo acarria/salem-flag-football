@@ -1,0 +1,5 @@
+/* Purge default CRA styles for Tailwind */
+body {
+  font-family: inherit;
+  background: none;
+}
