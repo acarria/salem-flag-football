@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime, Boolean, Text, JSON
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime, Boolean, Text, JSON, Numeric
 from sqlalchemy.sql import func
 from app.db.db import Base
 
@@ -38,7 +38,7 @@ class League(Base):
     
     # Registration settings
     registration_deadline = Column(Date, nullable=True)  # When registration closes
-    registration_fee = Column(Integer, nullable=True)  # Registration fee in cents
+    registration_fee = Column(Numeric(10, 2), nullable=True)  # Registration fee in dollars
     
     # Advanced settings stored as JSON
     settings = Column(JSON, nullable=True)  # Flexible settings for future features

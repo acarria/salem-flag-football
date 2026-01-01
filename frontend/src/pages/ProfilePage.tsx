@@ -3,7 +3,7 @@ import { useUser } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
 import { getEmailError, getPhoneError } from '../utils/validation';
-import apiService, { UserProfile } from '../services/api';
+import { apiService, UserProfile } from '../services';
 
 export default function ProfilePage() {
   const { user } = useUser();
@@ -76,7 +76,7 @@ export default function ProfilePage() {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     
-    setProfile(prev => prev ? {
+    setProfile((prev: UserProfile | null) => prev ? {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     } : null);

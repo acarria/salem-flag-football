@@ -1,5 +1,5 @@
 import React from 'react';
-import { AdminConfig, AdminConfigCreateRequest } from '../../../types';
+import { AdminConfig, AdminConfigCreateRequest } from '../../../services';
 
 interface AdminManagementProps {
   admins: AdminConfig[];

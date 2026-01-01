@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import RegistrationModal from '../components/modals/RegistrationModal';
 import BaseLayout from '../components/layout/BaseLayout';
-import apiService, { Standing, Game } from '../services/api';
+import { apiService, Standing, Game } from '../services';
 
 export default function PublicHomePage() {
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);

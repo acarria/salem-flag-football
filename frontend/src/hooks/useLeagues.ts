@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { League, LeagueCreateRequest, LeagueUpdateRequest, LeagueStats } from '../types';
-import { leaguesApi } from '../services/api/leagues';
+import { League, LeagueCreateRequest, LeagueUpdateRequest, LeagueStats } from '../services';
+import { leagueApi } from '../services';
 
 export const useLeagues = () => {
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -15,7 +15,7 @@ export const useLeagues = () => {
     setError(null);
     try {
       console.log('Loading leagues...');
-      const leaguesData = await leaguesApi.getAllLeagues();
+      const leaguesData = await leagueApi.getAllLeagues();
       console.log('Leagues loaded:', leaguesData);
       setLeagues(leaguesData);
     } catch (err) {
@@ -28,7 +28,7 @@ export const useLeagues = () => {
 
   const loadLeagueStats = async (leagueId: number) => {
     try {
-      const stats = await leaguesApi.getLeagueStats(leagueId);
+      const stats = await leagueApi.getLeagueStats(leagueId);
       setLeagueStats(stats);
     } catch (err) {
       console.error('Failed to load league stats:', err);
@@ -37,7 +37,7 @@ export const useLeagues = () => {
 
   const createLeague = async (leagueData: LeagueCreateRequest) => {
     try {
-      await leaguesApi.createLeague(leagueData);
+      await leagueApi.createLeague(leagueData);
       setSuccess('League created successfully!');
       await loadLeagues();
     } catch (err) {
@@ -49,7 +49,7 @@ export const useLeagues = () => {
 
   const updateLeague = async (leagueId: number, leagueData: LeagueUpdateRequest) => {
     try {
-      await leaguesApi.updateLeague(leagueId, leagueData);
+      await leagueApi.updateLeague(leagueId, leagueData);
       setSuccess('League updated successfully!');
       await loadLeagues();
     } catch (err) {
@@ -65,7 +65,7 @@ export const useLeagues = () => {
     }
 
     try {
-      await leaguesApi.deleteLeague(leagueId);
+      await leagueApi.deleteLeague(leagueId);
       setSuccess('League deleted successfully!');
       await loadLeagues();
     } catch (err) {

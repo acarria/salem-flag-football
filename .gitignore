@@ -30,6 +30,7 @@ coverage/
 # Misc
 *.log
 *.tgz
+.cursorignore
 
 # Local env
 .env.local
@@ -42,3 +43,10 @@ public/*.map
 
 # Project-specific
 flag_football_league_blueprint.md
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

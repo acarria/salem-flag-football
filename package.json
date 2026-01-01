@@ -1,0 +1,23 @@
+{
+  "name": "salem-flag-football",
+  "version": "1.0.0",
+  "description": "A comprehensive flag football league management platform for the Salem Flag Football League in Salem, Massachusetts. This platform handles player registration, league management, team organization, and provides a modern web interface for both players and administrators.",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acarria/salem-flag-football.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/acarria/salem-flag-football/issues"
+  },
+  "homepage": "https://github.com/acarria/salem-flag-football#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.7.2"
+  }
+}

@@ -2,19 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
-import apiService, { League, LeagueCreateRequest, LeagueUpdateRequest, LeagueStats, AdminConfig, AdminConfigCreateRequest, AdminConfigUpdateRequest } from '../services/api';
+import { League, LeagueCreateRequest, LeagueUpdateRequest, AdminConfig, AdminConfigCreateRequest } from '../services';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'compass_draw';
-type GameFormat = '7v7' | '5v5' | '4v4' | '3v3';
+type GameFormat = '7v7' | '6v6' | '5v5';
 
 export default function AdminPage() {
   const { isSignedIn } = useAuth();
   const { user } = useUser();
   const navigate = useNavigate();
+  const { request: authenticatedRequest } = useAuthenticatedApi();
   
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
-  const [leagueStats, setLeagueStats] = useState<LeagueStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -75,20 +75,13 @@ export default function AdminPage() {
     loadAdmins();
   }, [isSignedIn, user, navigate]);
 
-  // Load league stats when a league is selected
-  useEffect(() => {
-    if (selectedLeague) {
-      loadLeagueStats(selectedLeague.id);
-    }
-  }, [selectedLeague]);
+
 
   const loadLeagues = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('Loading leagues...');
-      const leaguesData = await apiService.getAllLeagues();
-      console.log('Leagues loaded:', leaguesData);
+      const leaguesData = await authenticatedRequest<League[]>('/admin/leagues');
       setLeagues(leaguesData);
     } catch (err) {
       console.error('Failed to load leagues:', err);
@@ -98,18 +91,11 @@ export default function AdminPage() {
     }
   };
 
-  const loadLeagueStats = async (leagueId: number) => {
-    try {
-      const stats = await apiService.getLeagueStats(leagueId);
-      setLeagueStats(stats);
-    } catch (err) {
-      console.error('Failed to load league stats:', err);
-    }
-  };
+
 
   const loadAdmins = async () => {
     try {
-      const adminsData = await apiService.getAdminConfigs();
+      const adminsData = await authenticatedRequest<AdminConfig[]>('/admin/admins');
       setAdmins(adminsData);
     } catch (err) {
       console.error('Failed to load admins:', err);
@@ -123,7 +109,11 @@ export default function AdminPage() {
     }
 
     try {
-      await apiService.addAdminEmail(adminFormData as AdminConfigCreateRequest);
+      await authenticatedRequest<AdminConfig>('/admin/admins', {
+        method: 'POST',
+        body: JSON.stringify(adminFormData as AdminConfigCreateRequest),
+      });
+      
       setSuccess('Admin added successfully!');
       setAdminFormData({ email: '', role: 'admin' });
       setShowAdminModal(false);
@@ -141,7 +131,10 @@ export default function AdminPage() {
     }
 
     try {
-      await apiService.removeAdminEmail(email);
+      await authenticatedRequest<any>(`/admin/admins/${email}`, {
+        method: 'DELETE',
+      });
+      
       setSuccess('Admin removed successfully!');
       loadAdmins();
     } catch (err) {
@@ -157,7 +150,11 @@ export default function AdminPage() {
     }
 
     try {
-      await apiService.createLeague(formData as LeagueCreateRequest);
+      const response = await authenticatedRequest<League>('/admin/leagues', {
+        method: 'POST',
+        body: JSON.stringify(formData as LeagueCreateRequest),
+      });
+      
       setSuccess('League created successfully!');
       setShowCreateModal(false);
       resetForm();
@@ -172,7 +169,11 @@ export default function AdminPage() {
     if (!editingLeague) return;
 
     try {
-      await apiService.updateLeague(editingLeague.id, formData as LeagueUpdateRequest);
+      await authenticatedRequest<League>(`/admin/leagues/${editingLeague.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(formData as LeagueUpdateRequest),
+      });
+      
       setSuccess('League updated successfully!');
       setShowEditModal(false);
       setEditingLeague(null);
@@ -190,7 +191,10 @@ export default function AdminPage() {
     }
 
     try {
-      await apiService.deleteLeague(leagueId);
+      await authenticatedRequest<any>(`/admin/leagues/${leagueId}`, {
+        method: 'DELETE',
+      });
+      
       setSuccess('League deleted successfully!');
       loadLeagues();
     } catch (err) {
@@ -253,7 +257,7 @@ export default function AdminPage() {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     
-    setFormData(prev => ({
+    setFormData((prev: Partial<LeagueCreateRequest>) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
@@ -449,7 +453,7 @@ export default function AdminPage() {
           <AdminManagementModal
             admins={admins}
             formData={adminFormData}
-            onInputChange={(e) => setAdminFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))}
+            onInputChange={(e) => setAdminFormData((prev: Partial<AdminConfigCreateRequest>) => ({ ...prev, [e.target.name]: e.target.value }))}
             onSubmit={handleAddAdmin}
             onRemove={handleRemoveAdmin}
             onCancel={() => {
@@ -640,9 +644,8 @@ function LeagueFormModal({
                 className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
               >
                 <option value="7v7">7v7</option>
+                <option value="6v6">6v6</option>
                 <option value="5v5">5v5</option>
-                <option value="4v4">4v4</option>
-                <option value="3v3">3v3</option>
               </select>
             </div>
             <div>
@@ -730,15 +733,16 @@ function LeagueFormModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Registration Fee (cents)</label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Registration Fee (dollars)</label>
               <input
                 type="number"
                 name="registration_fee"
                 value={formData.registration_fee || ''}
                 onChange={onInputChange}
                 min="0"
-                step="100"
+                step="0.01"
                 className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
+                placeholder="50.00"
               />
             </div>
           </div>

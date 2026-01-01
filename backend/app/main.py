@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, user, registration, team, league, admin
+from app.api import auth, user, registration, team, league
+from app.api.admin.main import router as admin_router
 
 app = FastAPI()
 
@@ -18,7 +19,7 @@ app.include_router(user.router, prefix="/user")
 app.include_router(registration.router, prefix="/registration")
 app.include_router(team.router, prefix="/team")
 app.include_router(league.router, prefix="/league")
-app.include_router(admin.router, prefix="/admin")
+app.include_router(admin_router)
 
 @app.get("/health")
 def health_check():

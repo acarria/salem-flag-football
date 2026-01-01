@@ -11,5 +11,6 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     CLERK_JWKS_URL: str = os.getenv("CLERK_JWKS_URL", "https://REDACTED_CLERK_INSTANCE.clerk.accounts.dev/.well-known/jwks.json")
     CLERK_ISSUER: str = os.getenv("CLERK_ISSUER", "https://REDACTED_CLERK_INSTANCE.clerk.accounts.dev/")
+    CLERK_SECRET_KEY: str = os.getenv("CLERK_SECRET_KEY", "REDACTED_CLERK_SECRET_KEY")
 
 settings = Settings() 
