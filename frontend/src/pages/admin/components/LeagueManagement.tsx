@@ -1,5 +1,5 @@
 import React from 'react';
-import { League, LeagueStats } from '../../../types';
+import { League, LeagueStats } from '../../../services';
 
 interface LeagueManagementProps {
   leagues: League[];

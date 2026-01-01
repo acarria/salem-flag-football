@@ -5,8 +5,10 @@ import ProfileCompletionModal from './components/modals/ProfileCompletionModal';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
+import LeaguesPage from './pages/LeaguesPage';
 import TestPage from './components/TestPage';
-import apiService, { UserProfile } from './services/api';
+import { apiService, UserProfile } from './services';
+import { AuthProvider } from './contexts/AuthContext';
 
 function App() {
   const { isSignedIn, isLoaded, userId } = useAuth();
@@ -91,32 +93,35 @@ function App() {
     );
   }
 
-  return (
-    <Router>
-      <div className="min-h-screen bg-black">
-        {/* Admin dashboard is now handled within the page components */}
+    return (
+    <AuthProvider>
+      <Router>
+        <div className="min-h-screen bg-black">
+          {/* Admin dashboard is now handled within the page components */}
 
-        {/* Routes */}
-                  <Routes>
+          {/* Routes */}
+          <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/leagues" element={<LeaguesPage />} />
             <Route path="/test" element={<TestPage />} />
           </Routes>
 
-        {/* Show profile completion modal for authenticated users without complete profiles */}
-        {isSignedIn && !isProfileComplete && (
-          <ProfileCompletionModal 
-            isOpen={showProfileModal} 
-            onComplete={handleProfileComplete}
-            onCancel={handleProfileCancel}
-            clerkUser={user}
-          />
-        )}
+          {/* Show profile completion modal for authenticated users without complete profiles */}
+          {isSignedIn && !isProfileComplete && (
+            <ProfileCompletionModal 
+              isOpen={showProfileModal} 
+              onComplete={handleProfileComplete}
+              onCancel={handleProfileCancel}
+              clerkUser={user}
+            />
+          )}
 
 
-      </div>
-    </Router>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 

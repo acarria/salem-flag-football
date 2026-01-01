@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import apiService, { League, LeagueCreateRequest, LeagueUpdateRequest, LeagueStats, AdminConfig, AdminConfigCreateRequest, AdminConfigUpdateRequest } from '../services/api';
+import apiService, { 
+  League, 
+  LeagueCreateRequest, 
+  LeagueUpdateRequest, 
+  LeagueStats, 
+  AdminConfig, 
+  AdminConfigCreateRequest, 
+  AdminConfigUpdateRequest,
+  TeamGenerationResponse,
+  ScheduleGenerationResponse
+} from '../services';
+import { 
+  MemberManagement, 
+  TeamGeneration, 
+  ScheduleGeneration 
+} from './admin/components';
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -8,7 +23,7 @@ interface AdminDashboardProps {
 }
 
 type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'compass_draw';
-type GameFormat = '7v7' | '5v5' | '4v4' | '3v3';
+type GameFormat = '7v7' | '6v6' | '5v5';
 
 export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps) {
   const { isSignedIn } = useAuth();
@@ -33,6 +48,12 @@ export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps)
     email: '',
     role: 'admin'
   });
+
+  // New admin features state
+  const [showMemberManagement, setShowMemberManagement] = useState(false);
+  const [showTeamGeneration, setShowTeamGeneration] = useState(false);
+  const [showScheduleGeneration, setShowScheduleGeneration] = useState(false);
+  const [showFakeDataModal, setShowFakeDataModal] = useState(false);
   
   // Form state for league creation/editing
   const [formData, setFormData] = useState<Partial<LeagueCreateRequest>>({
@@ -140,6 +161,47 @@ export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps)
     } catch (err) {
       console.error('Failed to remove admin:', err);
       setError('Failed to remove admin. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // New admin feature handlers
+  const handleTeamsGenerated = (response: TeamGenerationResponse) => {
+    setSuccess(`Teams generated successfully! ${response.teams_created} teams created with ${response.players_assigned} players assigned.`);
+    // Refresh league data to show updated team counts
+    if (selectedLeague) {
+      loadLeagueStats(selectedLeague.id);
+    }
+  };
+
+  const handleScheduleGenerated = (response: ScheduleGenerationResponse) => {
+    setSuccess(`Schedule generated successfully! ${response.games_created} games created over ${response.weeks_scheduled} weeks.`);
+  };
+
+  const handleAddFakeData = async () => {
+    if (!selectedLeague) {
+      setError('Please select a league first.');
+      return;
+    }
+
+    if (!confirm('This will add 24 fake players and 5 groups to the league. Continue?')) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await apiService.addFakeData(selectedLeague.id);
+      setSuccess(result.message);
+      // Refresh league data
+      loadLeagues();
+      if (selectedLeague) {
+        loadLeagueStats(selectedLeague.id);
+      }
+    } catch (err) {
+      console.error('Failed to add fake data:', err);
+      setError('Failed to add fake data. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -259,7 +321,7 @@ export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps)
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     
-    setFormData(prev => ({
+    setFormData((prev: Partial<LeagueCreateRequest>) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : 
               type === 'number' ? (value === '' ? undefined : parseInt(value)) :
@@ -400,6 +462,38 @@ export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps)
                     <p className="text-gray-300 text-sm">{selectedLeague.description}</p>
                   )}
                 </div>
+
+                {/* League Actions */}
+                <div className="border-t border-gray-600 pt-4">
+                  <h6 className="text-pumpkin font-semibold mb-3">League Actions</h6>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setShowMemberManagement(true)}
+                      className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                    >
+                      Manage Members
+                    </button>
+                    <button
+                      onClick={() => setShowTeamGeneration(true)}
+                      className="px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                    >
+                      Generate Teams
+                    </button>
+                    <button
+                      onClick={() => setShowScheduleGeneration(true)}
+                      className="px-3 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition-colors"
+                    >
+                      Generate Schedule
+                    </button>
+                    <button
+                      onClick={handleAddFakeData}
+                      disabled={isLoading}
+                      className="px-3 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition-colors disabled:opacity-50"
+                    >
+                      Add Test Data
+                    </button>
+                  </div>
+                </div>
                 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -501,7 +595,7 @@ export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps)
           <AdminManagementModal
             admins={admins}
             formData={adminFormData}
-            onInputChange={(e) => setAdminFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))}
+            onInputChange={(e) => setAdminFormData((prev: Partial<AdminConfigCreateRequest>) => ({ ...prev, [e.target.name]: e.target.value }))}
             onSubmit={handleAddAdmin}
             onRemove={handleRemoveAdmin}
             onCancel={() => {
@@ -509,6 +603,35 @@ export default function AdminDashboard({ isOpen, onClose }: AdminDashboardProps)
               setAdminFormData({ email: '', role: 'admin' });
             }}
             isLoading={isLoading}
+          />
+        )}
+
+        {/* Member Management Modal */}
+        {showMemberManagement && selectedLeague && (
+          <MemberManagement
+            leagueId={selectedLeague.id}
+            leagueName={selectedLeague.name}
+            onClose={() => setShowMemberManagement(false)}
+          />
+        )}
+
+        {/* Team Generation Modal */}
+        {showTeamGeneration && selectedLeague && (
+          <TeamGeneration
+            leagueId={selectedLeague.id}
+            leagueName={selectedLeague.name}
+            onClose={() => setShowTeamGeneration(false)}
+            onTeamsGenerated={handleTeamsGenerated}
+          />
+        )}
+
+        {/* Schedule Generation Modal */}
+        {showScheduleGeneration && selectedLeague && (
+          <ScheduleGeneration
+            leagueId={selectedLeague.id}
+            leagueName={selectedLeague.name}
+            onClose={() => setShowScheduleGeneration(false)}
+            onScheduleGenerated={handleScheduleGenerated}
           />
         )}
       </div>
@@ -671,9 +794,8 @@ function LeagueFormModal({
                 className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
               >
                 <option value="7v7">7v7</option>
+                <option value="6v6">6v6</option>
                 <option value="5v5">5v5</option>
-                <option value="4v4">4v4</option>
-                <option value="3v3">3v3</option>
               </select>
             </div>
           </div>
@@ -898,16 +1020,16 @@ function LeagueFormModal({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Registration Fee (cents)</label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Registration Fee (dollars)</label>
               <input
                 type="number"
                 name="registration_fee"
                 value={formData.registration_fee || ''}
                 onChange={onInputChange}
                 min="0"
-                step="100"
+                step="0.01"
                 className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-                placeholder="0 = free"
+                placeholder="50.00"
               />
             </div>
           </div>

@@ -8,3 +8,4 @@ pydantic[email]
 python-jose
 passlib[bcrypt]
 httpx
+PyJWT

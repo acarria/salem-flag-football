@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { getEmailError, getPhoneError } from '../../utils/validation';
-import apiService, { UserProfile, League } from '../../services/api';
+import { apiService, UserProfile, League } from '../../services';
 
 interface RegistrationModalProps {
   isOpen: boolean;

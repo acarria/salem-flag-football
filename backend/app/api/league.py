@@ -2,9 +2,75 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.models.league import League
+from app.models.player import Player
+from app.models.team import Team
 from datetime import date
+from typing import List
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class PublicLeagueResponse(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    start_date: str
+    end_date: str | None
+    num_weeks: int
+    format: str
+    tournament_format: str
+    game_duration: int
+    games_per_week: int
+    max_teams: int | None
+    min_teams: int
+    registration_deadline: str | None
+    registration_fee: int | None
+    is_active: bool
+    registered_players_count: int
+    registered_teams_count: int
+
+    class Config:
+        from_attributes = True
+
+@router.get("/public/leagues", response_model=List[PublicLeagueResponse], summary="Get all leagues (public view)")
+async def get_public_leagues(db: Session = Depends(get_db)):
+    """Get all leagues with registration statistics for public viewing"""
+    leagues = db.query(League).order_by(League.created_at.desc()).all()
+    
+    result = []
+    for league in leagues:
+        # Count registered players and teams
+        player_count = db.query(Player).filter(
+            Player.league_id == league.id,
+            Player.registration_status == 'registered'
+        ).count()
+        
+        team_count = db.query(Team).filter(
+            Team.league_id == league.id,
+            Team.is_active == True
+        ).count()
+        
+        result.append(PublicLeagueResponse(
+            id=league.id,
+            name=league.name,
+            description=league.description,
+            start_date=league.start_date.isoformat(),
+            end_date=league.end_date.isoformat() if league.end_date else None,
+            num_weeks=league.num_weeks,
+            format=league.format,
+            tournament_format=league.tournament_format,
+            game_duration=league.game_duration,
+            games_per_week=league.games_per_week,
+            max_teams=league.max_teams,
+            min_teams=league.min_teams,
+            registration_deadline=league.registration_deadline.isoformat() if league.registration_deadline else None,
+            registration_fee=league.registration_fee,
+            is_active=league.is_active,
+            registered_players_count=player_count,
+            registered_teams_count=team_count
+        ))
+    
+    return result
 
 @router.get("/schedule", summary="Get league schedule")
 async def get_schedule():

@@ -64,6 +64,7 @@ export default function BaseLayout({
             {/* Center: Navigation Links (desktop only) */}
             <nav className="hidden md:flex flex-1 justify-center gap-8">
               <Link to="/" className="text-white hover:text-pumpkin transition-colors font-medium">Home</Link>
+              <Link to="/leagues" className="text-white hover:text-pumpkin transition-colors font-medium">Leagues</Link>
               <Link to="/rules" className="text-white hover:text-pumpkin transition-colors font-medium">Rules</Link>
               <Link to="/info" className="text-white hover:text-pumpkin transition-colors font-medium">League Info</Link>
               <Link to="/contact" className="text-white hover:text-pumpkin transition-colors font-medium">Contact</Link>
@@ -140,6 +141,7 @@ export default function BaseLayout({
               Salem Flag Football League - Community flag football in historic Salem, MA
             </p>
             <div className="flex justify-center gap-6 text-sm">
+              <Link to="/leagues" className="text-pumpkin hover:text-deeporange">Leagues</Link>
               <Link to="/rules" className="text-pumpkin hover:text-deeporange">Rules</Link>
               <Link to="/info" className="text-pumpkin hover:text-deeporange">League Info</Link>
               <Link to="/contact" className="text-pumpkin hover:text-deeporange">Contact</Link>

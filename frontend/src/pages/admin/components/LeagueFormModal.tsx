@@ -1,6 +1,6 @@
 import React from 'react';
-import { LeagueCreateRequest } from '../../../types';
-import { TournamentFormat } from '../../../types/common';
+import { LeagueCreateRequest } from '../../../services';
+import { TournamentFormat } from '../../../services';
 
 interface LeagueFormModalProps {
   title: string;
@@ -91,9 +91,8 @@ export default function LeagueFormModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pumpkin focus:border-transparent"
               >
                 <option value="7v7">7v7</option>
+                <option value="6v6">6v6</option>
                 <option value="5v5">5v5</option>
-                <option value="4v4">4v4</option>
-                <option value="3v3">3v3</option>
               </select>
             </div>
             <div>
@@ -306,7 +305,7 @@ export default function LeagueFormModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Registration Fee (cents)
+                Registration Fee (dollars)
               </label>
               <input
                 type="number"
@@ -314,9 +313,9 @@ export default function LeagueFormModal({
                 value={formData.registration_fee || ''}
                 onChange={onInputChange}
                 min="0"
-                step="100"
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pumpkin focus:border-transparent"
-                placeholder="5000 = $50.00"
+                placeholder="50.00"
               />
             </div>
           </div>
