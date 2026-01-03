@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
+from math import ceil
 from app.db.db import get_db
 from app.models.admin_config import AdminConfig
+from app.models.player import Player
+from app.models.league_player import LeaguePlayer
 from app.api.schemas.admin import (
-    AdminConfigResponse, AdminConfigCreateRequest, AdminConfigUpdateRequest
+    AdminConfigResponse, AdminConfigCreateRequest, AdminConfigUpdateRequest, 
+    UserResponse, PaginatedUserResponse
 )
 from app.api.admin.dependencies import get_admin_user
 from app.services.admin_service import AdminService
@@ -74,3 +79,62 @@ async def remove_admin_email(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to remove admin: {str(e)}")
+
+@router.get("/users", response_model=PaginatedUserResponse, summary="Get all users (paginated)")
+async def get_all_users(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(25, ge=1, le=100, description="Number of users per page"),
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+):
+    """Get all users with their basic information (paginated)"""
+    try:
+        # Get total count of active players
+        total_count = db.query(func.count(Player.id)).filter(Player.is_active == True).scalar() or 0
+        
+        # Calculate pagination
+        total_pages = ceil(total_count / page_size) if total_count > 0 else 0
+        
+        # Validate page number
+        if page > total_pages and total_pages > 0:
+            raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}")
+        
+        # Get paginated players, ordered by creation date (newest first)
+        offset = (page - 1) * page_size
+        players = db.query(Player).filter(
+            Player.is_active == True
+        ).order_by(Player.created_at.desc()).offset(offset).limit(page_size).all()
+        
+        # For each player, count the number of leagues they're registered for
+        result = []
+        for player in players:
+            # Count league registrations from LeaguePlayer table
+            leagues_count = db.query(func.count(LeaguePlayer.id)).filter(
+                LeaguePlayer.player_id == player.id,
+                LeaguePlayer.is_active == True
+            ).scalar() or 0
+            
+            result.append(UserResponse(
+                clerk_user_id=player.clerk_user_id,
+                first_name=player.first_name,
+                last_name=player.last_name,
+                email=player.email,
+                phone=player.phone,
+                date_of_birth=player.date_of_birth,
+                gender=player.gender,
+                registration_status=player.registration_status,
+                created_at=player.created_at,
+                leagues_count=leagues_count
+            ))
+        
+        return PaginatedUserResponse(
+            users=result,
+            total=total_count,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")

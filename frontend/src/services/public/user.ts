@@ -19,4 +19,8 @@ export class UserApiService extends BaseApiService {
       body: JSON.stringify(profile),
     });
   }
+
+  async checkLeagueRegistration(userId: string, leagueId: number): Promise<{ isRegistered: boolean }> {
+    return this.request<{ isRegistered: boolean }>(`/user/profile/${userId}/registered/${leagueId}`);
+  }
 }

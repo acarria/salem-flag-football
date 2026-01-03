@@ -46,6 +46,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   // Update fieldErrors type
   type EmailErrorType = string | { message: string; suggestion: string };
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string | EmailErrorType }>({});
+  const [isLeagueRegistered, setIsLeagueRegistered] = useState(false);
 
   // Load leagues and user profile when modal opens
   useEffect(() => {
@@ -63,6 +64,11 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           // Load user profile
           const profile = await apiService.getUserProfile(user.id);
           setUserProfile(profile);
+
+          // Check registration status for selected league
+          if (leaguesData.length > 0) {
+            await checkLeagueRegistrationStatus(leaguesData[0].id);
+          }
 
           // Pre-fill solo registration with user profile data
           if (profile && type === 'solo') {
@@ -119,6 +125,28 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   }, [isOpen, user, type]);
 
   if (!isOpen) return null;
+
+  const checkLeagueRegistrationStatus = async (leagueId: number) => {
+    if (!user) return;
+    try {
+      const result = await apiService.checkLeagueRegistration(user.id, leagueId);
+      setIsLeagueRegistered(result.isRegistered);
+      if (result.isRegistered) {
+        setError('You are already registered for this league. You cannot register twice.');
+      } else {
+        setError(''); // Clear error if not registered
+      }
+    } catch (err) {
+      console.error('Failed to check registration status:', err);
+      setIsLeagueRegistered(false);
+    }
+  };
+
+  const handleLeagueChange = async (leagueId: number) => {
+    setSelectedLeague(leagueId);
+    setError('');
+    await checkLeagueRegistrationStatus(leagueId);
+  };
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>, idx?: number) => {
     const { name, value, type } = e.target;
@@ -199,6 +227,12 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
         return;
       }
 
+      // Check if already registered before attempting registration
+      if (isLeagueRegistered) {
+        setError('You are already registered for this league. You cannot register twice.');
+        return;
+      }
+
       try {
         // Create user profile from registration data
         const userProfile: UserProfile = {
@@ -237,9 +271,15 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
         } else {
           setError('User not found. Please try signing in again.');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to save registration:', err);
-        setError('Failed to save registration. Please try again.');
+        // Check if error is about duplicate registration
+        if (err?.message?.includes('already registered') || err?.response?.data?.detail?.includes('already registered')) {
+          setError('You are already registered for this league. You cannot register twice.');
+          setIsLeagueRegistered(true);
+        } else {
+          setError('Failed to save registration. Please try again.');
+        }
       }
     } else {
       const errors = validateGroup();
@@ -278,26 +318,26 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
-      <div className="bg-gunmetal border-2 border-pumpkin rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative">
+      <div className="bg-gunmetal border-2 border-accent rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative">
         <button
-          className="absolute top-2 right-2 text-pumpkin hover:text-deeporange text-2xl font-bold"
+          className="absolute top-2 right-2 text-accent hover:text-accent-dark text-2xl font-bold"
           onClick={onClose}
           aria-label="Close registration modal"
         >
           ×
         </button>
-        <h2 className="text-2xl font-bold text-pumpkin mb-4 text-center">Register for League</h2>
+        <h2 className="text-2xl font-bold text-accent mb-4 text-center">Register for League</h2>
         
         {/* Registration Type Selection */}
         <div className="flex justify-center mb-4 gap-2">
           <button
-            className={`px-4 py-2 rounded font-bold border-2 ${type === 'solo' ? 'bg-pumpkin text-black border-pumpkin' : 'bg-black text-pumpkin border-pumpkin'} transition-colors`}
+            className={`px-4 py-2 rounded font-bold border-2 ${type === 'solo' ? 'bg-accent text-white border-accent' : 'bg-black text-accent border-accent'} transition-colors`}
             onClick={() => { setType('solo'); setError(''); setSuccess(''); setFieldErrors({}); }}
           >
             Solo
           </button>
           <button
-            className={`px-4 py-2 rounded font-bold border-2 ${type === 'group' ? 'bg-pumpkin text-black border-pumpkin' : 'bg-black text-pumpkin border-pumpkin'} transition-colors`}
+            className={`px-4 py-2 rounded font-bold border-2 ${type === 'group' ? 'bg-accent text-white border-accent' : 'bg-black text-accent border-accent'} transition-colors`}
             onClick={() => { setType('group'); setError(''); setSuccess(''); setGroup(getInitialGroup()); setFieldErrors({}); }}
           >
             Group
@@ -311,11 +351,11 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           </div>
         ) : leagues.length > 0 ? (
           <div className="mb-4 p-3 bg-black bg-opacity-50 rounded-lg">
-            <label className="block text-sm font-semibold text-pumpkin mb-2">Select League:</label>
+            <label className="block text-sm font-semibold text-accent mb-2">Select League:</label>
             <select
               value={selectedLeague || ''}
-              onChange={(e) => setSelectedLeague(Number(e.target.value))}
-              className={`w-full p-2 rounded bg-black border text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.league ? 'border-red-500' : 'border-pumpkin'}`}
+              onChange={(e) => handleLeagueChange(Number(e.target.value))}
+              className={`w-full p-2 rounded bg-black border text-white focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.league ? 'border-red-500' : 'border-accent'}`}
             >
               <option value="">Select a league...</option>
               {leagues.map((league) => (
@@ -353,7 +393,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
             <>
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.firstName ? 'border-red-500' : ''}`}
+                  className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.firstName ? 'border-red-500' : ''}`}
                   name="firstName"
                   placeholder="First Name"
                   value={solo.firstName}
@@ -362,7 +402,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                   readOnly={!!user?.firstName}
                 />
                 <input
-                  className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.lastName ? 'border-red-500' : ''}`}
+                  className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.lastName ? 'border-red-500' : ''}`}
                   name="lastName"
                   placeholder="Last Name"
                   value={solo.lastName}
@@ -375,7 +415,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
               {typeof fieldErrors.lastName === 'string' && <div className="text-red-400 text-xs mb-1">{fieldErrors.lastName as string}</div>}
               
               <input
-                className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.email ? 'border-red-500' : ''}`}
+                className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.email ? 'border-red-500' : ''}`}
                 name="email"
                 placeholder="Email"
                 value={solo.email}
@@ -393,7 +433,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                       {error.message}{' '}
                       <button
                         type="button"
-                        className="underline text-pumpkin hover:text-deeporange"
+                        className="underline text-accent hover:text-accent-dark"
                         onClick={() => setSolo(prev => ({ ...prev, email: error.suggestion || prev.email }))}
                       >
                         Yes
@@ -405,7 +445,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
               })()}
               
               <input
-                className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.phone ? 'border-red-500' : ''}`}
+                className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.phone ? 'border-red-500' : ''}`}
                 name="phone"
                 placeholder="Phone"
                 value={solo.phone}
@@ -416,7 +456,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
               {typeof fieldErrors.phone === 'string' && <div className="text-red-400 text-xs mb-1">{fieldErrors.phone as string}</div>}
               
               <input
-                className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.dateOfBirth ? 'border-red-500' : ''}`}
+                className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.dateOfBirth ? 'border-red-500' : ''}`}
                 name="dateOfBirth"
                 placeholder="Date of Birth"
                 value={solo.dateOfBirth}
@@ -427,7 +467,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
               {typeof fieldErrors.dateOfBirth === 'string' && <div className="text-red-400 text-xs mb-1">{fieldErrors.dateOfBirth as string}</div>}
               
               <select
-                className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.gender ? 'border-red-500' : ''}`}
+                className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.gender ? 'border-red-500' : ''}`}
                 name="gender"
                 value={solo.gender}
                 onChange={handleInput}
@@ -447,10 +487,10 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                     name="termsAccepted"
                     checked={solo.termsAccepted}
                     onChange={handleInput}
-                    className="mt-1 w-4 h-4 text-pumpkin bg-black border-pumpkin rounded focus:ring-pumpkin focus:ring-2"
+                    className="mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2"
                   />
                   <span className="text-sm text-gray-300">
-                    I agree to the <a href="/terms" className="text-pumpkin hover:text-deeporange underline">Terms of Service</a> and acknowledge that by registering, I am bound by these terms.
+                    I agree to the <a href="/terms" className="text-accent hover:text-accent-dark underline">Terms of Service</a> and acknowledge that by registering, I am bound by these terms.
                   </span>
                 </label>
                 {typeof fieldErrors.termsAccepted === 'string' && <div className="text-red-400 text-xs">{fieldErrors.termsAccepted as string}</div>}
@@ -461,7 +501,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                     name="communicationsAccepted"
                     checked={solo.communicationsAccepted}
                     onChange={handleInput}
-                    className="mt-1 w-4 h-4 text-pumpkin bg-black border-pumpkin rounded focus:ring-pumpkin focus:ring-2"
+                    className="mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2"
                   />
                   <span className="text-sm text-gray-300">
                     I consent to receive communications about league activities, schedules, and updates via email.
@@ -472,7 +512,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           ) : (
             <>
               <input
-                className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.groupName ? 'border-red-500' : ''}`}
+                className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.groupName ? 'border-red-500' : ''}`}
                 name="groupName"
                 placeholder="Group Name (e.g., 'The Friends', 'Work Buddies')"
                 value={groupName}
@@ -488,10 +528,10 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
               
               {group.map((player, idx) => (
                 <div key={idx} className="flex flex-col gap-2 mb-4 p-3 bg-black bg-opacity-30 rounded">
-                  <h4 className="text-pumpkin font-semibold">Group Member {idx + 1}</h4>
+                  <h4 className="text-accent font-semibold">Group Member {idx + 1}</h4>
                   <div className="grid grid-cols-2 gap-2">
                     <input
-                      className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors[`player${idx}_firstName`] ? 'border-red-500' : ''}`}
+                      className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors[`player${idx}_firstName`] ? 'border-red-500' : ''}`}
                       name="firstName"
                       placeholder="First Name"
                       value={player.firstName}
@@ -499,7 +539,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                       autoComplete="off"
                     />
                     <input
-                      className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors[`player${idx}_lastName`] ? 'border-red-500' : ''}`}
+                      className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors[`player${idx}_lastName`] ? 'border-red-500' : ''}`}
                       name="lastName"
                       placeholder="Last Name"
                       value={player.lastName}
@@ -514,7 +554,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                     <div className="text-red-400 text-xs mb-1">{fieldErrors[`player${idx}_lastName`] as string}</div>
                   )}
                   <input
-                    className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors[`player${idx}_email`] ? 'border-red-500' : ''}`}
+                    className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors[`player${idx}_email`] ? 'border-red-500' : ''}`}
                     name="email"
                     placeholder="Email Address"
                     value={player.email}
@@ -531,7 +571,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                           {error.message}{' '}
                           <button
                             type="button"
-                            className="underline text-pumpkin hover:text-deeporange"
+                            className="underline text-accent hover:text-accent-dark"
                             onClick={() => {
                               const updated = [...group];
                               updated[idx].email = error.suggestion;
@@ -553,7 +593,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
               <button
                 type="button"
                 onClick={handleAddPlayer}
-                className="w-full p-2 rounded bg-pumpkin text-black font-bold hover:bg-deeporange transition-colors"
+                className="w-full p-2 rounded bg-accent text-white font-bold hover:bg-accent-dark transition-colors"
                 disabled={group.length >= MAX_GROUP_SIZE}
               >
                 Add Player
@@ -575,10 +615,14 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
 
           <button
             type="submit"
-            className="w-full p-2 rounded bg-pumpkin text-black font-bold hover:bg-deeporange transition-colors"
-            disabled={!isFormValid()}
+            className="w-full p-2 rounded bg-accent text-white font-bold hover:bg-accent-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!isFormValid() || isLeagueRegistered}
           >
-            {type === 'solo' ? 'Register Solo' : 'Register Group'}
+            {isLeagueRegistered 
+              ? 'Already Registered' 
+              : type === 'solo' 
+              ? 'Register Solo' 
+              : 'Register Group'}
           </button>
         </form>
       </div>

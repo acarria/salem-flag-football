@@ -4,33 +4,12 @@ from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
 from app.models.team import Team
+from app.models.league_player import LeaguePlayer
+from app.api.schemas.league import PublicLeagueResponse
 from datetime import date
 from typing import List
-from pydantic import BaseModel
 
 router = APIRouter()
-
-class PublicLeagueResponse(BaseModel):
-    id: int
-    name: str
-    description: str | None
-    start_date: str
-    end_date: str | None
-    num_weeks: int
-    format: str
-    tournament_format: str
-    game_duration: int
-    games_per_week: int
-    max_teams: int | None
-    min_teams: int
-    registration_deadline: str | None
-    registration_fee: int | None
-    is_active: bool
-    registered_players_count: int
-    registered_teams_count: int
-
-    class Config:
-        from_attributes = True
 
 @router.get("/public/leagues", response_model=List[PublicLeagueResponse], summary="Get all leagues (public view)")
 async def get_public_leagues(db: Session = Depends(get_db)):
@@ -39,10 +18,11 @@ async def get_public_leagues(db: Session = Depends(get_db)):
     
     result = []
     for league in leagues:
-        # Count registered players and teams
-        player_count = db.query(Player).filter(
-            Player.league_id == league.id,
-            Player.registration_status == 'registered'
+        # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
+        player_count = db.query(LeaguePlayer).filter(
+            LeaguePlayer.league_id == league.id,
+            LeaguePlayer.registration_status == 'registered',
+            LeaguePlayer.is_active == True
         ).count()
         
         team_count = db.query(Team).filter(

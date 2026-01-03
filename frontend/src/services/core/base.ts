@@ -38,7 +38,38 @@ export class BaseApiService {
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        // Try to extract error details from response body
+        let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+        let errorData: any = { detail: errorMessage };
+        
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            errorData = await response.json();
+            if (errorData.detail) {
+              errorMessage = errorData.detail;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else {
+            const text = await response.text();
+            if (text) {
+              errorMessage = text;
+              errorData = { detail: text };
+            }
+          }
+        } catch (e) {
+          // If we can't parse the response, use the status text
+          console.error('Failed to parse error response:', e);
+        }
+        
+        const error: any = new Error(errorMessage);
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+          data: errorData
+        };
+        throw error;
       }
 
       return await response.json();

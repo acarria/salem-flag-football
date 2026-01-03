@@ -3,6 +3,8 @@ import {
   AdminConfig, 
   AdminConfigCreateRequest, 
   AdminConfigUpdateRequest,
+  User,
+  PaginatedUserResponse,
   LeagueMember,
   TeamGenerationRequest,
   TeamGenerationResponse,
@@ -15,6 +17,11 @@ export class AdminApiService extends BaseApiService {
   // Admin Management
   async getAdminConfigs(): Promise<AdminConfig[]> {
     return this.request<AdminConfig[]>('/admin/admins');
+  }
+
+  // User Management
+  async getAllUsers(page: number = 1, pageSize: number = 25): Promise<PaginatedUserResponse> {
+    return this.request<PaginatedUserResponse>(`/admin/users?page=${page}&page_size=${pageSize}`);
   }
 
   async addAdminEmail(adminData: AdminConfigCreateRequest): Promise<AdminConfig> {

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
-import { League, LeagueCreateRequest, LeagueUpdateRequest, AdminConfig, AdminConfigCreateRequest } from '../services';
+import { League, LeagueCreateRequest, LeagueUpdateRequest, AdminConfig, AdminConfigCreateRequest, User, PaginatedUserResponse } from '../services';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { AdminManagementModal, LeagueFormModal } from './admin/components';
 
 type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'compass_draw';
 type GameFormat = '7v7' | '6v6' | '5v5';
@@ -31,6 +32,12 @@ export default function AdminPage() {
     email: '',
     role: 'admin'
   });
+
+  // User management state
+  const [usersData, setUsersData] = useState<PaginatedUserResponse | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersPageSize] = useState(25);
   
   // Form state for league creation/editing
   const [formData, setFormData] = useState<Partial<LeagueCreateRequest>>({
@@ -73,6 +80,7 @@ export default function AdminPage() {
     // Load data if user is admin
     loadLeagues();
     loadAdmins();
+    loadUsers(1);
   }, [isSignedIn, user, navigate]);
 
 
@@ -99,6 +107,21 @@ export default function AdminPage() {
       setAdmins(adminsData);
     } catch (err) {
       console.error('Failed to load admins:', err);
+    }
+  };
+
+  const loadUsers = async (page: number = 1) => {
+    setIsLoadingUsers(true);
+    setError(null);
+    try {
+      const response = await authenticatedRequest<PaginatedUserResponse>(`/admin/users?page=${page}&page_size=${usersPageSize}`);
+      setUsersData(response);
+      setUsersPage(page);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+      setError('Failed to load users. Please try again.');
+    } finally {
+      setIsLoadingUsers(false);
     }
   };
 
@@ -287,7 +310,7 @@ export default function AdminPage() {
       <div className="max-w-7xl mx-auto p-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-pumpkin mb-2">Admin Dashboard</h1>
+          <h1 className="text-3xl font-bold text-accent mb-2">Admin Dashboard</h1>
           <p className="text-gray-300">Manage leagues, teams, and admin users</p>
         </div>
 
@@ -317,20 +340,20 @@ export default function AdminPage() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-4">
-            <h3 className="text-lg font-bold text-pumpkin">Total Leagues</h3>
+          <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-4">
+            <h3 className="text-lg font-bold text-accent">Total Leagues</h3>
             <p className="text-2xl font-bold text-white">{leagues.length}</p>
           </div>
-          <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-4">
-            <h3 className="text-lg font-bold text-pumpkin">Active Leagues</h3>
+          <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-4">
+            <h3 className="text-lg font-bold text-accent">Active Leagues</h3>
             <p className="text-2xl font-bold text-white">{leagues.filter(l => l.is_active).length}</p>
           </div>
-          <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-4">
-            <h3 className="text-lg font-bold text-pumpkin">Total Admins</h3>
+          <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-4">
+            <h3 className="text-lg font-bold text-accent">Total Admins</h3>
             <p className="text-2xl font-bold text-white">{admins.length}</p>
           </div>
-          <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-4">
-            <h3 className="text-lg font-bold text-pumpkin">Current User</h3>
+          <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-4">
+            <h3 className="text-lg font-bold text-accent">Current User</h3>
             <p className="text-sm text-white">{user?.emailAddresses?.[0]?.emailAddress}</p>
           </div>
         </div>
@@ -339,7 +362,7 @@ export default function AdminPage() {
         <div className="flex flex-wrap gap-4 mb-8">
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-pumpkin text-black font-bold rounded-lg hover:bg-deeporange transition-colors"
+            className="px-6 py-3 bg-accent text-white font-bold rounded-lg hover:bg-accent-dark transition-colors"
           >
             ➕ Create League
           </button>
@@ -347,7 +370,7 @@ export default function AdminPage() {
             onClick={() => setShowAdminModal(true)}
             className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
           >
-            👥 Manage Admins
+            🔑 Manage Admins
           </button>
           <button
             onClick={loadLeagues}
@@ -358,20 +381,183 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Users List */}
+        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6 mb-8">
+          <h2 className="text-2xl font-bold text-accent mb-6">
+            Users {usersData && usersData.total > 0 && `(${usersData.total})`}
+          </h2>
+          
+          {isLoadingUsers ? (
+            <div className="text-center py-8">
+              <div className="text-accent text-xl">Loading users...</div>
+            </div>
+          ) : usersData && usersData.users.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-400 text-xl">No users found.</div>
+            </div>
+          ) : usersData ? (
+            <>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-600">
+                      <th className="text-left p-3 text-accent font-semibold">Name</th>
+                      <th className="text-left p-3 text-accent font-semibold">Email</th>
+                      <th className="text-left p-3 text-accent font-semibold">Phone</th>
+                      <th className="text-left p-3 text-accent font-semibold">Gender</th>
+                      <th className="text-left p-3 text-accent font-semibold">Status</th>
+                      <th className="text-left p-3 text-accent font-semibold">Leagues</th>
+                      <th className="text-left p-3 text-accent font-semibold">Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersData.users.map((user) => (
+                      <tr key={user.clerk_user_id} className="border-b border-gray-700 hover:bg-black hover:bg-opacity-30">
+                        <td className="p-3 text-white">
+                          {user.first_name} {user.last_name}
+                        </td>
+                        <td className="p-3 text-gray-300">{user.email}</td>
+                        <td className="p-3 text-gray-300">{user.phone || '-'}</td>
+                        <td className="p-3 text-gray-300">{user.gender || '-'}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            user.registration_status === 'registered' ? 'bg-green-900 text-green-200' :
+                            user.registration_status === 'active' ? 'bg-blue-900 text-blue-200' :
+                            'bg-gray-700 text-gray-300'
+                          }`}>
+                            {user.registration_status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-gray-300">{user.leagues_count}</td>
+                        <td className="p-3 text-gray-300">
+                          {new Date(user.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination Controls */}
+              {usersData.total_pages > 1 && (
+                <div className="flex items-center justify-between border-t border-gray-600 pt-4">
+                  <div className="text-sm text-gray-300">
+                    Showing {usersData.total > 0 ? (usersPage - 1) * usersPageSize + 1 : 0} to {Math.min(usersPage * usersPageSize, usersData.total)} of {usersData.total} users
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const newPage = usersPage - 1;
+                        if (newPage >= 1) {
+                          setUsersPage(newPage);
+                          loadUsers(newPage);
+                        }
+                      }}
+                      disabled={usersPage === 1}
+                      className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    
+                    <div className="flex gap-1">
+                      {(() => {
+                        const pages: (number | string)[] = [];
+                        const maxPagesToShow = 7;
+                        const totalPages = usersData.total_pages;
+                        
+                        if (totalPages <= maxPagesToShow) {
+                          for (let i = 1; i <= totalPages; i++) {
+                            pages.push(i);
+                          }
+                        } else {
+                          if (usersPage <= 4) {
+                            for (let i = 1; i <= 5; i++) {
+                              pages.push(i);
+                            }
+                            pages.push('...');
+                            pages.push(totalPages);
+                          } else if (usersPage >= totalPages - 3) {
+                            pages.push(1);
+                            pages.push('...');
+                            for (let i = totalPages - 4; i <= totalPages; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            pages.push(1);
+                            pages.push('...');
+                            for (let i = usersPage - 1; i <= usersPage + 1; i++) {
+                              pages.push(i);
+                            }
+                            pages.push('...');
+                            pages.push(totalPages);
+                          }
+                        }
+                        
+                        return pages.map((page, index) => (
+                          page === '...' ? (
+                            <span key={`ellipsis-${index}`} className="px-2 py-1 text-gray-400">
+                              ...
+                            </span>
+                          ) : (
+                            <button
+                              key={page}
+                              onClick={() => {
+                                if (typeof page === 'number') {
+                                  setUsersPage(page);
+                                  loadUsers(page);
+                                }
+                              }}
+                              className={`px-3 py-1 rounded transition-colors ${
+                                usersPage === page
+                                  ? 'bg-accent text-white font-bold'
+                                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          )
+                        ));
+                      })()}
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        const newPage = usersPage + 1;
+                        if (newPage <= usersData.total_pages) {
+                          setUsersPage(newPage);
+                          loadUsers(newPage);
+                        }
+                      }}
+                      disabled={usersPage === usersData.total_pages}
+                      className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+
         {/* Leagues List */}
-        <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-6">
-          <h2 className="text-2xl font-bold text-pumpkin mb-6">Leagues</h2>
+        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6">
+          <h2 className="text-2xl font-bold text-accent mb-6">Leagues</h2>
           
           {isLoading ? (
             <div className="text-center py-8">
-              <div className="text-pumpkin text-xl">Loading leagues...</div>
+              <div className="text-accent text-xl">Loading leagues...</div>
             </div>
           ) : leagues.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-gray-400 text-xl mb-4">No leagues found</div>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-pumpkin text-black font-bold rounded hover:bg-deeporange transition-colors"
+                className="px-4 py-2 bg-accent text-white font-bold rounded hover:bg-accent-dark transition-colors"
               >
                 Create Your First League
               </button>
@@ -381,7 +567,7 @@ export default function AdminPage() {
               {leagues.map((league) => (
                 <div key={league.id} className="bg-black bg-opacity-30 rounded-lg p-4 border border-gray-700">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-bold text-pumpkin">{league.name}</h3>
+                    <h3 className="text-lg font-bold text-accent">{league.name}</h3>
                     <div className="flex gap-2">
                       <button
                         onClick={() => openEditModal(league)}
@@ -467,305 +653,3 @@ export default function AdminPage() {
     </BaseLayout>
   );
 }
-
-// Modal Components
-interface AdminManagementModalProps {
-  admins: AdminConfig[];
-  formData: Partial<AdminConfigCreateRequest>;
-  onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
-  onSubmit: () => void;
-  onRemove: (email: string) => void;
-  onCancel: () => void;
-  isLoading: boolean;
-}
-
-function AdminManagementModal({
-  admins,
-  formData,
-  onInputChange,
-  onSubmit,
-  onRemove,
-  onCancel,
-  isLoading
-}: AdminManagementModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gunmetal border-2 border-pumpkin rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-2xl font-bold text-pumpkin">Manage Admin Users</h3>
-          <button onClick={onCancel} className="text-gray-400 hover:text-white">✕</button>
-        </div>
-
-        {/* Current Admins */}
-        <div className="mb-6">
-          <h4 className="text-lg font-bold text-pumpkin mb-3">Current Admins</h4>
-          <div className="space-y-2">
-            {admins.map((admin) => (
-              <div key={admin.id} className="flex items-center justify-between bg-black bg-opacity-30 rounded p-3">
-                <div>
-                  <div className="font-semibold text-white">{admin.email}</div>
-                  <div className="text-sm text-gray-400">Role: {admin.role}</div>
-                </div>
-                <button
-                  onClick={() => onRemove(admin.email)}
-                  disabled={admin.email === 'alexcarria1@gmail.com'}
-                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Add New Admin */}
-        <div className="border-t border-gray-700 pt-6">
-          <h4 className="text-lg font-bold text-pumpkin mb-3">Add New Admin</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={onInputChange}
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-                placeholder="admin@example.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Role</label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={onInputChange}
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              >
-                <option value="admin">Admin</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={onSubmit}
-              disabled={isLoading || !formData.email}
-              className="px-4 py-2 bg-pumpkin text-black font-bold rounded hover:bg-deeporange transition-colors disabled:opacity-50"
-            >
-              Add Admin
-            </button>
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 border-2 border-pumpkin text-pumpkin font-bold rounded hover:bg-pumpkin hover:text-black transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface LeagueFormModalProps {
-  title: string;
-  formData: Partial<LeagueCreateRequest>;
-  onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
-  isLoading: boolean;
-  getTournamentFormatDescription: (format: TournamentFormat) => string;
-}
-
-function LeagueFormModal({
-  title,
-  formData,
-  onInputChange,
-  onSubmit,
-  onCancel,
-  isLoading,
-  getTournamentFormatDescription
-}: LeagueFormModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gunmetal border-2 border-pumpkin rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-2xl font-bold text-pumpkin">{title}</h3>
-          <button onClick={onCancel} className="text-gray-400 hover:text-white">✕</button>
-        </div>
-
-        <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="space-y-6">
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">League Name *</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={onInputChange}
-                required
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Start Date *</label>
-              <input
-                type="date"
-                name="start_date"
-                value={formData.start_date}
-                onChange={onInputChange}
-                required
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={onInputChange}
-              rows={3}
-              className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-            />
-          </div>
-
-          {/* Game Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Game Format *</label>
-              <select
-                name="format"
-                value={formData.format}
-                onChange={onInputChange}
-                required
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              >
-                <option value="7v7">7v7</option>
-                <option value="6v6">6v6</option>
-                <option value="5v5">5v5</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Number of Weeks *</label>
-              <input
-                type="number"
-                name="num_weeks"
-                value={formData.num_weeks}
-                onChange={onInputChange}
-                min="1"
-                required
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Game Duration (minutes)</label>
-              <input
-                type="number"
-                name="game_duration"
-                value={formData.game_duration}
-                onChange={onInputChange}
-                min="30"
-                max="120"
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-          </div>
-
-          {/* Tournament Format */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Tournament Format *</label>
-            <select
-              name="tournament_format"
-              value={formData.tournament_format}
-              onChange={onInputChange}
-              required
-              className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-            >
-              <option value="round_robin">Round Robin</option>
-              <option value="swiss">Swiss Tournament</option>
-              <option value="playoff_bracket">Playoff Bracket</option>
-              <option value="compass_draw">Compass Draw</option>
-            </select>
-            <p className="text-sm text-gray-400 mt-1">
-              {getTournamentFormatDescription(formData.tournament_format as TournamentFormat)}
-            </p>
-          </div>
-
-          {/* Team Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Minimum Teams</label>
-              <input
-                type="number"
-                name="min_teams"
-                value={formData.min_teams}
-                onChange={onInputChange}
-                min="2"
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Maximum Teams</label>
-              <input
-                type="number"
-                name="max_teams"
-                value={formData.max_teams || ''}
-                onChange={onInputChange}
-                min="1"
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-          </div>
-
-          {/* Registration Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Registration Deadline</label>
-              <input
-                type="date"
-                name="registration_deadline"
-                value={formData.registration_deadline}
-                onChange={onInputChange}
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Registration Fee (dollars)</label>
-              <input
-                type="number"
-                name="registration_fee"
-                value={formData.registration_fee || ''}
-                onChange={onInputChange}
-                min="0"
-                step="0.01"
-                className="w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin"
-                placeholder="50.00"
-              />
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="px-6 py-3 bg-pumpkin text-black font-bold rounded hover:bg-deeporange transition-colors disabled:opacity-50"
-            >
-              {isLoading ? 'Saving...' : 'Save League'}
-            </button>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-6 py-3 border-2 border-pumpkin text-pumpkin font-bold rounded hover:bg-pumpkin hover:text-black transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-} 
