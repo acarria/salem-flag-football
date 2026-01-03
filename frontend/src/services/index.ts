@@ -36,6 +36,7 @@ class CombinedApiService {
   addAdminEmail = adminApi.addAdminEmail.bind(adminApi);
   updateAdminConfig = adminApi.updateAdminConfig.bind(adminApi);
   removeAdminEmail = adminApi.removeAdminEmail.bind(adminApi);
+  getAllUsers = adminApi.getAllUsers.bind(adminApi);
   generateTeams = adminApi.generateTeams.bind(adminApi);
   generateScheduleForLeague = adminApi.generateScheduleForLeague.bind(adminApi);
   getLeagueSchedule = adminApi.getLeagueSchedule.bind(adminApi);
@@ -48,6 +49,7 @@ class CombinedApiService {
   // User methods
   getUserProfile = userApi.getUserProfile.bind(userApi);
   updateUserProfile = userApi.updateUserProfile.bind(userApi);
+  checkLeagueRegistration = userApi.checkLeagueRegistration.bind(userApi);
 
   // Registration methods
   registerPlayer = registrationApi.registerPlayer.bind(registrationApi);

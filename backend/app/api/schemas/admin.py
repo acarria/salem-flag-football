@@ -1,6 +1,6 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, field_validator
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, time
 from decimal import Decimal
 
 # League Management Schemas
@@ -199,3 +199,182 @@ class AdminConfigCreateRequest(BaseModel):
 class AdminConfigUpdateRequest(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
+
+# User Management Schemas
+class UserResponse(BaseModel):
+    clerk_user_id: str
+    first_name: str
+    last_name: str
+    email: str
+    phone: Optional[str]
+    date_of_birth: Optional[date]
+    gender: Optional[str]
+    registration_status: str
+    created_at: datetime
+    leagues_count: int  # Number of leagues the user is registered for
+
+    class Config:
+        from_attributes = True
+
+class PaginatedUserResponse(BaseModel):
+    users: List[UserResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+# Field Management Schemas
+class FieldResponse(BaseModel):
+    id: int
+    league_id: int
+    name: str
+    field_number: Optional[str] = None
+    street_address: str
+    city: str
+    state: str
+    zip_code: str
+    country: str
+    facility_name: Optional[str] = None
+    additional_notes: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class FieldCreateRequest(BaseModel):
+    name: str
+    field_number: Optional[str] = None
+    street_address: str
+    city: str
+    state: str
+    zip_code: str
+    country: str = "USA"
+    facility_name: Optional[str] = None
+    additional_notes: Optional[str] = None
+
+    @validator('zip_code')
+    def validate_zip_code(cls, v):
+        """Validate zip code format (basic validation)."""
+        if not v or len(v.strip()) == 0:
+            raise ValueError('zip_code cannot be empty')
+        return v.strip()
+
+    @validator('state')
+    def validate_state(cls, v):
+        """Validate state is provided."""
+        if not v or len(v.strip()) == 0:
+            raise ValueError('state cannot be empty')
+        return v.strip()
+
+    @validator('city')
+    def validate_city(cls, v):
+        """Validate city is provided."""
+        if not v or len(v.strip()) == 0:
+            raise ValueError('city cannot be empty')
+        return v.strip()
+
+    @validator('street_address')
+    def validate_street_address(cls, v):
+        """Validate street address is provided."""
+        if not v or len(v.strip()) == 0:
+            raise ValueError('street_address cannot be empty')
+        return v.strip()
+
+class FieldUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    field_number: Optional[str] = None
+    street_address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    country: Optional[str] = None
+    facility_name: Optional[str] = None
+    additional_notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# Field Availability Schemas
+class FieldAvailabilityResponse(BaseModel):
+    id: int
+    league_id: int
+    field_id: int
+    field_name: Optional[str] = None  # Populated from field relationship
+    is_recurring: bool
+    day_of_week: Optional[int] = None  # 0=Monday, 6=Sunday
+    recurrence_start_date: Optional[date] = None
+    recurrence_end_date: Optional[date] = None
+    custom_date: Optional[date] = None
+    start_time: time
+    end_time: time
+    notes: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class FieldAvailabilityCreateRequest(BaseModel):
+    field_id: int  # Required: which field this availability is for
+    is_recurring: bool
+    day_of_week: Optional[int] = None  # Required if is_recurring=True, 0=Monday, 6=Sunday
+    recurrence_start_date: Optional[date] = None  # Required if is_recurring=True
+    recurrence_end_date: Optional[date] = None  # Optional, None = indefinite
+    custom_date: Optional[date] = None  # Required if is_recurring=False
+    start_time: time
+    end_time: time
+    notes: Optional[str] = None
+
+    @validator('day_of_week')
+    def validate_day_of_week(cls, v, values):
+        """Validate day_of_week is provided for recurring availability and is in valid range."""
+        is_recurring = values.get('is_recurring', False)
+        if is_recurring and v is None:
+            raise ValueError('day_of_week is required for recurring availability')
+        if v is not None and (v < 0 or v > 6):
+            raise ValueError('day_of_week must be between 0 (Monday) and 6 (Sunday)')
+        return v
+
+    @validator('recurrence_start_date')
+    def validate_recurrence_start_date(cls, v, values):
+        """Validate recurrence_start_date is provided for recurring availability."""
+        is_recurring = values.get('is_recurring', False)
+        if is_recurring and v is None:
+            raise ValueError('recurrence_start_date is required for recurring availability')
+        return v
+
+    @validator('custom_date')
+    def validate_custom_date(cls, v, values):
+        """Validate custom_date is provided for one-time availability."""
+        is_recurring = values.get('is_recurring', False)
+        if not is_recurring and v is None:
+            raise ValueError('custom_date is required for one-time availability')
+        return v
+
+    @validator('end_time')
+    def validate_end_time(cls, v, values):
+        """Validate end_time is after start_time."""
+        start_time = values.get('start_time')
+        if start_time and v <= start_time:
+            raise ValueError('end_time must be after start_time')
+        return v
+
+class FieldAvailabilityUpdateRequest(BaseModel):
+    field_id: Optional[int] = None  # Optional: can change which field this availability is for
+    is_recurring: Optional[bool] = None
+    day_of_week: Optional[int] = None
+    recurrence_start_date: Optional[date] = None
+    recurrence_end_date: Optional[date] = None
+    custom_date: Optional[date] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    @validator('day_of_week')
+    def validate_day_of_week(cls, v):
+        """Validate day_of_week is in valid range."""
+        if v is not None and (v < 0 or v > 6):
+            raise ValueError('day_of_week must be between 0 (Monday) and 6 (Sunday)')
+        return v

@@ -8,6 +8,7 @@ import { apiService, UserProfile } from '../services';
 export default function ProfilePage() {
   const { user } = useUser();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,6 +34,7 @@ export default function ProfilePage() {
           
           if (existingProfile) {
             setProfile(existingProfile);
+            setOriginalProfile(existingProfile);
           } else {
             // Create default profile from Clerk user data
             const defaultProfile: UserProfile = {
@@ -46,6 +48,7 @@ export default function ProfilePage() {
               registrationStatus: 'not_registered'
             };
             setProfile(defaultProfile);
+            setOriginalProfile(defaultProfile);
           }
         } catch (err) {
           console.error('Failed to fetch profile:', err);
@@ -63,6 +66,7 @@ export default function ProfilePage() {
             registrationStatus: 'not_registered'
           };
           setProfile(defaultProfile);
+          setOriginalProfile(defaultProfile);
         } finally {
           setIsLoading(false);
         }
@@ -108,31 +112,30 @@ export default function ProfilePage() {
     }
 
     try {
-      await apiService.updateUserProfile(user.id, profile);
+      const updatedProfile = await apiService.updateUserProfile(user.id, profile);
+      setProfile(updatedProfile);
+      setOriginalProfile(updatedProfile);
       setSuccess('Profile updated successfully!');
       setIsEditing(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save profile:', err);
-      setError('Failed to save profile. Please try again.');
+      // Extract error message from the response
+      let errorMessage = 'Failed to save profile. Please try again.';
+      if (err?.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleCancel = () => {
-    // Reset to original profile data
-    if (user) {
-      const defaultProfile: UserProfile = {
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.primaryEmailAddress?.emailAddress || '',
-        phone: '',
-        dateOfBirth: '',
-        gender: '',
-        communicationsAccepted: false,
-        registrationStatus: 'not_registered'
-      };
-      setProfile(defaultProfile);
+    // Reset to original profile data that was fetched from the API
+    if (originalProfile) {
+      setProfile({ ...originalProfile });
     }
     setIsEditing(false);
     setError('');
@@ -145,7 +148,7 @@ export default function ProfilePage() {
       <BaseLayout>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <div className="text-pumpkin text-xl">Loading profile...</div>
+            <div className="text-accent text-xl">Loading profile...</div>
           </div>
         </div>
       </BaseLayout>
@@ -158,7 +161,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="text-red-400 text-xl mb-4">Profile not found</div>
-            <Link to="/" className="text-pumpkin hover:text-deeporange">
+            <Link to="/" className="text-accent hover:text-accent-dark">
               Return to Home
             </Link>
           </div>
@@ -171,14 +174,20 @@ export default function ProfilePage() {
     <BaseLayout>
       <div className="max-w-4xl mx-auto p-4">
         {/* Profile Header */}
-        <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-6 mb-6">
+        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-pumpkin">Profile Information</h2>
+            <h2 className="text-2xl font-bold text-accent">Profile Information</h2>
             <div className="flex gap-2">
               {!isEditing ? (
                 <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 rounded bg-pumpkin text-black font-bold hover:bg-deeporange transition-colors"
+                  onClick={() => {
+                    // Save current profile as original before editing
+                    if (profile) {
+                      setOriginalProfile({ ...profile });
+                    }
+                    setIsEditing(true);
+                  }}
+                  className="px-4 py-2 rounded bg-accent text-white font-bold hover:bg-accent-dark transition-colors"
                 >
                   Edit Profile
                 </button>
@@ -186,7 +195,7 @@ export default function ProfilePage() {
                 <>
                   <button
                     onClick={handleCancel}
-                    className="px-4 py-2 rounded border-2 border-pumpkin text-pumpkin font-bold hover:bg-pumpkin hover:text-black transition-colors"
+                    className="px-4 py-2 rounded border-2 border-accent text-accent font-bold hover:bg-accent hover:text-white transition-colors"
                   >
                     Cancel
                   </button>
@@ -196,7 +205,7 @@ export default function ProfilePage() {
                     className={`px-4 py-2 rounded font-bold transition-colors ${
                       isSaving 
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                        : 'bg-pumpkin text-black hover:bg-deeporange'
+                        : 'bg-accent text-white hover:bg-accent-dark'
                     }`}
                   >
                     {isSaving ? 'Saving...' : 'Save Changes'}
@@ -219,7 +228,7 @@ export default function ProfilePage() {
           )}
 
           {/* Registration Status */}
-          <div className="mb-4 p-3 bg-black bg-opacity-30 rounded border border-pumpkin">
+          <div className="mb-4 p-3 bg-black bg-opacity-30 rounded border border-accent">
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Registration Status:</span>
               <span className={`font-bold ${
@@ -244,7 +253,7 @@ export default function ProfilePage() {
                   value={profile.firstName}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${
+                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
                     !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 />
@@ -257,7 +266,7 @@ export default function ProfilePage() {
                   value={profile.lastName}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${
+                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
                     !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 />
@@ -272,7 +281,7 @@ export default function ProfilePage() {
                 value={profile.email}
                 onChange={handleInputChange}
                 disabled={!isEditing}
-                className={`w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${
+                className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
                   !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               />
@@ -295,7 +304,7 @@ export default function ProfilePage() {
                 onChange={handleInputChange}
                 disabled={!isEditing}
                 placeholder="(555) 123-4567"
-                className={`w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${
+                className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
                   !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               />
@@ -313,7 +322,7 @@ export default function ProfilePage() {
                   value={profile.dateOfBirth}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${
+                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
                     !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 />
@@ -325,7 +334,7 @@ export default function ProfilePage() {
                   value={profile.gender}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-pumpkin text-white focus:outline-none focus:ring-2 focus:ring-pumpkin ${
+                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
                     !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
@@ -346,7 +355,7 @@ export default function ProfilePage() {
                   checked={profile.communicationsAccepted}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`mt-1 w-4 h-4 text-pumpkin bg-black border-pumpkin rounded focus:ring-pumpkin focus:ring-2 ${
+                  className={`mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2 ${
                     !isEditing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 />
@@ -360,12 +369,12 @@ export default function ProfilePage() {
 
         {/* League Information */}
         {profile.registrationStatus === 'registered' && (
-          <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-6">
-            <h3 className="text-xl font-bold text-pumpkin mb-4">League Information</h3>
+          <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6">
+            <h3 className="text-xl font-bold text-accent mb-4">League Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <h4 className="font-semibold text-gray-300 mb-2">Current Team</h4>
-                <p className="text-pumpkin font-bold">Team ID: {profile.teamId || 'Not assigned'}</p>
+                <p className="text-accent font-bold">Team ID: {profile.teamId || 'Not assigned'}</p>
               </div>
               <div>
                 <h4 className="font-semibold text-gray-300 mb-2">Registration Date</h4>
@@ -384,26 +393,26 @@ export default function ProfilePage() {
         )}
 
         {/* Quick Actions */}
-        <div className="bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-6 mt-6">
-          <h3 className="text-xl font-bold text-pumpkin mb-4">Quick Actions</h3>
+        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6 mt-6">
+          <h3 className="text-xl font-bold text-accent mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link 
               to="/rules" 
-              className="p-4 bg-black bg-opacity-30 rounded-lg border border-pumpkin hover:bg-pumpkin hover:text-black transition-colors text-center"
+              className="p-4 bg-black bg-opacity-30 rounded-lg border border-accent hover:bg-accent hover:text-white transition-colors text-center"
             >
               <div className="text-2xl mb-2">📋</div>
               <div className="font-semibold">View Rules</div>
             </Link>
             <Link 
               to="/" 
-              className="p-4 bg-black bg-opacity-30 rounded-lg border border-pumpkin hover:bg-pumpkin hover:text-black transition-colors text-center"
+              className="p-4 bg-black bg-opacity-30 rounded-lg border border-accent hover:bg-accent hover:text-white transition-colors text-center"
             >
               <div className="text-2xl mb-2">📅</div>
               <div className="font-semibold">View Schedule</div>
             </Link>
             <Link 
               to="/contact" 
-              className="p-4 bg-black bg-opacity-30 rounded-lg border border-pumpkin hover:bg-pumpkin hover:text-black transition-colors text-center"
+              className="p-4 bg-black bg-opacity-30 rounded-lg border border-accent hover:bg-accent hover:text-white transition-colors text-center"
             >
               <div className="text-2xl mb-2">📞</div>
               <div className="font-semibold">Contact League</div>

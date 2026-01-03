@@ -161,8 +161,8 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
-      <div className="bg-gunmetal border-2 border-pumpkin rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative">
-        <h2 className="text-2xl font-bold text-pumpkin mb-4 text-center">Complete Your Profile</h2>
+      <div className="bg-gunmetal border-2 border-accent rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative">
+        <h2 className="text-2xl font-bold text-accent mb-4 text-center">Complete Your Profile</h2>
         <p className="text-gray-300 text-sm mb-6 text-center">
           Please provide your personal information to continue using the league platform.
         </p>
@@ -173,7 +173,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             <input
-              className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.firstName ? 'border-red-500' : ''}`}
+              className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.firstName ? 'border-red-500' : ''}`}
               name="firstName"
               placeholder="First Name"
               value={profileData.firstName}
@@ -181,7 +181,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
               autoComplete="given-name"
             />
             <input
-              className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.lastName ? 'border-red-500' : ''}`}
+              className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.lastName ? 'border-red-500' : ''}`}
               name="lastName"
               placeholder="Last Name"
               value={profileData.lastName}
@@ -193,7 +193,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           {fieldErrors.lastName && <div className="text-red-400 text-xs">{fieldErrors.lastName}</div>}
           
           <input
-            className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.email ? 'border-red-500' : ''}`}
+            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.email ? 'border-red-500' : ''}`}
             name="email"
             placeholder="Email"
             value={profileData.email}
@@ -204,7 +204,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           {fieldErrors.email && <div className="text-red-400 text-xs">{fieldErrors.email}</div>}
           
           <input
-            className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.phone ? 'border-red-500' : ''}`}
+            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.phone ? 'border-red-500' : ''}`}
             name="phone"
             placeholder="Phone"
             value={profileData.phone}
@@ -215,7 +215,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           {fieldErrors.phone && <div className="text-red-400 text-xs">{fieldErrors.phone}</div>}
           
           <input
-            className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.dateOfBirth ? 'border-red-500' : ''}`}
+            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.dateOfBirth ? 'border-red-500' : ''}`}
             name="dateOfBirth"
             placeholder="Date of Birth"
             value={profileData.dateOfBirth}
@@ -226,7 +226,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           {fieldErrors.dateOfBirth && <div className="text-red-400 text-xs">{fieldErrors.dateOfBirth}</div>}
           
           <select
-            className={`w-full p-2 rounded bg-black border border-pumpkin text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pumpkin ${fieldErrors.gender ? 'border-red-500' : ''}`}
+            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.gender ? 'border-red-500' : ''}`}
             name="gender"
             value={profileData.gender}
             onChange={handleInput}
@@ -246,10 +246,10 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
                 name="termsAccepted"
                 checked={profileData.termsAccepted}
                 onChange={handleInput}
-                className="mt-1 w-4 h-4 text-pumpkin bg-black border-pumpkin rounded focus:ring-pumpkin focus:ring-2"
+                className="mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2"
               />
               <span className="text-sm text-gray-300">
-                I agree to the <a href="/terms" className="text-pumpkin hover:text-deeporange underline">Terms of Service</a> and acknowledge that by creating an account and providing my information, I am bound by these terms.
+                I agree to the <a href="/terms" className="text-accent hover:text-accent-dark underline">Terms of Service</a> and acknowledge that by creating an account and providing my information, I am bound by these terms.
               </span>
             </label>
             {fieldErrors.termsAccepted && <div className="text-red-400 text-xs">{fieldErrors.termsAccepted}</div>}
@@ -260,7 +260,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
                 name="communicationsAccepted"
                 checked={profileData.communicationsAccepted}
                 onChange={handleInput}
-                className="mt-1 w-4 h-4 text-pumpkin bg-black border-pumpkin rounded focus:ring-pumpkin focus:ring-2"
+                className="mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2"
               />
               <span className="text-sm text-gray-300">
                 I consent to receive communications about league activities, schedules, and updates via email.
@@ -273,7 +273,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
             disabled={!isFormValid()}
             className={`w-full py-3 rounded font-bold transition-colors mt-4 ${
               isFormValid() 
-                ? 'bg-pumpkin text-black hover:bg-deeporange' 
+                ? 'bg-accent text-white hover:bg-accent-dark' 
                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
           >

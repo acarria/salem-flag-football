@@ -133,6 +133,27 @@ export interface AdminConfigUpdateRequest {
   is_active?: boolean;
 }
 
+export interface User {
+  clerk_user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  registration_status: string;
+  created_at: string;
+  leagues_count: number;
+}
+
+export interface PaginatedUserResponse {
+  users: User[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface LeagueMember {
   id: number;
   player_id: number;

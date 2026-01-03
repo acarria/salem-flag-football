@@ -17,11 +17,19 @@ export default function LeaguesPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [registeredLeagues, setRegisteredLeagues] = useState<Set<number>>(new Set());
 
   // Load leagues on component mount
   useEffect(() => {
     loadLeagues();
   }, []);
+
+  // Check registration status when user or leagues change
+  useEffect(() => {
+    if (isSignedIn && user && leagues.length > 0) {
+      checkRegistrationStatus();
+    }
+  }, [isSignedIn, user, leagues]);
 
   const loadLeagues = async () => {
     setIsLoading(true);
@@ -36,6 +44,31 @@ export default function LeaguesPage() {
       setError('Failed to load leagues. Please try again later.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkRegistrationStatus = async () => {
+    if (!user || !isSignedIn) return;
+    
+    try {
+      const registrationChecks = await Promise.all(
+        leagues.map(league => 
+          apiService.checkLeagueRegistration(user.id, league.id)
+            .then(result => ({ leagueId: league.id, isRegistered: result.isRegistered }))
+            .catch(() => ({ leagueId: league.id, isRegistered: false }))
+        )
+      );
+      
+      const registeredSet = new Set<number>();
+      registrationChecks.forEach(check => {
+        if (check.isRegistered) {
+          registeredSet.add(check.leagueId);
+        }
+      });
+      
+      setRegisteredLeagues(registeredSet);
+    } catch (err) {
+      console.error('Failed to check registration status:', err);
     }
   };
 
@@ -58,11 +91,22 @@ export default function LeaguesPage() {
     setShowRegistrationModal(true);
   };
 
-  const handleRegistrationComplete = () => {
+  const handleRegistrationComplete = async () => {
     setSuccess('Registration submitted successfully!');
     setShowRegistrationModal(false);
-    // Optionally reload leagues to update registration counts
-    loadLeagues();
+    // Reload leagues to update registration counts and check registration status
+    await loadLeagues();
+    if (selectedLeague && user) {
+      // Check if user is now registered for the selected league
+      try {
+        const result = await apiService.checkLeagueRegistration(user.id, selectedLeague.id);
+        if (result.isRegistered) {
+          setRegisteredLeagues(prev => new Set([...Array.from(prev), selectedLeague.id]));
+        }
+      } catch (err) {
+        console.error('Failed to check registration status:', err);
+      }
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -87,7 +131,14 @@ export default function LeaguesPage() {
     if (league.max_teams && league.registered_teams_count >= league.max_teams) {
       return { status: 'full', text: 'League Full', color: 'text-yellow-400' };
     }
+    if (isSignedIn && registeredLeagues.has(league.id)) {
+      return { status: 'registered', text: 'Already Registered', color: 'text-blue-400' };
+    }
     return { status: 'open', text: 'Registration Open', color: 'text-green-400' };
+  };
+
+  const isLeagueRegistered = (league: League) => {
+    return isSignedIn && registeredLeagues.has(league.id);
   };
 
   return (
@@ -95,7 +146,7 @@ export default function LeaguesPage() {
       <div className="max-w-6xl mx-auto p-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-pumpkin mb-2">Available Leagues</h1>
+          <h1 className="text-3xl font-bold text-accent mb-2">Available Leagues</h1>
           <p className="text-gray-300">Browse and register for flag football leagues</p>
         </div>
 
@@ -135,10 +186,14 @@ export default function LeaguesPage() {
           {selectedLeague && (
             <button
               onClick={handleRegisterForLeague}
-              disabled={!isSignedIn}
-              className="px-6 py-3 bg-pumpkin text-black font-bold rounded-lg hover:bg-deeporange transition-colors disabled:opacity-50"
+              disabled={!isSignedIn || isLeagueRegistered(selectedLeague)}
+              className="px-6 py-3 bg-accent text-white font-bold rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSignedIn ? 'Register for Selected League' : 'Sign In to Register'}
+              {!isSignedIn 
+                ? 'Sign In to Register' 
+                : isLeagueRegistered(selectedLeague)
+                ? 'Already Registered'
+                : 'Register for Selected League'}
             </button>
           )}
         </div>
@@ -146,7 +201,7 @@ export default function LeaguesPage() {
         {/* Leagues Grid */}
         {isLoading ? (
           <div className="text-center py-8">
-            <div className="text-pumpkin text-xl">Loading leagues...</div>
+            <div className="text-accent text-xl">Loading leagues...</div>
           </div>
         ) : leagues.length === 0 ? (
           <div className="text-center py-8">
@@ -162,14 +217,14 @@ export default function LeaguesPage() {
               return (
                 <div 
                   key={league.id} 
-                  className={`bg-gunmetal bg-opacity-95 border-2 rounded-xl p-6 cursor-pointer transition-all hover:border-pumpkin ${
-                    isSelected ? 'border-pumpkin' : 'border-gray-700'
+                  className={`bg-gunmetal bg-opacity-95 border-2 rounded-xl p-6 cursor-pointer transition-all hover:border-accent ${
+                    isSelected ? 'border-accent' : 'border-gray-700'
                   }`}
                   onClick={() => handleLeagueSelect(league)}
                 >
                   {/* League Header */}
                   <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-lg font-bold text-pumpkin">{league.name}</h3>
+                    <h3 className="text-lg font-bold text-accent">{league.name}</h3>
                     <span className={`text-sm font-semibold ${registrationStatus.color}`}>
                       {registrationStatus.text}
                     </span>
@@ -229,7 +284,7 @@ export default function LeaguesPage() {
                   {/* Selection Indicator */}
                   {isSelected && (
                     <div className="mt-4 text-center">
-                      <span className="text-pumpkin font-semibold">✓ Selected</span>
+                      <span className="text-accent font-semibold">✓ Selected</span>
                     </div>
                   )}
                 </div>
@@ -240,13 +295,13 @@ export default function LeaguesPage() {
 
         {/* Selected League Details */}
         {selectedLeague && (
-          <div className="mt-8 bg-gunmetal bg-opacity-95 border-2 border-pumpkin rounded-xl p-6">
-            <h2 className="text-2xl font-bold text-pumpkin mb-4">League Details: {selectedLeague.name}</h2>
+          <div className="mt-8 bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6">
+            <h2 className="text-2xl font-bold text-accent mb-4">League Details: {selectedLeague.name}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Basic Information */}
               <div>
-                <h3 className="text-lg font-bold text-pumpkin mb-3">League Information</h3>
+                <h3 className="text-lg font-bold text-accent mb-3">League Information</h3>
                 <div className="space-y-2 text-sm">
                   <div><span className="text-gray-400">Description:</span> {selectedLeague.description || 'No description available'}</div>
                   <div><span className="text-gray-400">Game Format:</span> {selectedLeague.format}</div>
@@ -258,7 +313,7 @@ export default function LeaguesPage() {
 
               {/* Registration Information */}
               <div>
-                <h3 className="text-lg font-bold text-pumpkin mb-3">Registration Information</h3>
+                <h3 className="text-lg font-bold text-accent mb-3">Registration Information</h3>
                 <div className="space-y-2 text-sm">
                   <div><span className="text-gray-400">Registration Fee:</span> {formatCurrency(selectedLeague.registration_fee)}</div>
                   <div><span className="text-gray-400">Minimum Teams:</span> {selectedLeague.min_teams}</div>
@@ -274,13 +329,19 @@ export default function LeaguesPage() {
 
             {/* Registration Button */}
             <div className="mt-6 text-center">
-              <button
-                onClick={handleRegisterForLeague}
-                disabled={!isSignedIn}
-                className="px-8 py-3 bg-pumpkin text-black font-bold rounded-lg hover:bg-deeporange transition-colors disabled:opacity-50"
-              >
-                {isSignedIn ? 'Register for This League' : 'Sign In to Register'}
-              </button>
+              {isLeagueRegistered(selectedLeague) ? (
+                <div className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg">
+                  ✓ You are already registered for this league
+                </div>
+              ) : (
+                <button
+                  onClick={handleRegisterForLeague}
+                  disabled={!isSignedIn}
+                  className="px-8 py-3 bg-accent text-white font-bold rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50"
+                >
+                  {isSignedIn ? 'Register for This League' : 'Sign In to Register'}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -289,9 +350,9 @@ export default function LeaguesPage() {
       {/* Registration Modal */}
       {showRegistrationModal && selectedLeague && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gunmetal border-2 border-pumpkin rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-gunmetal border-2 border-accent rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-pumpkin">Register for {selectedLeague.name}</h3>
+              <h3 className="text-2xl font-bold text-accent">Register for {selectedLeague.name}</h3>
               <button 
                 onClick={() => setShowRegistrationModal(false)}
                 className="text-gray-400 hover:text-white"
@@ -315,13 +376,13 @@ export default function LeaguesPage() {
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={handleRegistrationComplete}
-                  className="px-6 py-3 bg-pumpkin text-black font-bold rounded hover:bg-deeporange transition-colors"
+                  className="px-6 py-3 bg-accent text-white font-bold rounded hover:bg-accent-dark transition-colors"
                 >
                   Submit Registration
                 </button>
                 <button
                   onClick={() => setShowRegistrationModal(false)}
-                  className="px-6 py-3 border-2 border-pumpkin text-pumpkin font-bold rounded hover:bg-pumpkin hover:text-black transition-colors"
+                  className="px-6 py-3 border-2 border-accent text-accent font-bold rounded hover:bg-accent hover:text-white transition-colors"
                 >
                   Cancel
                 </button>

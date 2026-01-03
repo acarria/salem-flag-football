@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, user, registration, team, league
+from app.api import user, registration, team, league
 from app.api.admin.main import router as admin_router
 
 app = FastAPI()
@@ -14,7 +14,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/auth")
 app.include_router(user.router, prefix="/user")
 app.include_router(registration.router, prefix="/registration")
 app.include_router(team.router, prefix="/team")

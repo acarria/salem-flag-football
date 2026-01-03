@@ -87,8 +87,8 @@ function App() {
   // Show loading state
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <div className="text-pumpkin text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-primary">
+        <div className="text-accent text-xl">Loading...</div>
       </div>
     );
   }
@@ -96,7 +96,7 @@ function App() {
     return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-black">
+        <div className="min-h-screen bg-primary">
           {/* Admin dashboard is now handled within the page components */}
 
           {/* Routes */}

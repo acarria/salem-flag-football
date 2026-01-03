@@ -6,6 +6,7 @@ from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
 from app.models.team import Team
+from app.models.league_player import LeaguePlayer
 from app.api.schemas.admin import (
     LeagueCreateRequest, LeagueUpdateRequest, LeagueResponse, LeagueStatsResponse
 )
@@ -119,10 +120,11 @@ async def get_all_leagues(
     
     result = []
     for league in leagues:
-        # Count registered players and teams
-        player_count = db.query(Player).filter(
-            Player.league_id == league.id,
-            Player.registration_status == 'registered'
+        # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
+        player_count = db.query(LeaguePlayer).filter(
+            LeaguePlayer.league_id == league.id,
+            LeaguePlayer.registration_status == 'registered',
+            LeaguePlayer.is_active == True
         ).count()
         
         team_count = db.query(Team).filter(
@@ -149,10 +151,11 @@ async def get_league_details(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Count registered players and teams
-    player_count = db.query(Player).filter(
-        Player.league_id == league.id,
-        Player.registration_status == 'registered'
+    # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
+    player_count = db.query(LeaguePlayer).filter(
+        LeaguePlayer.league_id == league.id,
+        LeaguePlayer.registration_status == 'registered',
+        LeaguePlayer.is_active == True
     ).count()
     
     team_count = db.query(Team).filter(
@@ -199,10 +202,11 @@ async def update_league(
         db.commit()
         db.refresh(league)
         
-        # Return with updated counts
-        player_count = db.query(Player).filter(
-            Player.league_id == league.id,
-            Player.registration_status == 'registered'
+        # Return with updated counts (using LeaguePlayer for many-to-many relationship)
+        player_count = db.query(LeaguePlayer).filter(
+            LeaguePlayer.league_id == league.id,
+            LeaguePlayer.registration_status == 'registered',
+            LeaguePlayer.is_active == True
         ).count()
         
         team_count = db.query(Team).filter(
@@ -250,10 +254,11 @@ async def get_league_stats(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Count players and teams
-    total_players = db.query(Player).filter(
-        Player.league_id == league.id,
-        Player.registration_status == 'registered'
+    # Count players and teams (using LeaguePlayer for many-to-many relationship)
+    total_players = db.query(LeaguePlayer).filter(
+        LeaguePlayer.league_id == league.id,
+        LeaguePlayer.registration_status == 'registered',
+        LeaguePlayer.is_active == True
     ).count()
     
     total_teams = db.query(Team).filter(
