@@ -281,3 +281,46 @@ export interface RegistrationData {
     }>;
   };
 }
+
+// Field Types
+export interface Field {
+  id: number;
+  league_id: number;
+  name: string;
+  field_number?: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  country: string;
+  facility_name?: string;
+  additional_notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FieldCreateRequest {
+  name: string;
+  field_number?: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  country?: string;
+  facility_name?: string;
+  additional_notes?: string;
+}
+
+export interface FieldUpdateRequest {
+  name?: string;
+  field_number?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  country?: string;
+  facility_name?: string;
+  additional_notes?: string;
+  is_active?: boolean;
+}

@@ -9,7 +9,8 @@ from app.api.schemas.admin import (
     LeagueResponse,
     LeagueStatsResponse,
     LeagueMemberResponse,
-    # Team Generation
+    # Team Management
+    TeamResponse,
     TeamGenerationRequest,
     TeamGenerationResponse,
     # Schedule Management
@@ -60,6 +61,7 @@ __all__ = [
     "LeagueResponse",
     "LeagueStatsResponse",
     "LeagueMemberResponse",
+    "TeamResponse",
     "TeamGenerationRequest",
     "TeamGenerationResponse",
     "ScheduleGenerationRequest",

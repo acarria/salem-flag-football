@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from datetime import datetime, date, timedelta, time as dt_time
 from typing import List, Dict, Tuple, Optional
 import math
@@ -9,6 +10,7 @@ from app.models.team import Team
 from app.models.game import Game
 from app.models.field import Field
 from app.models.field_availability import FieldAvailability
+from app.models.league_field import LeagueField
 from app.api.schemas.admin import (
     ScheduleGenerationRequest, ScheduleGenerationResponse,
     FieldResponse, FieldCreateRequest, FieldUpdateRequest,
@@ -18,8 +20,8 @@ from app.api.admin.dependencies import get_admin_user
 
 router = APIRouter()
 
-# Maximum game duration in minutes (90 minutes)
-MAX_GAME_DURATION_MINUTES = 90
+# Maximum game duration in minutes (60 minutes)
+MAX_GAME_DURATION_MINUTES = 60
 
 def calculate_team_standings(league_id: int, db: Session) -> List[Tuple[int, Dict]]:
     """
@@ -157,21 +159,22 @@ def get_playoff_winners_from_round(league_id: int, bracket_round: int, db: Sessi
     
     return winners
 
-def get_available_time_slots_for_date(league_id: int, target_date: date, db: Session, max_duration_minutes: int = MAX_GAME_DURATION_MINUTES) -> List[Tuple[dt_time, dt_time]]:
+def get_available_time_slots_for_date(league_id: int, target_date: date, db: Session, field_id: Optional[int] = None, max_duration_minutes: int = MAX_GAME_DURATION_MINUTES) -> List[Tuple[int, dt_time, dt_time]]:
     """
     Get available time slots for a specific date based on field availability.
     
-    This function queries both recurring and custom field availability records
-    for the league and returns time slots available on the target date. Each
-    slot is represented as a (field_id, start_time, end_time) tuple.
+    This function queries field availability for fields associated with the league
+    and checks existing game bookings across ALL active leagues to avoid conflicts.
+    Returns time slots available on the target date. Each slot is represented as
+    a (field_id, start_time, end_time) tuple.
     
     Args:
         league_id: The unique identifier of the league.
         target_date: The date to check availability for.
         db: SQLAlchemy database session.
         field_id: Optional field ID to filter by specific field. If None, returns
-                  availability for all fields in the league.
-        max_duration_minutes: Maximum duration for a game slot (default: 90 minutes).
+                  availability for all fields associated with the league.
+        max_duration_minutes: Maximum duration for a game slot (default: 60 minutes).
     
     Returns:
         A list of tuples, where each tuple contains:
@@ -181,28 +184,69 @@ def get_available_time_slots_for_date(league_id: int, target_date: date, db: Ses
         
         Slots are sorted by field_id, then by start time. Each slot represents
         a contiguous period of field availability that can accommodate at least
-        one game of max_duration_minutes.
+        one game of max_duration_minutes, after accounting for existing bookings
+        across all active leagues.
     
     Note:
+        - Gets fields associated with the league via league_fields junction table
         - For recurring availability, checks if target_date matches the day_of_week
           and falls within the recurrence_start_date and recurrence_end_date range.
         - For custom availability, checks if target_date matches custom_date.
         - Only active availability records are considered.
+        - Checks existing games across ALL active leagues for conflicts
         - If field_id is provided, only returns availability for that field.
         - If no availability is found, returns an empty list.
     """
+    # Get fields associated with this league
+    league_field_ids_subquery = db.query(LeagueField.field_id).filter(
+        LeagueField.league_id == league_id
+    ).subquery()
+    
+    # Build base query for fields associated with the league
+    fields_query = db.query(Field.id).filter(
+        Field.id.in_(select(league_field_ids_subquery.c.field_id)),
+        Field.is_active == True
+    )
+    
+    if field_id is not None:
+        fields_query = fields_query.filter(Field.id == field_id)
+    
+    associated_field_ids = [fid[0] for fid in fields_query.all()]
+    
+    if not associated_field_ids:
+        return []  # No fields associated with this league
+    
     available_slots = []
     day_of_week = target_date.weekday()  # 0=Monday, 6=Sunday
     
+    # Get existing game bookings across ALL active leagues for this date
+    # This ensures we don't double-book fields
+    existing_games = db.query(Game).filter(
+        Game.game_date == target_date,
+        Game.field_id.in_(associated_field_ids),
+        Game.is_active == True,
+        Game.status.in_(['scheduled', 'in_progress'])  # Only count confirmed bookings
+    ).all()
+    
+    # Build a set of booked time slots: (field_id, start_time, end_time)
+    booked_slots = set()
+    for game in existing_games:
+        if game.field_id and game.game_time:
+            game_start = datetime.strptime(game.game_time, "%H:%M").time()
+            game_end_minutes = (game_start.hour * 60 + game_start.minute + game.duration_minutes)
+            game_end_hours = game_end_minutes // 60
+            game_end_mins = game_end_minutes % 60
+            game_end = dt_time(game_end_hours, game_end_mins)
+            booked_slots.add((game.field_id, game_start, game_end))
+    
     # Build base query for recurring availability
     recurring_query = db.query(FieldAvailability).filter(
-        FieldAvailability.league_id == league_id,
+        FieldAvailability.field_id.in_(associated_field_ids),
         FieldAvailability.is_recurring == True,
         FieldAvailability.is_active == True,
         FieldAvailability.day_of_week == day_of_week
     )
     
-    # Filter by field_id if provided
     if field_id is not None:
         recurring_query = recurring_query.filter(FieldAvailability.field_id == field_id)
     
@@ -221,17 +265,29 @@ def get_available_time_slots_for_date(league_id: int, target_date: date, db: Ses
         duration_minutes = (end_dt - start_dt).total_seconds() / 60
         
         if duration_minutes >= max_duration_minutes:
-            available_slots.append((avail.field_id, avail.start_time, avail.end_time))
+            # Check if this slot conflicts with existing bookings
+            slot_start = avail.start_time
+            slot_end = avail.end_time
+            conflicts = False
+            
+            for booked_field_id, booked_start, booked_end in booked_slots:
+                if booked_field_id == avail.field_id:
+                    # Check for overlap
+                    if not (slot_end <= booked_start or slot_start >= booked_end):
+                        conflicts = True
+                        break
+            
+            if not conflicts:
+                available_slots.append((avail.field_id, avail.start_time, avail.end_time))
     
     # Build base query for custom one-time availability
     custom_query = db.query(FieldAvailability).filter(
-        FieldAvailability.league_id == league_id,
+        FieldAvailability.field_id.in_(associated_field_ids),
         FieldAvailability.is_recurring == False,
         FieldAvailability.is_active == True,
         FieldAvailability.custom_date == target_date
     )
     
-    # Filter by field_id if provided
     if field_id is not None:
         custom_query = custom_query.filter(FieldAvailability.field_id == field_id)
     
@@ -244,7 +300,20 @@ def get_available_time_slots_for_date(league_id: int, target_date: date, db: Ses
         duration_minutes = (end_dt - start_dt).total_seconds() / 60
         
         if duration_minutes >= max_duration_minutes:
-            available_slots.append((avail.field_id, avail.start_time, avail.end_time))
+            # Check if this slot conflicts with existing bookings
+            slot_start = avail.start_time
+            slot_end = avail.end_time
+            conflicts = False
+            
+            for booked_field_id, booked_start, booked_end in booked_slots:
+                if booked_field_id == avail.field_id:
+                    # Check for overlap
+                    if not (slot_end <= booked_start or slot_start >= booked_end):
+                        conflicts = True
+                        break
+            
+            if not conflicts:
+                available_slots.append((avail.field_id, avail.start_time, avail.end_time))
     
     # Sort by field_id, then by start time
     available_slots.sort(key=lambda x: (x[0], x[1]))
@@ -306,7 +375,7 @@ def generate_time_slots_from_availability(
     Args:
         available_start: Start time of the available window.
         available_end: End time of the available window.
-        game_duration_minutes: Duration of each game in minutes (max 90).
+        game_duration_minutes: Duration of each game in minutes (max 60).
         buffer_minutes: Buffer time between games in minutes (default: 0).
     
     Returns:
@@ -314,7 +383,7 @@ def generate_time_slots_from_availability(
         game start times within the window.
     
     Note:
-        - Game duration is capped at MAX_GAME_DURATION_MINUTES (90 minutes).
+        - Game duration is capped at MAX_GAME_DURATION_MINUTES (60 minutes).
         - Time slots are generated at intervals of (game_duration + buffer_minutes).
         - Returns empty list if window is too short for even one game.
     """
@@ -401,8 +470,8 @@ async def generate_schedule(
         - Weeks with no field availability will be skipped.
         
         Game Duration:
-        - All games are capped at a maximum duration of 90 minutes.
-        - If game_duration exceeds 90 minutes, it will be automatically reduced to 90 minutes.
+        - All games are capped at a maximum duration of 60 minutes.
+        - If game_duration exceeds 60 minutes, it will be automatically reduced to 60 minutes.
     """
     # Verify league exists
     league = db.query(League).filter(League.id == league_id).first()
@@ -422,7 +491,7 @@ async def generate_schedule(
     start_date = schedule_data.start_date or league.start_date
     game_duration = schedule_data.game_duration or league.game_duration
     
-    # Enforce maximum game duration of 90 minutes
+    # Enforce maximum game duration of 60 minutes
     game_duration = min(game_duration, MAX_GAME_DURATION_MINUTES)
     
     # If time_slots are provided in request, use them (for backward compatibility)
@@ -792,23 +861,20 @@ async def get_league_schedule(
         "schedule_by_week": schedule_by_week
     }
 
-# Field Management Endpoints
-@router.post("/leagues/{league_id}/fields", response_model=FieldResponse, summary="Create a new field")
-async def create_field(
-    league_id: int,
+# Global Field Management Endpoints (fields are independent, not tied to leagues)
+@router.post("/fields", response_model=FieldResponse, summary="Create a new field")
+async def create_field_global(
     field_data: FieldCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> FieldResponse:
     """
-    Create a new field for a league.
+    Create a new independent field.
     
-    This endpoint allows admins to add a new physical field/location where
-    games can be played. Each field has a unique identifier and detailed
-    address information.
+    Fields are independent entities that can be shared across multiple leagues.
+    This endpoint creates a field that can then be associated with leagues.
     
     Args:
-        league_id: The unique identifier of the league.
         field_data: FieldCreateRequest containing field information:
             - name: Field name (e.g., "Field 1", "Main Field")
             - field_number: Optional field number/identifier
@@ -826,17 +892,10 @@ async def create_field(
         FieldResponse: The created field record.
     
     Raises:
-        HTTPException 404: If the league is not found.
         HTTPException 400: If validation fails (e.g., missing required address fields).
     """
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
-    # Create field record
+    # Create field record (no league_id needed)
     field = Field(
-        league_id=league_id,
         name=field_data.name,
         field_number=field_data.field_number,
         street_address=field_data.street_address,
@@ -852,6 +911,305 @@ async def create_field(
     
     try:
         db.add(field)
+        db.commit()
+        db.refresh(field)
+        return FieldResponse.model_validate(field)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create field: {str(e)}")
+
+@router.get("/fields", response_model=List[FieldResponse], summary="Get all fields")
+async def get_all_fields(
+    is_active: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> List[FieldResponse]:
+    """
+    Retrieve all fields (independent of leagues).
+    
+    Args:
+        is_active: Optional filter to show only active/inactive fields (default: all).
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        List[FieldResponse]: A list of all fields.
+    """
+    query = db.query(Field)
+    
+    if is_active is not None:
+        query = query.filter(Field.is_active == is_active)
+    
+    fields = query.order_by(Field.name).all()
+    
+    return [FieldResponse.model_validate(field) for field in fields]
+
+@router.get("/fields/{field_id}", response_model=FieldResponse, summary="Get a specific field")
+async def get_field_by_id_global(
+    field_id: int,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> FieldResponse:
+    """
+    Retrieve a specific field by ID.
+    
+    Args:
+        field_id: The unique identifier of the field.
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        FieldResponse: The field record.
+    
+    Raises:
+        HTTPException 404: If the field is not found.
+    """
+    field = db.query(Field).filter(Field.id == field_id).first()
+    
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+    
+    return FieldResponse.model_validate(field)
+
+@router.put("/fields/{field_id}", response_model=FieldResponse, summary="Update a field")
+async def update_field_global(
+    field_id: int,
+    field_data: FieldUpdateRequest,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> FieldResponse:
+    """
+    Update an existing field.
+    
+    Args:
+        field_id: The unique identifier of the field to update.
+        field_data: FieldUpdateRequest containing fields to update.
+                   Only provided fields will be updated.
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        FieldResponse: The updated field record.
+    
+    Raises:
+        HTTPException 404: If the field is not found.
+    """
+    field = db.query(Field).filter(Field.id == field_id).first()
+    
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+    
+    # Update fields if provided
+    update_data = field_data.model_dump(exclude_unset=True)
+    
+    for field_name, value in update_data.items():
+        setattr(field, field_name, value)
+    
+    try:
+        db.commit()
+        db.refresh(field)
+        return FieldResponse.model_validate(field)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update field: {str(e)}")
+
+@router.delete("/fields/{field_id}", summary="Delete a field")
+async def delete_field_global(
+    field_id: int,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> Dict[str, str]:
+    """
+    Delete a field.
+    
+    This endpoint soft-deletes the field by setting is_active=False, rather than
+    permanently removing it from the database. This preserves historical data
+    and allows for reactivation if needed.
+    
+    Args:
+        field_id: The unique identifier of the field to delete.
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        Dict[str, str]: A confirmation message.
+    
+    Raises:
+        HTTPException 404: If the field is not found.
+    """
+    field = db.query(Field).filter(Field.id == field_id).first()
+    
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+    
+    # Soft delete by setting is_active=False
+    field.is_active = False
+    
+    try:
+        db.commit()
+        return {"message": "Field deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete field: {str(e)}")
+
+# League-Field Association Endpoints
+@router.post("/leagues/{league_id}/fields/{field_id}", response_model=Dict[str, str], summary="Associate a field with a league")
+async def associate_field_with_league(
+    league_id: int,
+    field_id: int,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> Dict[str, str]:
+    """
+    Associate an existing field with a league.
+    
+    Args:
+        league_id: The unique identifier of the league.
+        field_id: The unique identifier of the field to associate.
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        Dict[str, str]: A confirmation message.
+    
+    Raises:
+        HTTPException 404: If the league or field is not found.
+        HTTPException 400: If the association already exists.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Verify field exists
+    field = db.query(Field).filter(Field.id == field_id, Field.is_active == True).first()
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found or not active")
+    
+    # Check if association already exists
+    existing = db.query(LeagueField).filter(
+        LeagueField.league_id == league_id,
+        LeagueField.field_id == field_id
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Field is already associated with this league")
+    
+    # Create association
+    league_field = LeagueField(
+        league_id=league_id,
+        field_id=field_id
+    )
+    
+    try:
+        db.add(league_field)
+        db.commit()
+        return {"message": "Field associated with league successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to associate field with league: {str(e)}")
+
+@router.delete("/leagues/{league_id}/fields/{field_id}", summary="Disassociate a field from a league")
+async def disassociate_field_from_league(
+    league_id: int,
+    field_id: int,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> Dict[str, str]:
+    """
+    Disassociate a field from a league.
+    
+    Args:
+        league_id: The unique identifier of the league.
+        field_id: The unique identifier of the field to disassociate.
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        Dict[str, str]: A confirmation message.
+    
+    Raises:
+        HTTPException 404: If the league or field association is not found.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Find and remove association
+    league_field = db.query(LeagueField).filter(
+        LeagueField.league_id == league_id,
+        LeagueField.field_id == field_id
+    ).first()
+    
+    if not league_field:
+        raise HTTPException(status_code=404, detail="Field is not associated with this league")
+    
+    try:
+        db.delete(league_field)
+        db.commit()
+        return {"message": "Field disassociated from league successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to disassociate field from league: {str(e)}")
+
+# League-Specific Field Endpoints (backward compatibility - uses league_fields junction table)
+@router.post("/leagues/{league_id}/fields", response_model=FieldResponse, summary="Create a new field and associate it with a league")
+async def create_field(
+    league_id: int,
+    field_data: FieldCreateRequest,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> FieldResponse:
+    """
+    Create a new field and automatically associate it with the specified league.
+    
+    This is a convenience endpoint that creates a field and associates it with
+    a league in one operation. The field can still be shared with other leagues later.
+    
+    Args:
+        league_id: The unique identifier of the league.
+        field_data: FieldCreateRequest containing field information.
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        FieldResponse: The created field record.
+    
+    Raises:
+        HTTPException 404: If the league is not found.
+        HTTPException 400: If validation fails.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Create field record (no league_id needed)
+    field = Field(
+        name=field_data.name,
+        field_number=field_data.field_number,
+        street_address=field_data.street_address,
+        city=field_data.city,
+        state=field_data.state,
+        zip_code=field_data.zip_code,
+        country=field_data.country,
+        facility_name=field_data.facility_name,
+        additional_notes=field_data.additional_notes,
+        created_by=admin_user["id"],
+        is_active=True
+    )
+    
+    try:
+        db.add(field)
+        db.flush()  # Get the field ID
+        
+        # Associate field with league
+        league_field = LeagueField(
+            league_id=league_id,
+            field_id=field.id
+        )
+        db.add(league_field)
         db.commit()
         db.refresh(field)
         return FieldResponse.model_validate(field)
@@ -886,8 +1244,12 @@ async def get_fields(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Query fields
-    query = db.query(Field).filter(Field.league_id == league_id)
+    # Get fields associated with this league via league_fields junction table
+    query = db.query(Field).join(
+        LeagueField, Field.id == LeagueField.field_id
+    ).filter(
+        LeagueField.league_id == league_id
+    )
     
     if is_active is not None:
         query = query.filter(Field.is_active == is_active)
@@ -923,11 +1285,17 @@ async def get_field_by_id(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Query field
-    field = db.query(Field).filter(
-        Field.id == field_id,
-        Field.league_id == league_id
+    # Verify field is associated with this league
+    league_field = db.query(LeagueField).filter(
+        LeagueField.league_id == league_id,
+        LeagueField.field_id == field_id
     ).first()
+    
+    if not league_field:
+        raise HTTPException(status_code=404, detail="Field is not associated with this league")
+    
+    # Get the field
+    field = db.query(Field).filter(Field.id == field_id).first()
     
     if not field:
         raise HTTPException(status_code=404, detail="Field not found")
@@ -964,11 +1332,9 @@ async def update_field(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Query field
-    field = db.query(Field).filter(
-        Field.id == field_id,
-        Field.league_id == league_id
-    ).first()
+    # Verify field is associated with this league (or allow updating any field if admin)
+    # For now, we'll allow updating if the field exists (fields are global)
+    field = db.query(Field).filter(Field.id == field_id).first()
     
     if not field:
         raise HTTPException(status_code=404, detail="Field not found")
@@ -1013,47 +1379,48 @@ async def delete_field(
     Raises:
         HTTPException 404: If the league or field is not found.
     """
+    # Note: This endpoint now disassociates the field from the league rather than deleting it
+    # To delete a field globally, use DELETE /fields/{field_id}
     # Verify league exists
     league = db.query(League).filter(League.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Query field
-    field = db.query(Field).filter(
-        Field.id == field_id,
-        Field.league_id == league_id
+    # Find and remove association (not the field itself)
+    league_field = db.query(LeagueField).filter(
+        LeagueField.league_id == league_id,
+        LeagueField.field_id == field_id
     ).first()
     
-    if not field:
-        raise HTTPException(status_code=404, detail="Field not found")
-    
-    # Soft delete by setting is_active=False
-    field.is_active = False
+    if not league_field:
+        raise HTTPException(status_code=404, detail="Field is not associated with this league")
     
     try:
+        db.delete(league_field)
         db.commit()
-        return {"message": "Field deleted successfully"}
+        return {"message": "Field disassociated from league successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete field: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to disassociate field from league: {str(e)}")
 
-# Field Availability Management Endpoints
-@router.post("/leagues/{league_id}/field-availability", response_model=FieldAvailabilityResponse, summary="Create field availability")
+# Field Availability Management Endpoints (field-only, not league-specific)
+@router.post("/field-availability", response_model=FieldAvailabilityResponse, summary="Create field availability")
 async def create_field_availability(
-    league_id: int,
     availability_data: FieldAvailabilityCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> FieldAvailabilityResponse:
     """
-    Create a new field availability record for a league.
+    Create a new field availability record.
     
-    This endpoint allows admins to configure when fields are available for games.
+    Field availability is field-only (not league-specific), so it applies to
+    all leagues that use the field. This endpoint allows admins to configure
+    when fields are available for games.
+    
     Supports both recurring patterns (e.g., every Tuesday 6-9pm) and custom
     one-time availability (e.g., specific dates for special events).
     
     Args:
-        league_id: The unique identifier of the league.
         availability_data: FieldAvailabilityCreateRequest containing:
             - field_id: The ID of the field this availability is for (required)
             - is_recurring: True for recurring pattern, False for one-time
@@ -1068,27 +1435,20 @@ async def create_field_availability(
         FieldAvailabilityResponse: The created field availability record.
     
     Raises:
-        HTTPException 404: If the league or field is not found.
+        HTTPException 404: If the field is not found.
         HTTPException 400: If validation fails (e.g., missing required fields, invalid day_of_week).
         HTTPException 400: If end_time is not after start_time.
     """
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
-    # Verify field exists and belongs to league
+    # Verify field exists
     field = db.query(Field).filter(
         Field.id == availability_data.field_id,
-        Field.league_id == league_id,
         Field.is_active == True
     ).first()
     if not field:
         raise HTTPException(status_code=404, detail="Field not found or not active")
     
-    # Create field availability record
+    # Create field availability record (no league_id)
     field_availability = FieldAvailability(
-        league_id=league_id,
         field_id=availability_data.field_id,
         is_recurring=availability_data.is_recurring,
         day_of_week=availability_data.day_of_week if availability_data.is_recurring else None,
@@ -1115,35 +1475,30 @@ async def create_field_availability(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create field availability: {str(e)}")
 
-@router.get("/leagues/{league_id}/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get all field availability records for a league")
-async def get_field_availability(
-    league_id: int,
+@router.get("/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get all field availability records")
+async def get_all_field_availability(
+    field_id: Optional[int] = None,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> List[FieldAvailabilityResponse]:
     """
-    Retrieve all field availability records for a league.
+    Retrieve all field availability records.
     
     Args:
-        league_id: The unique identifier of the league.
+        field_id: Optional filter by specific field ID.
         is_active: Optional filter to show only active/inactive records (default: all).
         db: SQLAlchemy database session (dependency injection).
         admin_user: Authenticated admin user (dependency injection).
     
     Returns:
-        List[FieldAvailabilityResponse]: A list of field availability records for the league.
-    
-    Raises:
-        HTTPException 404: If the league is not found.
+        List[FieldAvailabilityResponse]: A list of field availability records.
     """
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
     # Query field availability records
-    query = db.query(FieldAvailability).filter(FieldAvailability.league_id == league_id)
+    query = db.query(FieldAvailability)
+    
+    if field_id is not None:
+        query = query.filter(FieldAvailability.field_id == field_id)
     
     if is_active is not None:
         query = query.filter(FieldAvailability.is_active == is_active)
@@ -1160,9 +1515,60 @@ async def get_field_availability(
     
     return result
 
-@router.get("/leagues/{league_id}/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Get a specific field availability record")
-async def get_field_availability_by_id(
+@router.get("/leagues/{league_id}/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get field availability for fields in a league")
+async def get_field_availability_for_league(
     league_id: int,
+    is_active: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+) -> List[FieldAvailabilityResponse]:
+    """
+    Retrieve field availability records for fields associated with a league.
+    
+    Args:
+        league_id: The unique identifier of the league.
+        is_active: Optional filter to show only active/inactive records (default: all).
+        db: SQLAlchemy database session (dependency injection).
+        admin_user: Authenticated admin user (dependency injection).
+    
+    Returns:
+        List[FieldAvailabilityResponse]: A list of field availability records for fields in the league.
+    
+    Raises:
+        HTTPException 404: If the league is not found.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Get field IDs associated with this league
+    field_ids_subquery = db.query(LeagueField.field_id).filter(
+        LeagueField.league_id == league_id
+    ).subquery()
+    
+    # Query field availability records for fields in this league
+    query = db.query(FieldAvailability).filter(
+        FieldAvailability.field_id.in_(select(field_ids_subquery.c.field_id))
+    )
+    
+    if is_active is not None:
+        query = query.filter(FieldAvailability.is_active == is_active)
+    
+    availabilities = query.order_by(FieldAvailability.created_at.desc()).all()
+    
+    # Populate field_name for each response
+    result = []
+    for avail in availabilities:
+        field = db.query(Field).filter(Field.id == avail.field_id).first()
+        response = FieldAvailabilityResponse.model_validate(avail)
+        response.field_name = field.name if field else None
+        result.append(response)
+    
+    return result
+
+@router.get("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Get a specific field availability record")
+async def get_field_availability_by_id(
     availability_id: int,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1171,7 +1577,6 @@ async def get_field_availability_by_id(
     Retrieve a specific field availability record by ID.
     
     Args:
-        league_id: The unique identifier of the league.
         availability_id: The unique identifier of the field availability record.
         db: SQLAlchemy database session (dependency injection).
         admin_user: Authenticated admin user (dependency injection).
@@ -1180,17 +1585,11 @@ async def get_field_availability_by_id(
         FieldAvailabilityResponse: The field availability record.
     
     Raises:
-        HTTPException 404: If the league or field availability record is not found.
+        HTTPException 404: If the field availability record is not found.
     """
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
     # Query field availability record
     availability = db.query(FieldAvailability).filter(
-        FieldAvailability.id == availability_id,
-        FieldAvailability.league_id == league_id
+        FieldAvailability.id == availability_id
     ).first()
     
     if not availability:
@@ -1202,9 +1601,8 @@ async def get_field_availability_by_id(
     response.field_name = field.name if field else None
     return response
 
-@router.put("/leagues/{league_id}/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Update field availability record")
+@router.put("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Update field availability record")
 async def update_field_availability(
-    league_id: int,
     availability_id: int,
     availability_data: FieldAvailabilityUpdateRequest,
     db: Session = Depends(get_db),
@@ -1214,7 +1612,6 @@ async def update_field_availability(
     Update an existing field availability record.
     
     Args:
-        league_id: The unique identifier of the league.
         availability_id: The unique identifier of the field availability record to update.
         availability_data: FieldAvailabilityUpdateRequest containing fields to update.
                            Only provided fields will be updated.
@@ -1225,18 +1622,12 @@ async def update_field_availability(
         FieldAvailabilityResponse: The updated field availability record.
     
     Raises:
-        HTTPException 404: If the league or field availability record is not found.
+        HTTPException 404: If the field availability record or field is not found.
         HTTPException 400: If validation fails (e.g., invalid day_of_week, end_time <= start_time).
     """
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
     # Query field availability record
     availability = db.query(FieldAvailability).filter(
-        FieldAvailability.id == availability_id,
-        FieldAvailability.league_id == league_id
+        FieldAvailability.id == availability_id
     ).first()
     
     if not availability:
@@ -1249,7 +1640,6 @@ async def update_field_availability(
     if 'field_id' in update_data:
         field = db.query(Field).filter(
             Field.id == update_data['field_id'],
-            Field.league_id == league_id,
             Field.is_active == True
         ).first()
         if not field:
@@ -1279,9 +1669,8 @@ async def update_field_availability(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update field availability: {str(e)}")
 
-@router.delete("/leagues/{league_id}/field-availability/{availability_id}", summary="Delete field availability record")
+@router.delete("/field-availability/{availability_id}", summary="Delete field availability record")
 async def delete_field_availability(
-    league_id: int,
     availability_id: int,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1294,7 +1683,6 @@ async def delete_field_availability(
     and allows for reactivation if needed.
     
     Args:
-        league_id: The unique identifier of the league.
         availability_id: The unique identifier of the field availability record to delete.
         db: SQLAlchemy database session (dependency injection).
         admin_user: Authenticated admin user (dependency injection).
@@ -1303,17 +1691,11 @@ async def delete_field_availability(
         Dict[str, str]: A confirmation message.
     
     Raises:
-        HTTPException 404: If the league or field availability record is not found.
+        HTTPException 404: If the field availability record is not found.
     """
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
     # Query field availability record
     availability = db.query(FieldAvailability).filter(
-        FieldAvailability.id == availability_id,
-        FieldAvailability.league_id == league_id
+        FieldAvailability.id == availability_id
     ).first()
     
     if not availability:
@@ -1450,7 +1832,7 @@ async def generate_playoff_bracket(
     start_date = schedule_data.start_date or (last_regular_season_game.game_date + timedelta(days=7))
     game_duration = schedule_data.game_duration or league.game_duration
     
-    # Enforce maximum game duration of 90 minutes
+    # Enforce maximum game duration of 60 minutes
     game_duration = min(game_duration, MAX_GAME_DURATION_MINUTES)
     
     # If time_slots are provided in request, use them (for backward compatibility)
