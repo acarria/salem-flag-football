@@ -6,6 +6,7 @@ class Game(Base):
     __tablename__ = "games"
     id = Column(Integer, primary_key=True, index=True)
     league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
+    field_id = Column(Integer, ForeignKey("fields.id"), nullable=True, index=True)
     team1_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     team2_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     week = Column(Integer, nullable=False)

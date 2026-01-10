@@ -9,12 +9,12 @@ class FieldAvailability(Base):
     
     Supports both recurring patterns (e.g., every Tuesday 6-9pm) and custom
     one-time availability windows (e.g., specific dates for special events).
-    Each availability record is tied to a specific field.
+    Each availability record is tied to a specific field and applies globally
+    (not league-specific).
     """
     __tablename__ = "field_availabilities"
     
     id = Column(Integer, primary_key=True, index=True)
-    league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False, index=True)
     field_id = Column(Integer, ForeignKey("fields.id"), nullable=False, index=True)
     
     # Type of availability

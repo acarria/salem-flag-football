@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
-import { League, LeagueCreateRequest, LeagueUpdateRequest, AdminConfig, AdminConfigCreateRequest, User, PaginatedUserResponse } from '../services';
+import { League, LeagueCreateRequest, LeagueUpdateRequest, AdminConfig, AdminConfigCreateRequest, User, PaginatedUserResponse, Field, FieldCreateRequest, FieldUpdateRequest } from '../services';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
-import { AdminManagementModal, LeagueFormModal } from './admin/components';
+import { AdminManagementModal, LeagueFormModal, FieldManagementModal } from './admin/components';
 
 type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'compass_draw';
 type GameFormat = '7v7' | '6v6' | '5v5';
@@ -38,6 +38,22 @@ export default function AdminPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [usersPage, setUsersPage] = useState(1);
   const [usersPageSize] = useState(25);
+  
+  // Global field management state (fields are independent of leagues)
+  const [fields, setFields] = useState<Field[]>([]);
+  const [showFieldModal, setShowFieldModal] = useState(false);
+  const [editingField, setEditingField] = useState<Field | null>(null);
+  const [fieldFormData, setFieldFormData] = useState<Partial<FieldCreateRequest>>({
+    name: '',
+    field_number: '',
+    street_address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    country: 'USA',
+    facility_name: '',
+    additional_notes: '',
+  });
   
   // Form state for league creation/editing
   const [formData, setFormData] = useState<Partial<LeagueCreateRequest>>({
@@ -78,9 +94,12 @@ export default function AdminPage() {
     }
 
     // Load data if user is admin
+    console.log('[AdminPage useEffect] Loading data for admin user');
     loadLeagues();
     loadAdmins();
     loadUsers(1);
+    // Load fields - authenticatedRequest should handle auth
+    loadAllFields();
   }, [isSignedIn, user, navigate]);
 
 
@@ -284,6 +303,158 @@ export default function AdminPage() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  // Global field management functions (fields are independent of leagues)
+  const loadAllFields = async () => {
+    try {
+      const fieldsData = await authenticatedRequest<Field[]>(`/admin/fields`);
+      setFields(Array.isArray(fieldsData) ? fieldsData : []);
+      // Clear any previous errors on success
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load fields:', err);
+      // Only show error for actual failures, not auth issues
+      if (err.response?.status && err.response.status !== 401 && err.response.status !== 403) {
+        const errorMessage = err.response?.data?.detail || err.message || 'Failed to load fields. Please try again.';
+        setError(errorMessage);
+      }
+      // Set empty array on error to prevent UI issues
+      setFields([]);
+    }
+  };
+
+  const openFieldModal = () => {
+    setShowFieldModal(true);
+  };
+
+  const handleCreateField = async () => {
+    if (!fieldFormData.name || !fieldFormData.street_address || !fieldFormData.city || !fieldFormData.state || !fieldFormData.zip_code) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await authenticatedRequest<Field>(`/admin/fields`, {
+        method: 'POST',
+        body: JSON.stringify(fieldFormData as FieldCreateRequest),
+      });
+      
+      setSuccess('Field created successfully!');
+      resetFieldForm();
+      await loadAllFields();
+    } catch (err: any) {
+      console.error('Failed to create field:', err);
+      let errorMessage = 'Failed to create field. Please try again.';
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateField = async () => {
+    if (!editingField) return;
+
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await authenticatedRequest<Field>(`/admin/fields/${editingField.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(fieldFormData as FieldUpdateRequest),
+      });
+      
+      setSuccess('Field updated successfully!');
+      resetFieldForm();
+      setEditingField(null);
+      await loadAllFields();
+    } catch (err: any) {
+      console.error('Failed to update field:', err);
+      let errorMessage = 'Failed to update field. Please try again.';
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteField = async (fieldId: number) => {
+    if (!window.confirm('Are you sure you want to delete this field? This action cannot be undone.')) {
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await authenticatedRequest<void>(`/admin/fields/${fieldId}`, {
+        method: 'DELETE',
+      });
+      
+      setSuccess('Field deleted successfully!');
+      await loadAllFields();
+    } catch (err: any) {
+      console.error('Failed to delete field:', err);
+      let errorMessage = 'Failed to delete field. Please try again.';
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
+    }
+  };
+
+  const handleEditField = (field: Field) => {
+    setEditingField(field);
+    setFieldFormData({
+      name: field.name,
+      field_number: field.field_number || '',
+      street_address: field.street_address,
+      city: field.city,
+      state: field.state,
+      zip_code: field.zip_code,
+      country: field.country,
+      facility_name: field.facility_name || '',
+      additional_notes: field.additional_notes || '',
+    });
+  };
+
+  const handleFieldInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFieldFormData((prev: Partial<FieldCreateRequest>) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const resetFieldForm = () => {
+    setFieldFormData({
+      name: '',
+      field_number: '',
+      street_address: '',
+      city: '',
+      state: '',
+      zip_code: '',
+      country: 'USA',
+      facility_name: '',
+      additional_notes: '',
+    });
+    setEditingField(null);
   };
 
   const getTournamentFormatDescription = (format: TournamentFormat) => {
@@ -544,6 +715,70 @@ export default function AdminPage() {
           ) : null}
         </div>
 
+        {/* Fields List */}
+        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-accent">Fields ({fields.length})</h2>
+            <button
+              onClick={openFieldModal}
+              className="px-4 py-2 bg-accent text-white font-bold rounded hover:bg-accent-dark transition-colors"
+            >
+              ➕ Add Field
+            </button>
+          </div>
+          
+          {fields.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-400 text-xl mb-4">No fields configured yet</div>
+              <button
+                onClick={openFieldModal}
+                className="px-4 py-2 bg-accent text-white font-bold rounded hover:bg-accent-dark transition-colors"
+              >
+                Add Your First Field
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {fields.map((field) => (
+                <div
+                  key={field.id}
+                  className={`bg-black bg-opacity-30 rounded-lg p-4 border ${
+                    field.is_active ? 'border-gray-700' : 'border-gray-800 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-accent">{field.name}</h3>
+                      {field.field_number && (
+                        <div className="text-sm text-gray-400">#{field.field_number}</div>
+                      )}
+                    </div>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        field.is_active
+                          ? 'bg-green-900 text-green-200'
+                          : 'bg-gray-700 text-gray-300'
+                      }`}
+                    >
+                      {field.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  
+                  {field.facility_name && (
+                    <div className="text-sm text-gray-300 mb-2">
+                      <span className="text-gray-400">Facility:</span> {field.facility_name}
+                    </div>
+                  )}
+                  
+                  <div className="text-sm text-gray-300">
+                    {field.street_address}, {field.city}, {field.state} {field.zip_code}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Leagues List */}
         <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6">
           <h2 className="text-2xl font-bold text-accent mb-6">Leagues</h2>
@@ -569,6 +804,12 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-lg font-bold text-accent">{league.name}</h3>
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => navigate(`/admin/leagues/${league.id}`)}
+                        className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition-colors"
+                      >
+                        Manage League
+                      </button>
                       <button
                         onClick={() => openEditModal(league)}
                         className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
@@ -645,6 +886,27 @@ export default function AdminPage() {
             onCancel={() => {
               setShowAdminModal(false);
               setAdminFormData({ email: '', role: 'admin' });
+            }}
+            isLoading={isLoading}
+          />
+        )}
+
+        {showFieldModal && (
+          <FieldManagementModal
+            league={null}
+            fields={fields}
+            formData={fieldFormData}
+            editingField={editingField}
+            onInputChange={handleFieldInputChange}
+            onSubmit={editingField ? handleUpdateField : handleCreateField}
+            onEdit={handleEditField}
+            onDelete={handleDeleteField}
+            onCancelEdit={() => {
+              resetFieldForm();
+            }}
+            onCancel={() => {
+              setShowFieldModal(false);
+              resetFieldForm();
             }}
             isLoading={isLoading}
           />

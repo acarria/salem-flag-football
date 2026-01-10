@@ -1,8 +1,8 @@
-# 🏈 Salem Flag Football League Platform
+# Salem Flag Football League Platform
 
 A comprehensive flag football league management platform for the Salem Flag Football League in Salem, Massachusetts. This platform handles player registration, league management, team organization, and provides a modern web interface for both players and administrators.
 
-## 🏗️ Architecture
+## Architecture
 
 This is a full-stack monorepo with the following structure:
 
@@ -12,9 +12,9 @@ This is a full-stack monorepo with the following structure:
 - **Database**: PostgreSQL with Alembic migrations
 - **Deployment**: Docker Compose for local development
 
-## 🚀 Current Functionality
+## Current Functionality
 
-### ✅ Implemented Features
+### Implemented Features
 
 #### **Authentication & User Management**
 - JWT-based authentication via Clerk
@@ -67,6 +67,17 @@ This is a full-stack monorepo with the following structure:
 - **Registration Flow**: Streamlined registration process for authenticated users
 - **Responsive Design**: Mobile-friendly interface with Salem-themed styling
 
+#### **Field Management**
+- **Field Management**: Multiple fields with detailed address information
+  - Create, update, and delete fields independently
+  - Associate fields with leagues
+  - Field-specific location data (street address, city, state, ZIP, facility name)
+- **Field Availability**: Flexible availability scheduling
+  - Recurring availability patterns (e.g., every Tuesday 6-9pm)
+  - Custom one-time availability windows for special events
+  - Field-level availability management (not league-specific)
+  - Automatic time slot generation from availability windows
+
 #### **Database Schema**
 - **Leagues**: Comprehensive league configuration and settings
 - **Players**: Complete player profiles and registration data
@@ -74,21 +85,28 @@ This is a full-stack monorepo with the following structure:
 - **Groups**: Support for group registrations
 - **Admin Config**: Admin user management
 - **League Players**: Many-to-many relationships with status tracking
+- **Fields**: Independent field entities with location information
+- **Field Availability**: Recurring and custom availability windows
+- **League Fields**: Many-to-many association between leagues and fields
 
-### 🔄 Partially Implemented Features
+### Partially Implemented Features
 
 #### **Schedule & Standings**
 - **Game Model**: Database model for storing individual games with scores and results
 - **Schedule Generation**: Automated schedule creation with database persistence
+  - Support for field availability integration (recurring and custom dates)
+  - Maximum game duration enforcement (60 minutes)
+  - Automatic field assignment based on availability
 - **Schedule Viewing**: Admin interface to view generated schedules
 - **Game Management**: Track game status, scores, and outcomes
+- **Playoff Bracket Generation**: Seeded playoff bracket generation after regular season completion
 
 #### **Team Management**
 - Basic team CRUD operations
 - Team assignment functionality
 - Missing: Team captain roles, team communication features
 
-## 🏗️ Recent Architectural Improvements
+## Recent Architectural Improvements
 
 ### **Backend Modularization**
 - **Refactored Admin API**: Split monolithic `admin.py` into modular components:
@@ -112,9 +130,18 @@ This is a full-stack monorepo with the following structure:
 - **League Member Management**: View all registered players in a league
 - **Team Generation**: Automated team creation with group preservation
 - **Schedule Generation**: Automated schedule creation with database persistence
+  - Field availability integration (recurring and custom dates)
+  - 90-minute maximum game duration enforcement
+  - Automatic field assignment
+- **Playoff Bracket Generation**: Seeded playoff brackets generated after regular season completion
+- **Field Management**: Complete CRUD operations for fields and field availability
 - **Test Data Generation**: Add fake players for testing purposes
 
-## 🚧 Work to be Done
+### **Player Registration Improvements**
+- **Multiple League Registration**: Players can register for multiple leagues simultaneously
+- **Dedicated Registration Endpoints**: Moved to `registration.py` with individual and group registration support
+
+## Work to be Done
 
 ### **High Priority**
 
@@ -158,9 +185,9 @@ This is a full-stack monorepo with the following structure:
 
 #### **6. Advanced Tournament Features**
 - [ ] Swiss tournament pairing algorithms
-- [ ] Playoff bracket generation
+- [x] Playoff bracket generation (seeded based on regular season standings)
 - [ ] Compass draw tournament support
-- [ ] Tournament progression tracking
+- [x] Tournament progression tracking (playoff rounds with elimination)
 
 #### **7. Player Management Enhancements**
 - [x] Team balancing algorithms (with group preservation)
@@ -187,12 +214,14 @@ This is a full-stack monorepo with the following structure:
 - [ ] Social features (player profiles, friend connections)
 - [ ] League history and archives
 
-## 🛠️ Technical Debt & Improvements
+## Technical Debt & Improvements
 
 ### **Database & API**
 - [x] Modular API architecture with separate routers for different domains
 - [x] Comprehensive API documentation (OpenAPI/Swagger)
 - [x] Implement proper error handling and validation
+- [x] Schema refactoring for consistent organization
+- [x] Field and field availability management endpoints
 - [ ] Add database indexes for performance
 - [ ] Implement caching for frequently accessed data
 - [ ] Add comprehensive test coverage
@@ -213,7 +242,7 @@ This is a full-stack monorepo with the following structure:
 - [ ] Add monitoring and logging
 - [ ] Implement backup strategies
 
-## 🚀 Getting Started
+## Getting Started
 
 ### **Prerequisites**
 - Docker and Docker Compose
@@ -263,7 +292,7 @@ cd backend
 alembic upgrade head
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 salem-flag-football/
@@ -298,7 +327,7 @@ salem-flag-football/
 └── docker-compose.yml
 ```
 
-## 🔧 API Usage Patterns
+## API Usage Patterns
 
 ### **Frontend Service Imports**
 
@@ -335,7 +364,13 @@ import { useLeagues } from '../hooks/useLeagues';
 - `GET /admin/leagues/{id}/members` - Get league members
 - `POST /admin/leagues/{id}/generate-teams` - Generate teams
 - `POST /admin/leagues/{id}/generate-schedule` - Generate schedule
+- `POST /admin/leagues/{id}/generate-playoff-bracket` - Generate playoff bracket (after regular season)
 - `GET /admin/leagues/{id}/schedule` - Get league schedule
+- `POST /admin/fields` - Create field
+- `GET /admin/fields` - List all fields
+- `POST /admin/leagues/{id}/fields/{field_id}` - Associate field with league
+- `POST /admin/field-availability` - Create field availability
+- `GET /admin/field-availability` - List field availability records
 
 #### **Public Endpoints**
 - `GET /league/public/leagues` - Get public leagues
@@ -344,11 +379,11 @@ import { useLeagues } from '../hooks/useLeagues';
 - `POST /registration/player` - Register player
 - `POST /registration/group` - Register group
 
-## 🔧 Environment Variables
+## Environment Variables
 
-### **Security Setup**
+### Security Setup
 
-**⚠️ IMPORTANT**: Never commit secrets to version control! The `.env` file is already in `.gitignore`.
+**IMPORTANT**: Never commit secrets to version control. The `.env` file is already in `.gitignore`.
 
 1. **Copy the example file**:
    ```bash
@@ -383,7 +418,7 @@ import { useLeagues } from '../hooks/useLeagues';
    - **JWKS URL**: `https://your-instance.clerk.accounts.dev/.well-known/jwks.json`
    - **Issuer**: `https://your-instance.clerk.accounts.dev/`
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -391,11 +426,11 @@ import { useLeagues } from '../hooks/useLeagues';
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🔒 Security
+## Security
 
 ### **Environment Variables**
 - All sensitive configuration is stored in `.env` files
@@ -411,11 +446,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Uses Clerk for secure JWT-based authentication
 - JWT tokens are validated using Clerk's JWKS endpoint
 - Admin access is controlled via database configuration
-
-## 📞 Support
-
-For support or questions, please contact the development team or create an issue in the repository.
-
----
-
-**Built with ❤️ for the Salem Flag Football League community**

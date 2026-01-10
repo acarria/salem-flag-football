@@ -5,6 +5,7 @@ import ProfileCompletionModal from './components/modals/ProfileCompletionModal';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
+import LeagueAdminPage from './pages/admin/LeagueAdminPage';
 import LeaguesPage from './pages/LeaguesPage';
 import TestPage from './components/TestPage';
 import { apiService, UserProfile } from './services';
@@ -104,6 +105,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/leagues/:leagueId" element={<LeagueAdminPage />} />
             <Route path="/leagues" element={<LeaguesPage />} />
             <Route path="/test" element={<TestPage />} />
           </Routes>

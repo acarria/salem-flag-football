@@ -6,6 +6,7 @@ import {
   User,
   PaginatedUserResponse,
   LeagueMember,
+  Team,
   TeamGenerationRequest,
   TeamGenerationResponse,
   ScheduleGenerationRequest,
@@ -67,6 +68,10 @@ export class AdminApiService extends BaseApiService {
   // Member Management
   async getLeagueMembers(leagueId: number): Promise<LeagueMember[]> {
     return this.request<LeagueMember[]>(`/admin/leagues/${leagueId}/members`);
+  }
+
+  async getLeagueTeams(leagueId: number): Promise<Team[]> {
+    return this.request<Team[]>(`/admin/leagues/${leagueId}/teams`);
   }
 
   // Fake Data Creation

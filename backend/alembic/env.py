@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.db.db import Base
-from app.models import user, player, league, team, group, league_player, admin_config
+from app.models import user, player, league, team, group, league_player, admin_config, field, field_availability, league_field
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

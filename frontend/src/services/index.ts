@@ -1,5 +1,5 @@
 // Import services first
-import { LeagueApiService, AdminApiService, TeamApiService } from './admin';
+import { LeagueApiService, AdminApiService, TeamApiService, FieldApiService } from './admin';
 import { UserApiService, RegistrationApiService } from './public';
 
 // Export all types
@@ -14,6 +14,7 @@ export const adminApi = new AdminApiService();
 export const userApi = new UserApiService();
 export const registrationApi = new RegistrationApiService();
 export const teamApi = new TeamApiService();
+export const fieldApi = new FieldApiService();
 
 // Legacy compatibility - create a combined service for backward compatibility
 class CombinedApiService {

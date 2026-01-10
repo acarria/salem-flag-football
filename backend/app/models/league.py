@@ -38,7 +38,7 @@ class League(Base):
     
     # Registration settings
     registration_deadline = Column(Date, nullable=True)  # When registration closes
-    registration_fee = Column(Numeric(10, 2), nullable=True)  # Registration fee in dollars
+    registration_fee = Column(Numeric(10, 2), nullable=False, default=0)  # Registration fee in dollars
     
     # Advanced settings stored as JSON
     settings = Column(JSON, nullable=True)  # Flexible settings for future features

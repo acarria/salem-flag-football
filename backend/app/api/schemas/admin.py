@@ -155,6 +155,18 @@ class LeagueMemberResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class TeamResponse(BaseModel):
+    id: int
+    league_id: int
+    name: str
+    color: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class TeamGenerationRequest(BaseModel):
     teams_count: Optional[int] = None  # If not provided, will be calculated based on players
     max_players_per_team: Optional[int] = None
@@ -226,7 +238,6 @@ class PaginatedUserResponse(BaseModel):
 # Field Management Schemas
 class FieldResponse(BaseModel):
     id: int
-    league_id: int
     name: str
     field_number: Optional[str] = None
     street_address: str
@@ -297,7 +308,6 @@ class FieldUpdateRequest(BaseModel):
 # Field Availability Schemas
 class FieldAvailabilityResponse(BaseModel):
     id: int
-    league_id: int
     field_id: int
     field_name: Optional[str] = None  # Populated from field relationship
     is_recurring: bool

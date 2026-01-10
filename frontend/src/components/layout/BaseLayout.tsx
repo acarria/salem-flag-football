@@ -32,16 +32,18 @@ export default function BaseLayout({
 
   return (
     <div className="min-h-screen bg-black text-white relative">
-      {/* Fixed Background Image */}
-      <div 
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: `url(${heroBackground})`
-        }}
-      >
-        {/* Gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/85 to-primary/95"></div>
-      </div>
+      {/* Fixed Background Image - only show on homepage */}
+      {showHero && (
+        <div 
+          className="fixed inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: `url(${heroBackground})`
+          }}
+        >
+          {/* Gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/85 to-primary/95"></div>
+        </div>
+      )}
 
       {/* Content Container */}
       <div className="relative z-10">

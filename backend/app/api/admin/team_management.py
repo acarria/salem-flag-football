@@ -8,7 +8,7 @@ from app.models.team import Team
 from app.models.league_player import LeaguePlayer
 from app.models.group import Group
 from app.api.schemas.admin import (
-    LeagueMemberResponse, TeamGenerationRequest, TeamGenerationResponse
+    LeagueMemberResponse, TeamResponse, TeamGenerationRequest, TeamGenerationResponse
 )
 from app.api.admin.dependencies import get_admin_user
 
@@ -67,6 +67,26 @@ async def get_league_members(
         ))
     
     return result
+
+@router.get("/leagues/{league_id}/teams", response_model=List[TeamResponse], summary="Get all teams for a league")
+async def get_league_teams(
+    league_id: int,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+):
+    """Get all teams for a specific league"""
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Get all teams for this league
+    teams = db.query(Team).filter(
+        Team.league_id == league_id,
+        Team.is_active == True
+    ).order_by(Team.name).all()
+    
+    return [TeamResponse.model_validate(team) for team in teams]
 
 @router.post("/leagues/{league_id}/generate-teams", response_model=TeamGenerationResponse, summary="Generate teams for league")
 async def generate_teams(
