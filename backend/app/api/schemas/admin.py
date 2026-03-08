@@ -389,3 +389,27 @@ class FieldAvailabilityUpdateRequest(BaseModel):
         if v is not None and (v < 0 or v > 6):
             raise ValueError('day_of_week must be between 0 (Monday) and 6 (Sunday)')
         return v
+
+# Game Management Schemas
+class GameUpdateRequest(BaseModel):
+    team1_score: Optional[int] = None
+    team2_score: Optional[int] = None
+    winner_id: Optional[UUID] = None
+    status: Optional[str] = None  # scheduled, in_progress, completed, cancelled
+    game_date: Optional[date] = None
+    game_time: Optional[str] = None  # "HH:MM"
+    field_id: Optional[UUID] = None
+
+    @validator('status')
+    def validate_status(cls, v):
+        if v is not None and v not in ('scheduled', 'in_progress', 'completed', 'cancelled'):
+            raise ValueError('status must be one of: scheduled, in_progress, completed, cancelled')
+        return v
+
+    @validator('game_time')
+    def validate_game_time(cls, v):
+        if v is not None:
+            parts = v.split(':')
+            if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+                raise ValueError('game_time must be in HH:MM format')
+        return v

@@ -9,7 +9,7 @@ interface FieldManagementModalProps {
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   onSubmit: () => void;
   onEdit: (field: Field) => void;
-  onDelete: (fieldId: number) => void;
+  onDelete: (fieldId: string) => void;
   onCancel: () => void;
   onCancelEdit: () => void;
   isLoading: boolean;

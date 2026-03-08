@@ -227,7 +227,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteLeague = async (leagueId: number) => {
+  const handleDeleteLeague = async (leagueId: string) => {
     if (!window.confirm('Are you sure you want to delete this league? This action cannot be undone.')) {
       return;
     }
@@ -392,7 +392,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteField = async (fieldId: number) => {
+  const handleDeleteField = async (fieldId: string) => {
     if (!window.confirm('Are you sure you want to delete this field? This action cannot be undone.')) {
       return;
     }

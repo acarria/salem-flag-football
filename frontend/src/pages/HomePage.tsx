@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import RegistrationModal from '../components/modals/RegistrationModal';
 import BaseLayout from '../components/layout/BaseLayout';
-import { apiService, Standing, Game } from '../services';
+import { apiService, League, PublicStanding, LeagueSchedule } from '../services';
 
 export default function PublicHomePage() {
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'standings' | 'schedule'>('standings');
-  const [standings, setStandings] = useState<Standing[]>([]);
-  const [schedule, setSchedule] = useState<Game[]>([]);
+  const [leagues, setLeagues] = useState<League[]>([]);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
+  const [standings, setStandings] = useState<PublicStanding[]>([]);
+  const [leagueSchedule, setLeagueSchedule] = useState<LeagueSchedule | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isSignedIn } = useAuth();
@@ -23,20 +25,42 @@ export default function PublicHomePage() {
     console.log('Registration completed successfully');
   };
 
-  // Fetch standings and schedule data
+  // Fetch active leagues on mount
   useEffect(() => {
+    const fetchLeagues = async () => {
+      try {
+        const data = await apiService.getPublicLeagues();
+        const active = data.filter((l) => l.is_active);
+        setLeagues(active);
+        if (active.length > 0) {
+          setSelectedLeagueId(active[0].id);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch leagues:', err);
+        setIsLoading(false);
+      }
+    };
+    fetchLeagues();
+  }, []);
+
+  // Fetch standings + schedule when selected league changes
+  useEffect(() => {
+    if (!selectedLeagueId) return;
+
     const fetchData = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        
+
         const [standingsData, scheduleData] = await Promise.all([
-          apiService.getStandings(),
-          apiService.getSchedule()
+          apiService.getLeagueStandings(selectedLeagueId),
+          apiService.getLeaguePublicSchedule(selectedLeagueId),
         ]);
-        
+
         setStandings(standingsData);
-        setSchedule(scheduleData);
+        setLeagueSchedule(scheduleData);
       } catch (err) {
         console.error('Failed to fetch league data:', err);
         setError('Failed to load league data. Please try again later.');
@@ -46,7 +70,7 @@ export default function PublicHomePage() {
     };
 
     fetchData();
-  }, []);
+  }, [selectedLeagueId]);
 
   return (
     <BaseLayout 
@@ -123,8 +147,24 @@ export default function PublicHomePage() {
 
         {/* Standings and Schedule */}
         <div className="glass-effect rounded-2xl p-8 mb-16 border border-white/10">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-            <h2 className="text-3xl font-bold text-white">League Information</h2>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div>
+              <h2 className="text-3xl font-bold text-white">League Information</h2>
+              {leagues.length > 1 && (
+                <select
+                  value={selectedLeagueId || ''}
+                  onChange={(e) => setSelectedLeagueId(e.target.value)}
+                  className="mt-2 bg-black/40 border border-white/20 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent"
+                >
+                  {leagues.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              )}
+              {leagues.length === 1 && (
+                <div className="text-gray-400 text-sm mt-1">{leagues[0].name}</div>
+              )}
+            </div>
             <div className="flex gap-2 bg-black/30 rounded-lg p-1 border border-white/10">
               <button
                 onClick={() => setActiveTab('standings')}
@@ -161,60 +201,93 @@ export default function PublicHomePage() {
               <div className="text-red-400 text-xl mb-2 font-semibold">Error loading data</div>
               <div className="text-gray-400">{error}</div>
             </div>
+          ) : !selectedLeagueId ? (
+            <div className="text-center py-12 text-gray-400">No active leagues found.</div>
           ) : (
             <>
               {activeTab === 'standings' && (
                 <div className="space-y-3">
-                  {standings.map((standing: any) => (
-                    <div 
-                      key={standing.rank} 
-                      className="bg-black/20 rounded-xl p-5 border border-white/5 hover:border-accent/30 hover:bg-black/30 transition-all duration-200"
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-4">
-                        <div className="flex items-center gap-4">
-                          <span className="text-accent font-bold text-xl w-8">#{standing.rank}</span>
-                          <span className="font-semibold text-white text-lg">{standing.team}</span>
-                        </div>
-                        <div className="flex gap-6 text-sm text-gray-300">
-                          <span className="font-medium">W: <span className="text-white">{standing.wins}</span></span>
-                          <span className="font-medium">L: <span className="text-white">{standing.losses}</span></span>
-                          <span className="font-medium">PF: <span className="text-white">{standing.pointsFor}</span></span>
-                          <span className="font-medium">PA: <span className="text-white">{standing.pointsAgainst}</span></span>
+                  {standings.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      No standings yet — standings appear after games are completed.
+                    </div>
+                  ) : (
+                    standings.map((s) => (
+                      <div
+                        key={s.team_id}
+                        className="bg-black/20 rounded-xl p-5 border border-white/5 hover:border-accent/30 hover:bg-black/30 transition-all duration-200"
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-4">
+                          <div className="flex items-center gap-4">
+                            <span className="text-accent font-bold text-xl w-8">#{s.rank}</span>
+                            <span className="font-semibold text-white text-lg">{s.team_name}</span>
+                          </div>
+                          <div className="flex gap-6 text-sm text-gray-300">
+                            <span className="font-medium">W: <span className="text-white">{s.wins}</span></span>
+                            <span className="font-medium">L: <span className="text-white">{s.losses}</span></span>
+                            <span className="font-medium">PF: <span className="text-white">{s.points_for}</span></span>
+                            <span className="font-medium">PA: <span className="text-white">{s.points_against}</span></span>
+                            <span className="font-medium">Win%: <span className="text-white">{(s.win_percentage * 100).toFixed(0)}%</span></span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               )}
 
               {activeTab === 'schedule' && (
-                <div className="space-y-3">
-                  {schedule.map((game: any) => (
-                    <div 
-                      key={`${game.week}-${game.home}-${game.away}`} 
-                      className="bg-black/20 rounded-xl p-5 border border-white/5 hover:border-accent/30 hover:bg-black/30 transition-all duration-200"
-                    >
-                      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                        <span className="text-accent font-bold text-lg">Week {game.week}</span>
-                        <span className="text-gray-400 text-sm">{game.date} at {game.time}</span>
-                      </div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-center flex-1">
-                          <div className="font-semibold text-white text-lg">{game.home}</div>
-                          <div className="text-xs text-gray-400 mt-1">Home</div>
+                <div className="space-y-6">
+                  {!leagueSchedule || leagueSchedule.total_games === 0 ? (
+                    <div className="text-center py-8 text-gray-400">No schedule has been generated yet.</div>
+                  ) : (
+                    Object.keys(leagueSchedule.schedule_by_week)
+                      .map(Number)
+                      .sort((a, b) => a - b)
+                      .map((week) => (
+                        <div key={week}>
+                          <div className="text-accent font-bold text-lg mb-3">Week {week}</div>
+                          <div className="space-y-3">
+                            {leagueSchedule.schedule_by_week[week].map((game) => (
+                              <div
+                                key={game.game_id}
+                                className="bg-black/20 rounded-xl p-5 border border-white/5 hover:border-accent/30 hover:bg-black/30 transition-all duration-200"
+                              >
+                                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                  <span className="text-gray-400 text-sm">
+                                    {new Date(game.date + 'T00:00:00').toLocaleDateString('en-US', {
+                                      weekday: 'short', month: 'short', day: 'numeric',
+                                    })} at {game.time}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                    game.status === 'completed' ? 'bg-green-900 text-green-200' :
+                                    game.status === 'cancelled' ? 'bg-red-900 text-red-300' :
+                                    'bg-gray-700 text-gray-300'
+                                  }`}>
+                                    {game.status}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="text-center flex-1">
+                                    <div className="font-semibold text-white text-lg">{game.team1_name}</div>
+                                    {game.status === 'completed' && (
+                                      <div className="text-2xl font-bold text-accent mt-1">{game.team1_score ?? '–'}</div>
+                                    )}
+                                  </div>
+                                  <div className="text-accent font-bold text-xl mx-4">VS</div>
+                                  <div className="text-center flex-1">
+                                    <div className="font-semibold text-white text-lg">{game.team2_name}</div>
+                                    {game.status === 'completed' && (
+                                      <div className="text-2xl font-bold text-accent mt-1">{game.team2_score ?? '–'}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="text-accent font-bold text-2xl mx-6">VS</div>
-                        <div className="text-center flex-1">
-                          <div className="font-semibold text-white text-lg">{game.away}</div>
-                          <div className="text-xs text-gray-400 mt-1">Away</div>
-                        </div>
-                      </div>
-                      <div className="text-center text-sm text-gray-400 flex items-center justify-center gap-2">
-                        <span>📍</span>
-                        <span>{game.location}</span>
-                      </div>
-                    </div>
-                  ))}
+                      ))
+                  )}
                 </div>
               )}
             </>

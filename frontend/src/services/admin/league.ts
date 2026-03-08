@@ -1,11 +1,13 @@
 import { BaseApiService } from '../core/base';
-import { 
-  League, 
-  LeagueCreateRequest, 
-  LeagueUpdateRequest, 
+import {
+  League,
+  LeagueCreateRequest,
+  LeagueUpdateRequest,
   LeagueStats,
-  Standing, 
-  Game 
+  Standing,
+  Game,
+  PublicStanding,
+  LeagueSchedule
 } from '../core/types';
 
 export class LeagueApiService extends BaseApiService {
@@ -32,6 +34,14 @@ export class LeagueApiService extends BaseApiService {
 
   async getLeagueRules(): Promise<any> {
     return this.request<any>('/league/rules');
+  }
+
+  async getLeagueStandings(leagueId: string): Promise<PublicStanding[]> {
+    return this.request<PublicStanding[]>(`/league/${leagueId}/standings`);
+  }
+
+  async getLeaguePublicSchedule(leagueId: string): Promise<LeagueSchedule> {
+    return this.request<LeagueSchedule>(`/league/${leagueId}/schedule`);
   }
 
   // Admin league endpoints

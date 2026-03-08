@@ -1,7 +1,7 @@
 import { BaseApiService } from '../core/base';
-import { 
-  AdminConfig, 
-  AdminConfigCreateRequest, 
+import {
+  AdminConfig,
+  AdminConfigCreateRequest,
   AdminConfigUpdateRequest,
   User,
   PaginatedUserResponse,
@@ -11,7 +11,8 @@ import {
   TeamGenerationResponse,
   ScheduleGenerationRequest,
   ScheduleGenerationResponse,
-  LeagueSchedule
+  LeagueSchedule,
+  GameUpdateRequest
 } from '../core/types';
 
 export class AdminApiService extends BaseApiService {
@@ -61,8 +62,15 @@ export class AdminApiService extends BaseApiService {
     });
   }
 
-  async getLeagueSchedule(leagueId: number): Promise<LeagueSchedule> {
+  async getLeagueSchedule(leagueId: string): Promise<LeagueSchedule> {
     return this.request<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
+  }
+
+  async updateGame(leagueId: string, gameId: string, data: GameUpdateRequest): Promise<any> {
+    return this.request<any>(`/admin/leagues/${leagueId}/games/${gameId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // Member Management

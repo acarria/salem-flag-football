@@ -17,7 +17,7 @@ export default function LeaguesPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
-  const [registeredLeagues, setRegisteredLeagues] = useState<Set<number>>(new Set());
+  const [registeredLeagues, setRegisteredLeagues] = useState<Set<string>>(new Set());
 
   // Load leagues on component mount
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function LeaguesPage() {
         )
       );
       
-      const registeredSet = new Set<number>();
+      const registeredSet = new Set<string>();
       registrationChecks.forEach(check => {
         if (check.isRegistered) {
           registeredSet.add(check.leagueId);
