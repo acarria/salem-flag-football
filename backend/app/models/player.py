@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Date, ForeignKey
+from sqlalchemy import Column, String, DateTime, Boolean, Date, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+import uuid
 from app.db.db import Base
 
 class Player(Base):
     __tablename__ = "players"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     clerk_user_id = Column(String, unique=True, index=True, nullable=False)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
@@ -14,7 +16,7 @@ class Player(Base):
     gender = Column(String, nullable=True)
     communications_accepted = Column(Boolean, default=False)
     registration_status = Column(String, default="pending")  # pending, registered, active, inactive
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # Which team they're on
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)  # Which team they're on
     group_name = Column(String, nullable=True)
     registration_date = Column(DateTime(timezone=True), nullable=True)
     payment_status = Column(String, default="pending")  # pending, paid, failed

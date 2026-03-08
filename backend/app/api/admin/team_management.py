@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from uuid import UUID
 from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
@@ -16,7 +17,7 @@ router = APIRouter()
 
 @router.get("/leagues/{league_id}/members", response_model=List[LeagueMemberResponse], summary="Get all league members")
 async def get_league_members(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -70,7 +71,7 @@ async def get_league_members(
 
 @router.get("/leagues/{league_id}/teams", response_model=List[TeamResponse], summary="Get all teams for a league")
 async def get_league_teams(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -90,7 +91,7 @@ async def get_league_teams(
 
 @router.post("/leagues/{league_id}/generate-teams", response_model=TeamGenerationResponse, summary="Generate teams for league")
 async def generate_teams(
-    league_id: int,
+    league_id: UUID,
     team_data: TeamGenerationRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -255,7 +256,7 @@ async def generate_teams(
 
 @router.post("/leagues/{league_id}/add-fake-data", summary="Add fake data for testing")
 async def add_fake_data(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -265,51 +266,64 @@ async def add_fake_data(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
+    from datetime import date, timedelta
+
+    first_names = ["John", "Jane", "Mike", "Sarah", "David", "Lisa", "Tom", "Amy", "Chris", "Emma",
+                   "Alex", "Rachel", "Ryan", "Jessica", "Kevin", "Michelle", "Brian", "Stephanie",
+                   "Jason", "Nicole", "Eric", "Amanda", "Mark", "Heather", "Scott", "Melissa"]
+    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
+                  "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
+                  "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
+                  "White", "Harris", "Sanchez"]
+
+    # Create an organizer player first so groups have a valid created_by UUID
+    organizer = Player(
+        clerk_user_id=f"fake_organizer_{league_id}",
+        first_name="Test",
+        last_name="Organizer",
+        email=f"organizer_{league_id}@example.com",
+        phone="555-0000",
+        date_of_birth=date(1985, 1, 1),
+        gender="M",
+        communications_accepted=True,
+        registration_status="registered",
+        created_by=admin_user["id"]
+    )
+    db.add(organizer)
+    db.flush()
+
     # Create some fake groups
     group_names = ["Friends United", "Work Buddies", "College Alumni", "Neighborhood Crew", "Gym Rats"]
     groups = []
-    
+
     for i, name in enumerate(group_names):
         group = Group(
             league_id=league_id,
             name=name,
-            created_by=1,  # Fake player ID
+            created_by=organizer.id,
             created_by_clerk=admin_user["id"]
         )
         db.add(group)
         db.flush()
         groups.append(group)
-    
-    # Create fake players
-    first_names = ["John", "Jane", "Mike", "Sarah", "David", "Lisa", "Tom", "Amy", "Chris", "Emma", 
-                   "Alex", "Rachel", "Ryan", "Jessica", "Kevin", "Michelle", "Brian", "Stephanie", 
-                   "Jason", "Nicole", "Eric", "Amanda", "Mark", "Heather", "Scott", "Melissa"]
-    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", 
-                  "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", 
-                  "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson", 
-                  "White", "Harris", "Sanchez"]
-    
-    from datetime import date, timedelta
-    
+
     players_created = 0
     for i in range(24):  # Create 24 fake players
-        # Create player
         player = Player(
-            clerk_user_id=f"fake_user_{i}",
+            clerk_user_id=f"fake_user_{league_id}_{i}",
             first_name=first_names[i % len(first_names)],
             last_name=last_names[i % len(last_names)],
-            email=f"player{i}@example.com",
+            email=f"player{i}_{league_id}@example.com",
             phone=f"555-{1000+i:04d}",
             date_of_birth=date(1990, 1, 1) + timedelta(days=i*30),
             gender="M" if i % 2 == 0 else "F",
             communications_accepted=True,
             registration_status="registered",
-            league_id=league_id,
             created_by=admin_user["id"]
         )
         db.add(player)
         db.flush()
-        
+
         # Create league player entry
         group_id = groups[i % len(groups)].id if i < 20 else None  # First 20 players are in groups
         league_player = LeaguePlayer(

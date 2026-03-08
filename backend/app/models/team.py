@@ -1,11 +1,13 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+import uuid
 from app.db.db import Base
 
 class Team(Base):
     __tablename__ = "teams"
-    id = Column(Integer, primary_key=True, index=True)
-    league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    league_id = Column(UUID(as_uuid=True), ForeignKey("leagues.id"), nullable=False)
     name = Column(String, nullable=False)
     color = Column(String, nullable=True)
     created_by = Column(String, nullable=False)  # Clerk user id
