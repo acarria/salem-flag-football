@@ -5,8 +5,8 @@ interface LeagueFieldAssociationModalProps {
   league: League;
   associatedFields: Field[]; // Fields currently associated with the league
   allFields: Field[]; // All available fields
-  onAssociate: (fieldId: number) => void;
-  onDisassociate: (fieldId: number) => void;
+  onAssociate: (fieldId: string) => void;
+  onDisassociate: (fieldId: string) => void;
   onCancel: () => void;
   isLoading: boolean;
 }

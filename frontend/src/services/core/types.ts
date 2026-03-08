@@ -3,12 +3,13 @@ export type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'co
 export type GameFormat = '7v7' | '6v6' | '5v5';
 
 export interface Team {
-  id: number;
+  id: string;
   name: string;
   color?: string;
-  league_id: number;
+  league_id: string;
 }
 
+// Legacy public standings/schedule (sample data format)
 export interface Standing {
   rank: number;
   team: string;
@@ -27,8 +28,20 @@ export interface Game {
   location: string;
 }
 
+// Real DB-backed standings from /league/{id}/standings
+export interface PublicStanding {
+  rank: number;
+  team_id: string;
+  team_name: string;
+  wins: number;
+  losses: number;
+  points_for: number;
+  points_against: number;
+  win_percentage: number;
+}
+
 export interface League {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   start_date: string;
@@ -106,7 +119,7 @@ export interface LeagueUpdateRequest {
 }
 
 export interface LeagueStats {
-  league_id: number;
+  league_id: string;
   total_players: number;
   total_teams: number;
   registration_status: string;
@@ -116,7 +129,7 @@ export interface LeagueStats {
 
 // Admin Types
 export interface AdminConfig {
-  id: number;
+  id: string;
   email: string;
   role: string;
   is_active: boolean;
@@ -155,14 +168,14 @@ export interface PaginatedUserResponse {
 }
 
 export interface LeagueMember {
-  id: number;
-  player_id: number;
+  id: string;
+  player_id: string;
   first_name: string;
   last_name: string;
   email: string;
-  group_id?: number;
+  group_id?: string;
   group_name?: string;
-  team_id?: number;
+  team_id?: string;
   team_name?: string;
   registration_status: string;
   payment_status: string;
@@ -184,15 +197,15 @@ export interface TeamGenerationResponse {
   groups_kept_together: number;
   groups_split: number;
   team_details: Array<{
-    team_id: number;
+    team_id: string;
     team_name: string;
     team_color: string;
     player_count: number;
     players: Array<{
-      player_id: number;
+      player_id: string;
       first_name: string;
       last_name: string;
-      group_id?: number;
+      group_id?: string;
     }>;
   }>;
 }
@@ -219,26 +232,38 @@ export interface ScheduleGenerationResponse {
   }>;
 }
 
+export interface ScheduledGame {
+  game_id: string;
+  team1_id: string;
+  team1_name: string;
+  team2_id: string;
+  team2_name: string;
+  date: string;
+  time: string;
+  datetime?: string;
+  duration_minutes?: number;
+  status: string;
+  phase?: string;
+  team1_score?: number | null;
+  team2_score?: number | null;
+  winner_id?: string | null;
+}
+
 export interface LeagueSchedule {
-  league_id: number;
+  league_id: string;
   league_name: string;
   total_games: number;
-  schedule_by_week: Record<number, Array<{
-    game_id: number;
-    team1_id: number;
-    team1_name: string;
-    team2_id: number;
-    team2_name: string;
-    date: string;
-    time: string;
-    datetime: string;
-    duration_minutes: number;
-    status: string;
-    phase?: string;
-    team1_score?: number;
-    team2_score?: number;
-    winner_id?: number;
-  }>>;
+  schedule_by_week: Record<number, ScheduledGame[]>;
+}
+
+export interface GameUpdateRequest {
+  team1_score?: number;
+  team2_score?: number;
+  winner_id?: string;
+  status?: string;
+  game_date?: string;
+  game_time?: string;
+  field_id?: string;
 }
 
 // User Types
@@ -251,12 +276,11 @@ export interface UserProfile {
   gender: string;
   communicationsAccepted: boolean;
   registrationStatus: 'registered' | 'pending' | 'not_registered';
-  teamId?: number;
+  teamId?: string;
   groupName?: string;
   registrationDate?: string;
   paymentStatus?: 'pending' | 'paid' | 'failed';
   waiverStatus?: 'pending' | 'signed' | 'expired';
-  leagueId?: number;
 }
 
 // Registration Types
@@ -284,8 +308,7 @@ export interface RegistrationData {
 
 // Field Types
 export interface Field {
-  id: number;
-  league_id: number;
+  id: string;
   name: string;
   field_number?: string;
   street_address: string;

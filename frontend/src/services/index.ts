@@ -21,6 +21,8 @@ class CombinedApiService {
   // League methods
   getStandings = leagueApi.getStandings.bind(leagueApi);
   getSchedule = leagueApi.getSchedule.bind(leagueApi);
+  getLeagueStandings = leagueApi.getLeagueStandings.bind(leagueApi);
+  getLeaguePublicSchedule = leagueApi.getLeaguePublicSchedule.bind(leagueApi);
   getActiveLeagues = leagueApi.getActiveLeagues.bind(leagueApi);
   getPublicLeagues = leagueApi.getPublicLeagues.bind(leagueApi);
   getLeagueInfo = leagueApi.getLeagueInfo.bind(leagueApi);

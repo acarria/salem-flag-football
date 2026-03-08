@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
 from app.models.team import Team
+from app.models.game import Game
 from app.models.league_player import LeaguePlayer
 from app.api.schemas.league import PublicLeagueResponse
 from datetime import date
@@ -87,6 +88,78 @@ async def get_rules():
 async def get_info():
     # TODO: Fetch general info from DB or static file
     return {"info": "General league info goes here."}
+
+@router.get("/{league_id}/standings", summary="Get standings for a specific league")
+async def get_league_standings(league_id: UUID, db: Session = Depends(get_db)):
+    """Return real standings computed from completed game results for a league."""
+    from app.api.admin.schedule_management import calculate_team_standings
+
+    league = db.query(League).filter(League.id == league_id, League.is_active == True).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+
+    standings = calculate_team_standings(league_id, db)
+
+    result = []
+    for rank, (team_id, stats) in enumerate(standings, 1):
+        team = db.query(Team).filter(Team.id == team_id).first()
+        result.append({
+            "rank": rank,
+            "team_id": str(team_id),
+            "team_name": team.name if team else "Unknown",
+            "wins": stats["wins"],
+            "losses": stats["losses"],
+            "points_for": stats["points_for"],
+            "points_against": stats["points_against"],
+            "win_percentage": round(stats["win_percentage"], 3),
+        })
+
+    return result
+
+
+@router.get("/{league_id}/schedule", summary="Get schedule for a specific league")
+async def get_public_league_schedule(league_id: UUID, db: Session = Depends(get_db)):
+    """Return the full schedule for a league, grouped by week."""
+    league = db.query(League).filter(League.id == league_id, League.is_active == True).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+
+    games = db.query(Game).filter(
+        Game.league_id == league_id,
+        Game.is_active == True
+    ).order_by(Game.week, Game.game_datetime).all()
+
+    schedule_by_week: dict = {}
+    for game in games:
+        week = game.week
+        if week not in schedule_by_week:
+            schedule_by_week[week] = []
+
+        team1 = db.query(Team).filter(Team.id == game.team1_id).first()
+        team2 = db.query(Team).filter(Team.id == game.team2_id).first()
+
+        schedule_by_week[week].append({
+            "game_id": str(game.id),
+            "team1_id": str(game.team1_id),
+            "team1_name": team1.name if team1 else "TBD",
+            "team2_id": str(game.team2_id),
+            "team2_name": team2.name if team2 else "TBD",
+            "date": game.game_date.isoformat(),
+            "time": game.game_time,
+            "status": game.status,
+            "phase": game.phase,
+            "team1_score": game.team1_score,
+            "team2_score": game.team2_score,
+            "winner_id": str(game.winner_id) if game.winner_id else None,
+        })
+
+    return {
+        "league_id": str(league_id),
+        "league_name": league.name,
+        "total_games": len(games),
+        "schedule_by_week": schedule_by_week,
+    }
+
 
 @router.get("/active", summary="Get active leagues")
 async def get_active_leagues(db: Session = Depends(get_db)):

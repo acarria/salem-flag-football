@@ -15,7 +15,8 @@ from app.models.league_field import LeagueField
 from app.api.schemas.admin import (
     ScheduleGenerationRequest, ScheduleGenerationResponse,
     FieldResponse, FieldCreateRequest, FieldUpdateRequest,
-    FieldAvailabilityResponse, FieldAvailabilityCreateRequest, FieldAvailabilityUpdateRequest
+    FieldAvailabilityResponse, FieldAvailabilityCreateRequest, FieldAvailabilityUpdateRequest,
+    GameUpdateRequest
 )
 from app.api.admin.dependencies import get_admin_user
 
@@ -861,6 +862,77 @@ async def get_league_schedule(
         "total_games": len(games),
         "schedule_by_week": schedule_by_week
     }
+
+@router.put("/leagues/{league_id}/games/{game_id}", summary="Update a game's score or details")
+async def update_game(
+    league_id: UUID,
+    game_id: UUID,
+    game_data: GameUpdateRequest,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user)
+):
+    """Update a game's score, status, or scheduling details (date/time/field)."""
+    game = db.query(Game).filter(
+        Game.id == game_id,
+        Game.league_id == league_id,
+        Game.is_active == True
+    ).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Update scores and auto-determine winner / status
+    scores_provided = game_data.team1_score is not None and game_data.team2_score is not None
+    if game_data.team1_score is not None:
+        game.team1_score = game_data.team1_score
+    if game_data.team2_score is not None:
+        game.team2_score = game_data.team2_score
+
+    if scores_provided:
+        # Auto-determine winner unless explicitly overridden
+        if game_data.winner_id is not None:
+            game.winner_id = game_data.winner_id
+        elif game_data.team1_score > game_data.team2_score:
+            game.winner_id = game.team1_id
+        elif game_data.team2_score > game_data.team1_score:
+            game.winner_id = game.team2_id
+        # Ties: winner_id stays None
+        # Auto-complete unless a different status is explicitly set
+        if game_data.status is None:
+            game.status = 'completed'
+
+    if game_data.winner_id is not None and not scores_provided:
+        game.winner_id = game_data.winner_id
+
+    if game_data.status is not None:
+        game.status = game_data.status
+
+    # Update scheduling details
+    if game_data.game_date is not None or game_data.game_time is not None:
+        new_date = game_data.game_date if game_data.game_date is not None else game.game_date
+        new_time_str = game_data.game_time if game_data.game_time is not None else game.game_time
+        hour, minute = map(int, new_time_str.split(':'))
+        game.game_date = new_date
+        game.game_time = new_time_str
+        game.game_datetime = datetime.combine(new_date, dt_time(hour, minute))
+
+    if game_data.field_id is not None:
+        game.field_id = game_data.field_id
+
+    try:
+        db.commit()
+        db.refresh(game)
+        return {
+            "message": "Game updated successfully",
+            "game_id": str(game.id),
+            "status": game.status,
+            "team1_score": game.team1_score,
+            "team2_score": game.team2_score,
+            "winner_id": str(game.winner_id) if game.winner_id else None,
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update game: {str(e)}")
+
 
 # Global Field Management Endpoints (fields are independent, not tied to leagues)
 @router.post("/fields", response_model=FieldResponse, summary="Create a new field")

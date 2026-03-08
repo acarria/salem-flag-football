@@ -26,7 +26,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const { user } = useUser();
   const [type, setType] = useState<RegistrationType>('solo');
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeague, setSelectedLeague] = useState<number | null>(null);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [solo, setSolo] = useState({ 
@@ -126,7 +126,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
 
   if (!isOpen) return null;
 
-  const checkLeagueRegistrationStatus = async (leagueId: number) => {
+  const checkLeagueRegistrationStatus = async (leagueId: string) => {
     if (!user) return;
     try {
       const result = await apiService.checkLeagueRegistration(user.id, leagueId);
@@ -142,7 +142,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
     }
   };
 
-  const handleLeagueChange = async (leagueId: number) => {
+  const handleLeagueChange = async (leagueId: string) => {
     setSelectedLeague(leagueId);
     setError('');
     await checkLeagueRegistrationStatus(leagueId);
@@ -249,7 +249,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           registrationDate: new Date().toISOString().split('T')[0], // Today's date
           paymentStatus: 'pending', // Will be updated when payment is processed
           waiverStatus: 'pending',   // Will be updated when waiver is signed
-          leagueId: selectedLeague || undefined // Store the selected league ID
+          // leagueId removed — league registration is tracked via LeaguePlayer
         };
 
         // Save to user profile
@@ -354,7 +354,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
             <label className="block text-sm font-semibold text-accent mb-2">Select League:</label>
             <select
               value={selectedLeague || ''}
-              onChange={(e) => handleLeagueChange(Number(e.target.value))}
+              onChange={(e) => handleLeagueChange(e.target.value)}
               className={`w-full p-2 rounded bg-black border text-white focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.league ? 'border-red-500' : 'border-accent'}`}
             >
               <option value="">Select a league...</option>

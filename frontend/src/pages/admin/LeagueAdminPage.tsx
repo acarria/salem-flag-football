@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import BaseLayout from '../../components/layout/BaseLayout';
-import { League, LeagueMember, Field, Team, LeagueSchedule, LeagueCreateRequest, LeagueUpdateRequest, TournamentFormat } from '../../services';
+import { League, LeagueMember, Field, Team, LeagueSchedule, ScheduledGame, GameUpdateRequest, LeagueCreateRequest, LeagueUpdateRequest, TournamentFormat } from '../../services';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { LeagueFieldAssociationModal, LeagueFormModal } from './components';
 
@@ -166,7 +166,7 @@ export default function LeagueAdminPage() {
   }, [activeTab, leagueId]);
 
   // Field association handlers
-  const handleAssociateField = async (fieldId: number) => {
+  const handleAssociateField = async (fieldId: string) => {
     if (!leagueId) return;
 
     setIsLoading(true);
@@ -195,7 +195,7 @@ export default function LeagueAdminPage() {
     }
   };
 
-  const handleDisassociateField = async (fieldId: number) => {
+  const handleDisassociateField = async (fieldId: string) => {
     if (!leagueId) return;
 
     setIsLoading(true);
@@ -291,6 +291,22 @@ export default function LeagueAdminPage() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const handleUpdateGame = async (gameId: string, data: GameUpdateRequest) => {
+    if (!leagueId) return;
+    setError(null);
+    setSuccess(null);
+    try {
+      await authenticatedRequest(`/admin/leagues/${leagueId}/games/${gameId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      setSuccess('Game updated successfully!');
+      await loadSchedule();
+    } catch (err: any) {
+      setError(err.message || 'Failed to update game.');
+    }
   };
 
   const resetLeagueForm = () => {
@@ -483,10 +499,11 @@ export default function LeagueAdminPage() {
           )}
           
           {activeTab === 'schedule' && (
-            <ScheduleTab 
+            <ScheduleTab
               schedule={schedule}
               isLoading={isLoading}
               onRefresh={loadSchedule}
+              onUpdateGame={handleUpdateGame}
             />
           )}
         </div>
@@ -814,15 +831,81 @@ function TeamsTab({
 }
 
 // Schedule Tab Component
-function ScheduleTab({ 
+function ScheduleTab({
   schedule,
   isLoading,
-  onRefresh
-}: { 
+  onRefresh,
+  onUpdateGame,
+}: {
   schedule: LeagueSchedule | null;
   isLoading: boolean;
   onRefresh: () => void;
+  onUpdateGame: (gameId: string, data: GameUpdateRequest) => Promise<void>;
 }) {
+  const [scoringGameId, setScoringGameId] = useState<string | null>(null);
+  const [scoreInputs, setScoreInputs] = useState<{ team1: string; team2: string }>({ team1: '', team2: '' });
+  const [editingGameId, setEditingGameId] = useState<string | null>(null);
+  const [editInputs, setEditInputs] = useState<{ game_date: string; game_time: string }>({ game_date: '', game_time: '' });
+  const [saving, setSaving] = useState(false);
+
+  const startScoring = (game: ScheduledGame) => {
+    setScoringGameId(game.game_id);
+    setScoreInputs({
+      team1: game.team1_score != null ? String(game.team1_score) : '',
+      team2: game.team2_score != null ? String(game.team2_score) : '',
+    });
+    setEditingGameId(null);
+  };
+
+  const startEditing = (game: ScheduledGame) => {
+    setEditingGameId(game.game_id);
+    setEditInputs({ game_date: game.date, game_time: game.time });
+    setScoringGameId(null);
+  };
+
+  const handleSaveScore = async (gameId: string) => {
+    const t1 = parseInt(scoreInputs.team1, 10);
+    const t2 = parseInt(scoreInputs.team2, 10);
+    if (isNaN(t1) || isNaN(t2) || t1 < 0 || t2 < 0) return;
+    setSaving(true);
+    try {
+      await onUpdateGame(gameId, { team1_score: t1, team2_score: t2 });
+      setScoringGameId(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveEdit = async (gameId: string) => {
+    if (!editInputs.game_date || !editInputs.game_time) return;
+    setSaving(true);
+    try {
+      await onUpdateGame(gameId, { game_date: editInputs.game_date, game_time: editInputs.game_time });
+      setEditingGameId(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelGame = async (gameId: string) => {
+    if (!window.confirm('Cancel this game?')) return;
+    setSaving(true);
+    try {
+      await onUpdateGame(gameId, { status: 'cancelled' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const statusBadge = (status: string) => {
+    const cls =
+      status === 'completed' ? 'bg-green-900 text-green-200' :
+      status === 'in_progress' ? 'bg-blue-900 text-blue-200' :
+      status === 'cancelled' ? 'bg-red-900 text-red-300 line-through' :
+      'bg-gray-700 text-gray-300';
+    return <span className={`px-2 py-1 rounded text-xs font-semibold ${cls}`}>{status}</span>;
+  };
+
   if (isLoading) {
     return (
       <div className="text-center py-8">
@@ -836,10 +919,7 @@ function ScheduleTab({
       <div className="space-y-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-accent">Schedule</h2>
-          <button
-            onClick={onRefresh}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-          >
+          <button onClick={onRefresh} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
             Refresh
           </button>
         </div>
@@ -851,9 +931,7 @@ function ScheduleTab({
     );
   }
 
-  const weeks = Object.keys(schedule.schedule_by_week)
-    .map(Number)
-    .sort((a, b) => a - b);
+  const weeks = Object.keys(schedule.schedule_by_week).map(Number).sort((a, b) => a - b);
 
   return (
     <div className="space-y-4">
@@ -864,10 +942,7 @@ function ScheduleTab({
             {schedule.total_games} games across {weeks.length} weeks
           </div>
         </div>
-        <button
-          onClick={onRefresh}
-          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-        >
+        <button onClick={onRefresh} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
           Refresh
         </button>
       </div>
@@ -878,37 +953,140 @@ function ScheduleTab({
             <h3 className="text-lg font-bold text-accent mb-4">Week {week}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {schedule.schedule_by_week[week].map((game) => (
-                <div
-                  key={game.game_id}
-                  className="bg-gunmetal border border-gray-700 rounded-lg p-3"
-                >
+                <div key={game.game_id} className="bg-gunmetal border border-gray-700 rounded-lg p-3">
+                  {/* Header row */}
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
-                      <div className="font-semibold text-white">
-                        {game.team1_name} vs {game.team2_name}
-                      </div>
+                      <div className="font-semibold text-white">{game.team1_name} vs {game.team2_name}</div>
                       <div className="text-sm text-gray-400 mt-1">
-                        {new Date(game.date).toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric'
+                        {new Date(game.date + 'T00:00:00').toLocaleDateString('en-US', {
+                          weekday: 'short', month: 'short', day: 'numeric',
                         })} at {game.time}
                       </div>
                     </div>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                        game.status === 'completed' ? 'bg-green-900 text-green-200' :
-                        game.status === 'in_progress' ? 'bg-blue-900 text-blue-200' :
-                        'bg-gray-700 text-gray-300'
-                      }`}
-                    >
-                      {game.status}
-                    </span>
+                    {statusBadge(game.status)}
                   </div>
-                  {game.team1_score !== null && game.team2_score !== null && (
-                    <div className="text-sm text-gray-300 mt-2">
-                      Score: {game.team1_score} - {game.team2_score}
+
+                  {/* Completed score display */}
+                  {game.status === 'completed' && game.team1_score != null && game.team2_score != null && (
+                    <div className="text-sm font-semibold text-white bg-black/20 rounded px-2 py-1 mb-2 text-center">
+                      {game.team1_name} {game.team1_score} — {game.team2_score} {game.team2_name}
                     </div>
+                  )}
+
+                  {/* Score entry inline form */}
+                  {scoringGameId === game.game_id ? (
+                    <div className="mt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">{game.team1_name}</label>
+                          <input
+                            type="number" min="0"
+                            value={scoreInputs.team1}
+                            onChange={(e) => setScoreInputs({ ...scoreInputs, team1: e.target.value })}
+                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-center"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">{game.team2_name}</label>
+                          <input
+                            type="number" min="0"
+                            value={scoreInputs.team2}
+                            onChange={(e) => setScoreInputs({ ...scoreInputs, team2: e.target.value })}
+                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-center"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSaveScore(game.game_id)}
+                          disabled={saving}
+                          className="flex-1 px-3 py-1 bg-green-700 text-white text-sm rounded hover:bg-green-600 disabled:opacity-50"
+                        >
+                          {saving ? 'Saving…' : 'Save Score'}
+                        </button>
+                        <button
+                          onClick={() => setScoringGameId(null)}
+                          className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : editingGameId === game.game_id ? (
+                    /* Edit date/time inline form */
+                    <div className="mt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={editInputs.game_date}
+                            onChange={(e) => setEditInputs({ ...editInputs, game_date: e.target.value })}
+                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Time</label>
+                          <input
+                            type="time"
+                            value={editInputs.game_time}
+                            onChange={(e) => setEditInputs({ ...editInputs, game_time: e.target.value })}
+                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSaveEdit(game.game_id)}
+                          disabled={saving}
+                          className="flex-1 px-3 py-1 bg-accent text-white text-sm rounded hover:bg-accent-dark disabled:opacity-50"
+                        >
+                          {saving ? 'Saving…' : 'Save Changes'}
+                        </button>
+                        <button
+                          onClick={() => setEditingGameId(null)}
+                          className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Action buttons */
+                    game.status !== 'cancelled' && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {game.status !== 'completed' && (
+                          <button
+                            onClick={() => startScoring(game)}
+                            className="px-3 py-1 bg-green-800 text-green-100 text-xs rounded hover:bg-green-700"
+                          >
+                            Record Score
+                          </button>
+                        )}
+                        {game.status === 'completed' && (
+                          <button
+                            onClick={() => startScoring(game)}
+                            className="px-3 py-1 bg-yellow-800 text-yellow-100 text-xs rounded hover:bg-yellow-700"
+                          >
+                            Edit Score
+                          </button>
+                        )}
+                        <button
+                          onClick={() => startEditing(game)}
+                          className="px-3 py-1 bg-gray-600 text-gray-100 text-xs rounded hover:bg-gray-500"
+                        >
+                          Reschedule
+                        </button>
+                        <button
+                          onClick={() => handleCancelGame(game.game_id)}
+                          disabled={saving}
+                          className="px-3 py-1 bg-red-900 text-red-200 text-xs rounded hover:bg-red-800 disabled:opacity-50"
+                        >
+                          Cancel Game
+                        </button>
+                      </div>
+                    )
                   )}
                 </div>
               ))}
