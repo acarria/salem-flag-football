@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import datetime, date, timedelta, time as dt_time
 from typing import List, Dict, Tuple, Optional
+from uuid import UUID
 import math
 from app.db.db import get_db
 from app.models.league import League
@@ -23,7 +24,7 @@ router = APIRouter()
 # Maximum game duration in minutes (60 minutes)
 MAX_GAME_DURATION_MINUTES = 60
 
-def calculate_team_standings(league_id: int, db: Session) -> List[Tuple[int, Dict]]:
+def calculate_team_standings(league_id: UUID, db: Session) -> List[Tuple[UUID, Dict]]:
     """
     Calculate team standings from completed regular season games.
     
@@ -120,7 +121,7 @@ def calculate_team_standings(league_id: int, db: Session) -> List[Tuple[int, Dic
     
     return standings
 
-def get_playoff_winners_from_round(league_id: int, bracket_round: int, db: Session) -> List[int]:
+def get_playoff_winners_from_round(league_id: UUID, bracket_round: int, db: Session) -> List[UUID]:
     """
     Retrieve list of team IDs that won in a specific playoff bracket round.
     
@@ -159,7 +160,7 @@ def get_playoff_winners_from_round(league_id: int, bracket_round: int, db: Sessi
     
     return winners
 
-def get_available_time_slots_for_date(league_id: int, target_date: date, db: Session, field_id: Optional[int] = None, max_duration_minutes: int = MAX_GAME_DURATION_MINUTES) -> List[Tuple[int, dt_time, dt_time]]:
+def get_available_time_slots_for_date(league_id: UUID, target_date: date, db: Session, field_id: Optional[UUID] = None, max_duration_minutes: int = MAX_GAME_DURATION_MINUTES) -> List[Tuple[UUID, dt_time, dt_time]]:
     """
     Get available time slots for a specific date based on field availability.
     
@@ -415,7 +416,7 @@ def generate_time_slots_from_availability(
 
 @router.post("/leagues/{league_id}/generate-schedule", response_model=ScheduleGenerationResponse, summary="Generate schedule for league")
 async def generate_schedule(
-    league_id: int,
+    league_id: UUID,
     schedule_data: ScheduleGenerationRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -770,7 +771,7 @@ async def generate_schedule(
 
 @router.get("/leagues/{league_id}/schedule", summary="Get league schedule")
 async def get_league_schedule(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -946,7 +947,7 @@ async def get_all_fields(
 
 @router.get("/fields/{field_id}", response_model=FieldResponse, summary="Get a specific field")
 async def get_field_by_id_global(
-    field_id: int,
+    field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> FieldResponse:
@@ -973,7 +974,7 @@ async def get_field_by_id_global(
 
 @router.put("/fields/{field_id}", response_model=FieldResponse, summary="Update a field")
 async def update_field_global(
-    field_id: int,
+    field_id: UUID,
     field_data: FieldUpdateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1015,7 +1016,7 @@ async def update_field_global(
 
 @router.delete("/fields/{field_id}", summary="Delete a field")
 async def delete_field_global(
-    field_id: int,
+    field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> Dict[str, str]:
@@ -1055,8 +1056,8 @@ async def delete_field_global(
 # League-Field Association Endpoints
 @router.post("/leagues/{league_id}/fields/{field_id}", response_model=Dict[str, str], summary="Associate a field with a league")
 async def associate_field_with_league(
-    league_id: int,
-    field_id: int,
+    league_id: UUID,
+    field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> Dict[str, str]:
@@ -1111,8 +1112,8 @@ async def associate_field_with_league(
 
 @router.delete("/leagues/{league_id}/fields/{field_id}", summary="Disassociate a field from a league")
 async def disassociate_field_from_league(
-    league_id: int,
-    field_id: int,
+    league_id: UUID,
+    field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> Dict[str, str]:
@@ -1156,7 +1157,7 @@ async def disassociate_field_from_league(
 # League-Specific Field Endpoints (backward compatibility - uses league_fields junction table)
 @router.post("/leagues/{league_id}/fields", response_model=FieldResponse, summary="Create a new field and associate it with a league")
 async def create_field(
-    league_id: int,
+    league_id: UUID,
     field_data: FieldCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1219,7 +1220,7 @@ async def create_field(
 
 @router.get("/leagues/{league_id}/fields", response_model=List[FieldResponse], summary="Get all fields for a league")
 async def get_fields(
-    league_id: int,
+    league_id: UUID,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1260,8 +1261,8 @@ async def get_fields(
 
 @router.get("/leagues/{league_id}/fields/{field_id}", response_model=FieldResponse, summary="Get a specific field")
 async def get_field_by_id(
-    league_id: int,
-    field_id: int,
+    league_id: UUID,
+    field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> FieldResponse:
@@ -1304,8 +1305,8 @@ async def get_field_by_id(
 
 @router.put("/leagues/{league_id}/fields/{field_id}", response_model=FieldResponse, summary="Update a field")
 async def update_field(
-    league_id: int,
-    field_id: int,
+    league_id: UUID,
+    field_id: UUID,
     field_data: FieldUpdateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1355,8 +1356,8 @@ async def update_field(
 
 @router.delete("/leagues/{league_id}/fields/{field_id}", summary="Delete a field")
 async def delete_field(
-    league_id: int,
-    field_id: int,
+    league_id: UUID,
+    field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> Dict[str, str]:
@@ -1477,7 +1478,7 @@ async def create_field_availability(
 
 @router.get("/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get all field availability records")
 async def get_all_field_availability(
-    field_id: Optional[int] = None,
+    field_id: Optional[UUID] = None,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1517,7 +1518,7 @@ async def get_all_field_availability(
 
 @router.get("/leagues/{league_id}/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get field availability for fields in a league")
 async def get_field_availability_for_league(
-    league_id: int,
+    league_id: UUID,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1569,7 +1570,7 @@ async def get_field_availability_for_league(
 
 @router.get("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Get a specific field availability record")
 async def get_field_availability_by_id(
-    availability_id: int,
+    availability_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> FieldAvailabilityResponse:
@@ -1603,7 +1604,7 @@ async def get_field_availability_by_id(
 
 @router.put("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Update field availability record")
 async def update_field_availability(
-    availability_id: int,
+    availability_id: UUID,
     availability_data: FieldAvailabilityUpdateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -1671,7 +1672,7 @@ async def update_field_availability(
 
 @router.delete("/field-availability/{availability_id}", summary="Delete field availability record")
 async def delete_field_availability(
-    availability_id: int,
+    availability_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> Dict[str, str]:
@@ -1713,7 +1714,7 @@ async def delete_field_availability(
 
 @router.post("/leagues/{league_id}/generate-playoff-bracket", response_model=ScheduleGenerationResponse, summary="Generate playoff bracket after regular season")
 async def generate_playoff_bracket(
-    league_id: int,
+    league_id: UUID,
     schedule_data: ScheduleGenerationRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)

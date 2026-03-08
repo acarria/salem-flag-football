@@ -1,9 +1,10 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from uuid import UUID
 
 # Public league response schema (moved from app/api/league.py)
 class PublicLeagueResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     description: str | None
     start_date: str

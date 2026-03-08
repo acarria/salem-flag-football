@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
+from uuid import UUID
 from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
@@ -142,7 +143,7 @@ async def get_all_leagues(
 
 @router.get("/leagues/{league_id}", response_model=LeagueResponse, summary="Get league details")
 async def get_league_details(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -171,7 +172,7 @@ async def get_league_details(
 
 @router.put("/leagues/{league_id}", response_model=LeagueResponse, summary="Update league")
 async def update_league(
-    league_id: int,
+    league_id: UUID,
     league_data: LeagueUpdateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -225,7 +226,7 @@ async def update_league(
 
 @router.delete("/leagues/{league_id}", summary="Delete league")
 async def delete_league(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -245,7 +246,7 @@ async def delete_league(
 
 @router.get("/leagues/{league_id}/stats", response_model=LeagueStatsResponse, summary="Get league statistics")
 async def get_league_stats(
-    league_id: int,
+    league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):

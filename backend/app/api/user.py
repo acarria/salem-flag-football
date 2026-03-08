@@ -7,6 +7,7 @@ from app.models.league_player import LeaguePlayer
 from app.api.schemas.user import UserProfile
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 router = APIRouter()
 
@@ -58,7 +59,7 @@ async def get_user_profile(user_id: str, db: Session = Depends(get_db)):
     }
 
 @router.get("/profile/{user_id}/registered/{league_id}", summary="Check if user is registered for a league")
-async def check_league_registration(user_id: str, league_id: int, db: Session = Depends(get_db)):
+async def check_league_registration(user_id: str, league_id: UUID, db: Session = Depends(get_db)):
     """
     Check if a user is already registered for a specific league.
     

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from uuid import UUID
 
 # User profile schema (moved from app/api/user.py)
 class UserProfile(BaseModel):
@@ -11,7 +12,7 @@ class UserProfile(BaseModel):
     gender: str
     communicationsAccepted: bool
     registrationStatus: str
-    teamId: Optional[int] = None
+    teamId: Optional[str] = None  # UUID
     groupName: Optional[str] = None
     registrationDate: Optional[str] = None
     paymentStatus: Optional[str] = None
@@ -27,7 +28,7 @@ class UserCreate(UserBase):
     password: str
 
 class UserOut(UserBase):
-    id: int
+    id: UUID
 
     class Config:
         orm_mode = True

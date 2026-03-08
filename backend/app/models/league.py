@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime, Boolean, Text, JSON, Numeric
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text, JSON, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+import uuid
 from app.db.db import Base
 
 class League(Base):
     __tablename__ = "leagues"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     start_date = Column(Date, nullable=False)

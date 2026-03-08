@@ -10,13 +10,22 @@ from alembic import context
 # Add the current directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-# Import all models to ensure they are registered with SQLAlchemy
-from app.db.db import Base
-from app.models import user, player, league, team, group, league_player, admin_config, field, field_availability, league_field
+# Load .env so DATABASE_URL is available (same as app)
+from dotenv import load_dotenv
+load_dotenv()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Use DATABASE_URL from environment when set (e.g. local dev vs Docker)
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
+
+# Import all models to ensure they are registered with SQLAlchemy
+from app.db.db import Base
+from app.models import user, player, league, team, group, league_player, admin_config, field, field_availability, league_field, game
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

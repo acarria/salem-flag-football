@@ -2,6 +2,7 @@ from pydantic import BaseModel, validator, field_validator
 from typing import List, Optional
 from datetime import datetime, date, time
 from decimal import Decimal
+from uuid import UUID
 
 # League Management Schemas
 class LeagueCreateRequest(BaseModel):
@@ -96,7 +97,7 @@ class LeagueUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
 
 class LeagueResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     description: Optional[str]
     start_date: date
@@ -129,7 +130,7 @@ class LeagueResponse(BaseModel):
         from_attributes = True
 
 class LeagueStatsResponse(BaseModel):
-    league_id: int
+    league_id: UUID
     total_players: int
     total_teams: int
     registration_status: str  # 'open', 'closed', 'full'
@@ -138,15 +139,15 @@ class LeagueStatsResponse(BaseModel):
 
 # Team Management Schemas
 class LeagueMemberResponse(BaseModel):
-    id: int
-    player_id: int
+    id: UUID
+    player_id: UUID
     first_name: str
     last_name: str
     email: str
-    group_id: Optional[int]
-    group_name: Optional[str]
-    team_id: Optional[int]
-    team_name: Optional[str]
+    group_id: Optional[UUID] = None
+    group_name: Optional[str] = None
+    team_id: Optional[UUID] = None
+    team_name: Optional[str] = None
     registration_status: str
     payment_status: str
     waiver_status: str
@@ -156,8 +157,8 @@ class LeagueMemberResponse(BaseModel):
         from_attributes = True
 
 class TeamResponse(BaseModel):
-    id: int
-    league_id: int
+    id: UUID
+    league_id: UUID
     name: str
     color: Optional[str] = None
     is_active: bool
@@ -195,7 +196,7 @@ class ScheduleGenerationResponse(BaseModel):
 
 # Admin Management Schemas
 class AdminConfigResponse(BaseModel):
-    id: int
+    id: UUID
     email: str
     role: str
     is_active: bool
@@ -237,7 +238,7 @@ class PaginatedUserResponse(BaseModel):
 
 # Field Management Schemas
 class FieldResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     field_number: Optional[str] = None
     street_address: str
@@ -307,8 +308,8 @@ class FieldUpdateRequest(BaseModel):
 
 # Field Availability Schemas
 class FieldAvailabilityResponse(BaseModel):
-    id: int
-    field_id: int
+    id: UUID
+    field_id: UUID
     field_name: Optional[str] = None  # Populated from field relationship
     is_recurring: bool
     day_of_week: Optional[int] = None  # 0=Monday, 6=Sunday
@@ -326,7 +327,7 @@ class FieldAvailabilityResponse(BaseModel):
         from_attributes = True
 
 class FieldAvailabilityCreateRequest(BaseModel):
-    field_id: int  # Required: which field this availability is for
+    field_id: UUID  # Required: which field this availability is for
     is_recurring: bool
     day_of_week: Optional[int] = None  # Required if is_recurring=True, 0=Monday, 6=Sunday
     recurrence_start_date: Optional[date] = None  # Required if is_recurring=True
@@ -371,7 +372,7 @@ class FieldAvailabilityCreateRequest(BaseModel):
         return v
 
 class FieldAvailabilityUpdateRequest(BaseModel):
-    field_id: Optional[int] = None  # Optional: can change which field this availability is for
+    field_id: Optional[UUID] = None  # Optional: can change which field this availability is for
     is_recurring: Optional[bool] = None
     day_of_week: Optional[int] = None
     recurrence_start_date: Optional[date] = None

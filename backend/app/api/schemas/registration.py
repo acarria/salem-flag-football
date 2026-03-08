@@ -1,11 +1,12 @@
 from pydantic import BaseModel, validator
 from typing import List, Optional
 from datetime import date
+from uuid import UUID
 
 # Registration Request Schemas
 class SoloRegistrationRequest(BaseModel):
     """Schema for solo player registration to a league."""
-    league_id: int
+    league_id: UUID
     firstName: str
     lastName: str
     email: str
@@ -42,7 +43,7 @@ class GroupPlayerInfo(BaseModel):
 
 class GroupRegistrationRequest(BaseModel):
     """Schema for group registration to a league."""
-    league_id: int
+    league_id: UUID
     groupName: str
     players: List[GroupPlayerInfo]
     termsAccepted: bool
@@ -67,15 +68,15 @@ class GroupRegistrationRequest(BaseModel):
 # Registration Response Schemas
 class LeagueRegistrationResponse(BaseModel):
     """Schema for a single league registration."""
-    id: int
-    league_id: int
+    id: UUID
+    league_id: UUID
     league_name: Optional[str] = None
-    player_id: int
+    player_id: UUID
     registration_status: str
     payment_status: str
     waiver_status: str
-    team_id: Optional[int] = None
-    group_id: Optional[int] = None
+    team_id: Optional[UUID] = None
+    group_id: Optional[UUID] = None
     group_name: Optional[str] = None
     created_at: str
     updated_at: str
@@ -88,5 +89,5 @@ class RegistrationResponse(BaseModel):
     success: bool
     message: str
     registration: Optional[LeagueRegistrationResponse] = None
-    player_id: Optional[int] = None
+    player_id: Optional[UUID] = None
 
