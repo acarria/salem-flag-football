@@ -124,7 +124,6 @@ async def get_all_leagues(
         # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
         player_count = db.query(LeaguePlayer).filter(
             LeaguePlayer.league_id == league.id,
-            LeaguePlayer.registration_status == 'registered',
             LeaguePlayer.is_active == True
         ).count()
         
@@ -206,7 +205,6 @@ async def update_league(
         # Return with updated counts (using LeaguePlayer for many-to-many relationship)
         player_count = db.query(LeaguePlayer).filter(
             LeaguePlayer.league_id == league.id,
-            LeaguePlayer.registration_status == 'registered',
             LeaguePlayer.is_active == True
         ).count()
         

@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Salem Flag Football API — Lambda + API Gateway HTTP API
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        DATABASE_URL: !Sub '{{resolve:ssm:/flagfootball/DATABASE_URL}}'
+        CLERK_JWKS_URL: !Sub '{{resolve:ssm:/flagfootball/CLERK_JWKS_URL}}'
+        CLERK_ISSUER: !Sub '{{resolve:ssm:/flagfootball/CLERK_ISSUER}}'
+        CLERK_SECRET_KEY: !Sub '{{resolve:ssm:/flagfootball/CLERK_SECRET_KEY}}'
+        RESEND_API_KEY: !Sub '{{resolve:ssm:/flagfootball/RESEND_API_KEY}}'
+        APP_URL: !Sub '{{resolve:ssm:/flagfootball/APP_URL}}'
+        CORS_ORIGINS: !Sub '{{resolve:ssm:/flagfootball/CORS_ORIGINS}}'
+        ADMIN_EMAIL: !Sub '{{resolve:ssm:/flagfootball/ADMIN_EMAIL}}'
+
+Resources:
+  FlagFootballApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+  FlagFootballFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageConfig:
+        Command: ['app.main.handler']
+      Architectures:
+        - x86_64
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FlagFootballApi
+            Path: /{proxy+}
+            Method: ANY
+        RootEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FlagFootballApi
+            Path: /
+            Method: ANY
+    Metadata:
+      DockerfileUri: ../../backend/Dockerfile
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${FlagFootballApi}.execute-api.${AWS::Region}.amazonaws.com'

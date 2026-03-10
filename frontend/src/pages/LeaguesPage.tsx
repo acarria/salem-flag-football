@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
 import BaseLayout from '../components/layout/BaseLayout';
 import { apiService, League } from '../services';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
@@ -8,7 +7,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 export default function LeaguesPage() {
   const { isSignedIn } = useAuth();
   const { user } = useUser();
-  const navigate = useNavigate();
+  const { openSignIn } = useClerk();
   const { request: authenticatedRequest } = useAuthenticatedApi();
   
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -78,8 +77,7 @@ export default function LeaguesPage() {
 
   const handleRegisterForLeague = () => {
     if (!isSignedIn) {
-      // Redirect to sign in or show sign in modal
-      navigate('/');
+      openSignIn();
       return;
     }
     

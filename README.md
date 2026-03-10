@@ -47,7 +47,11 @@ This is a full-stack monorepo with the following structure:
 
 #### **Player Registration System**
 - **Individual Registration**: Players can register for leagues
-- **Group Registration**: Support for group/team registrations
+- **Group Registration (Invitation-based)**:
+  - Organizer registers and is immediately confirmed
+  - Invitees receive email invitations with a 7-day expiring token
+  - Invitees accept/decline via a dedicated `/invite/:token` page (no login required to view, login required to accept)
+  - `GroupInvitation` model tracks status: pending → accepted/declined/expired
 - **Profile Management**: Complete player profiles with:
   - Personal information (name, email, phone, DOB, gender)
   - Communication preferences
@@ -83,30 +87,61 @@ This is a full-stack monorepo with the following structure:
 - **Players**: Complete player profiles and registration data
 - **Teams**: Team management and organization
 - **Groups**: Support for group registrations
+- **Group Invitations**: Token-based invitations with expiry tracking
 - **Admin Config**: Admin user management
 - **League Players**: Many-to-many relationships with status tracking
+- **Games**: Individual game records with scores, results, and round tracking
 - **Fields**: Independent field entities with location information
 - **Field Availability**: Recurring and custom availability windows
 - **League Fields**: Many-to-many association between leagues and fields
-
-### Partially Implemented Features
+- All primary and foreign keys use **UUIDs** (migrated from integer IDs)
 
 #### **Schedule & Standings**
-- **Game Model**: Database model for storing individual games with scores and results
 - **Schedule Generation**: Automated schedule creation with database persistence
   - Support for field availability integration (recurring and custom dates)
   - Maximum game duration enforcement (60 minutes)
   - Automatic field assignment based on availability
-- **Schedule Viewing**: Admin interface to view generated schedules
-- **Game Management**: Track game status, scores, and outcomes
-- **Playoff Bracket Generation**: Seeded playoff bracket generation after regular season completion
+- **Schedule Editing**: Admins can edit individual games (time, field, teams)
+- **Score Recording**: Admins submit scores; results stored on the `Game` model
+- **Real Standings**: Standings calculated live from game results (W/L/T, points, run differential)
+- **Playoff Bracket Generation**: Seeded playoff brackets generated after regular season completion
 
 #### **Team Management**
 - Basic team CRUD operations
 - Team assignment functionality
 - Missing: Team captain roles, team communication features
 
-## Recent Architectural Improvements
+## Recent Changes
+
+### **Authentication Hardening (Clerk JWT)**
+- **Issuer normalization**: Backend strips trailing slashes from `CLERK_ISSUER` before comparison, so tokens with `iss: "…dev"` and `iss: "…dev/"` both validate correctly — eliminates the common "Invalid issuer" error from slash mismatches
+- **Email fallback via Clerk API**: Clerk JWTs don't include `email` by default. If absent, the backend now calls `GET /v1/users/{user_id}` with the secret key to resolve the primary email — no Clerk dashboard customization required
+- **User ID normalization**: JWT payload is normalized to expose `id` (aliased from `sub`) so all downstream code uses a consistent key regardless of auth path (JWT vs. session)
+- **Diagnostic logging**: Startup logs `CLERK_JWKS_URL` and `CLERK_ISSUER`; per-request logging fires on issuer mismatches with exact values for quick diagnosis
+
+### **Group Registration & Invitations**
+- **Invitation-based group registration**: Organizer registers directly (status: confirmed); invitees receive tokenized email invitations
+- **`GroupInvitation` model**: Tracks email, names, token, status, expiry (7 days), and accepting player
+- **Email delivery**: `email_service.py` sends HTML invitation emails via Resend API (best-effort, non-fatal)
+- **Public invite page** (`/invite/:token`): Shows invitation details without login; requires authentication to accept
+- **Invitation endpoints**: `GET /invite/:token`, `POST /invite/:token/accept`, `POST /invite/:token/decline`, `GET /invitations/me`
+
+### **Score Recording & Real Standings**
+- Score submission stored on the `Game` model (home/away scores, winner, status)
+- Standings calculated live from game results: wins, losses, ties, points, run differential
+- Admin interface for entering scores and viewing updated standings
+
+### **Schedule Editing**
+- Admins can edit individual scheduled games: start time, field assignment, team assignments
+- Changes persist immediately and reflect in the public schedule view
+
+### **UUID Migration**
+- All primary keys and foreign keys migrated from integer IDs to UUIDs
+- Alembic migration covers all tables: players, leagues, teams, games, groups, group invitations, fields, league players
+
+### **Playoff Bracket Generation**
+- Seeded brackets generated from regular season standings
+- Elimination round tracking with playoff-specific game records
 
 ### **Backend Modularization**
 - **Refactored Admin API**: Split monolithic `admin.py` into modular components:
@@ -116,26 +151,13 @@ This is a full-stack monorepo with the following structure:
   - `admin_management.py`: Admin user configuration
 - **Centralized Schemas**: Moved all Pydantic models to `app/api/schemas/admin.py`
 - **Shared Dependencies**: Created `app/api/admin/dependencies.py` for common admin authentication
-- **New Game Model**: Added comprehensive `Game` model for schedule persistence
 
 ### **Frontend Modularization**
 - **Refactored API Services**: Split monolithic `api.ts` into modular structure:
   - `core/`: Base service class and shared types
   - `admin/`: Admin-specific API services (league, team, admin management)
-  - `public/`: Public API services (user, registration)
-- **Backward Compatibility**: Maintained existing imports through `CombinedApiService`
+  - `public/`: Public API services (user, registration, invitations)
 - **Clean Architecture**: Organized services by domain with index files for clean imports
-
-### **New Admin Features**
-- **League Member Management**: View all registered players in a league
-- **Team Generation**: Automated team creation with group preservation
-- **Schedule Generation**: Automated schedule creation with database persistence
-  - Field availability integration (recurring and custom dates)
-  - 90-minute maximum game duration enforcement
-  - Automatic field assignment
-- **Playoff Bracket Generation**: Seeded playoff brackets generated after regular season completion
-- **Field Management**: Complete CRUD operations for fields and field availability
-- **Test Data Generation**: Add fake players for testing purposes
 
 ### **Player Registration Improvements**
 - **Multiple League Registration**: Players can register for multiple leagues simultaneously
@@ -150,14 +172,14 @@ This is a full-stack monorepo with the following structure:
 - [x] Implement automatic schedule generation based on tournament format
 - [x] Add schedule viewing capabilities for admins
 - [x] Create game result tracking system
-- [ ] Add schedule editing capabilities for admins
-- [ ] Add game result submission interface
+- [x] Add schedule editing capabilities for admins
+- [x] Add game result submission interface
 
 #### **2. Standings & Results System**
-- [ ] Create `GameResult` model for storing scores and outcomes
-- [ ] Implement standings calculation logic
-- [ ] Add result submission interface for admins
-- [ ] Create real-time standings updates
+- [x] Store scores and outcomes on the `Game` model
+- [x] Implement standings calculation logic (W/L/T, points, run differential)
+- [x] Add result submission interface for admins
+- [ ] Create real-time standings updates (websocket/polling)
 - [ ] Support for different scoring systems
 
 #### **3. Payment Integration**
@@ -361,13 +383,19 @@ import { useLeagues } from '../hooks/useLeagues';
 #### **Admin Endpoints**
 - `GET /admin/leagues` - List all leagues
 - `POST /admin/leagues` - Create new league
+- `PUT /admin/leagues/{id}` - Update league
+- `DELETE /admin/leagues/{id}` - Delete league
 - `GET /admin/leagues/{id}/members` - Get league members
 - `POST /admin/leagues/{id}/generate-teams` - Generate teams
 - `POST /admin/leagues/{id}/generate-schedule` - Generate schedule
-- `POST /admin/leagues/{id}/generate-playoff-bracket` - Generate playoff bracket (after regular season)
+- `PUT /admin/games/{id}` - Edit a scheduled game (time, field, teams)
+- `POST /admin/games/{id}/score` - Record game score
+- `POST /admin/leagues/{id}/generate-playoff-bracket` - Generate playoff bracket
 - `GET /admin/leagues/{id}/schedule` - Get league schedule
 - `POST /admin/fields` - Create field
 - `GET /admin/fields` - List all fields
+- `PUT /admin/fields/{id}` - Update field
+- `DELETE /admin/fields/{id}` - Delete field
 - `POST /admin/leagues/{id}/fields/{field_id}` - Associate field with league
 - `POST /admin/field-availability` - Create field availability
 - `GET /admin/field-availability` - List field availability records
@@ -376,8 +404,12 @@ import { useLeagues } from '../hooks/useLeagues';
 - `GET /league/public/leagues` - Get public leagues
 - `GET /league/standings` - Get standings
 - `GET /league/schedule` - Get schedule
-- `POST /registration/player` - Register player
-- `POST /registration/group` - Register group
+- `POST /registration/player` - Register player (solo)
+- `POST /registration/group` - Register group with invitations
+- `GET /registration/invite/{token}` - Get invitation details (public)
+- `POST /registration/invite/{token}/accept` - Accept group invitation (authenticated)
+- `POST /registration/invite/{token}/decline` - Decline group invitation (public)
+- `GET /registration/invitations/me` - Get pending invitations for current user
 
 ## Environment Variables
 
@@ -394,15 +426,24 @@ import { useLeagues } from '../hooks/useLeagues';
    ```env
    # Database Configuration
    DATABASE_URL=postgresql://postgres:postgres@db:5432/flagfootball
-   
+
    # Security
    SECRET_KEY=your-secret-key-here
-   
+
    # Clerk Authentication
+   # Trailing slash on CLERK_ISSUER is required — it must match the "iss" claim in Clerk JWTs
    CLERK_JWKS_URL=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
    CLERK_ISSUER=https://your-clerk-instance.clerk.accounts.dev/
    CLERK_SECRET_KEY=sk_test_your-clerk-secret-key-here
-   
+
+   # Email (Resend) — used for group invitation emails
+   RESEND_API_KEY=re_your-resend-api-key
+   EMAIL_FROM=onboarding@resend.dev
+   APP_URL=http://localhost:3000
+
+   # Admin bootstrap — this email gets super_admin on first startup
+   ADMIN_EMAIL=your-admin@example.com
+
    # Frontend Configuration
    REACT_APP_API_URL=http://localhost:8000
    REACT_APP_CLERK_PUBLISHABLE_KEY=pk_test_your-clerk-publishable-key-here
@@ -416,7 +457,9 @@ import { useLeagues } from '../hooks/useLeagues';
    - **Publishable Key**: Found in the API Keys section
    - **Secret Key**: Found in the API Keys section
    - **JWKS URL**: `https://your-instance.clerk.accounts.dev/.well-known/jwks.json`
-   - **Issuer**: `https://your-instance.clerk.accounts.dev/`
+   - **Issuer**: `https://your-instance.clerk.accounts.dev/` (include the trailing slash)
+
+> **Note:** The backend automatically fetches user emails from the Clerk API using the secret key. You do not need to customize the Clerk session token to include the `email` claim.
 
 ## Contributing
 

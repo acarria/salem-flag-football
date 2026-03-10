@@ -12,5 +12,8 @@ class Settings:
     CLERK_JWKS_URL: str = os.getenv("CLERK_JWKS_URL", "https://literate-finch-21.clerk.accounts.dev/.well-known/jwks.json")
     CLERK_ISSUER: str = os.getenv("CLERK_ISSUER", "https://literate-finch-21.clerk.accounts.dev/")
     CLERK_SECRET_KEY: str = os.getenv("CLERK_SECRET_KEY", "sk_test_cMFMmIn2Jg880J7wkc2Zof49puvcAjhtYSLLLeHl8B")
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    APP_URL: str = os.getenv("APP_URL", "http://localhost:3000")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "onboarding@resend.dev")
 
 settings = Settings() 
