@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth, useClerk } from '@clerk/clerk-react';
 import RegistrationModal from '../components/modals/RegistrationModal';
 import BaseLayout from '../components/layout/BaseLayout';
 import { apiService, League, PublicStanding, LeagueSchedule } from '../services';
@@ -14,10 +14,13 @@ export default function PublicHomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
 
   const handleRegisterClick = () => {
     if (isSignedIn) {
       setShowRegistrationModal(true);
+    } else {
+      openSignIn();
     }
   };
 

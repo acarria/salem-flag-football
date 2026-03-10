@@ -7,34 +7,46 @@ import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
 import LeagueAdminPage from './pages/admin/LeagueAdminPage';
 import LeaguesPage from './pages/LeaguesPage';
+import InvitePage from './pages/InvitePage';
 import TestPage from './components/TestPage';
 import { apiService, UserProfile } from './services';
 import { AuthProvider } from './contexts/AuthContext';
+import { invitationService, PendingInvitation } from './services/public/invitations';
 
 function App() {
-  const { isSignedIn, isLoaded, userId } = useAuth();
+  const { isSignedIn, isLoaded, userId, getToken } = useAuth();
   const { user } = useUser();
   const { signOut } = useClerk();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
 
-  // Check if user has completed their profile
+  // Check if user has completed their profile and load pending invitations
   useEffect(() => {
     const checkProfile = async () => {
       if (isSignedIn && isLoaded && userId) {
         try {
           const profile = await apiService.getUserProfile(userId);
           if (profile) {
-            // User has a profile - they've completed the initial setup
             setIsProfileComplete(true);
           } else {
-            // User doesn't have a profile - show the required profile completion modal
             setShowProfileModal(true);
           }
         } catch (err) {
           console.error('Failed to check profile:', err);
-          // If we can't check the profile, assume they need to complete it
           setShowProfileModal(true);
+        }
+
+        // Load pending invitations
+        try {
+          const authToken = await getToken();
+          if (authToken) {
+            const invites = await invitationService.getPendingInvitations(authToken);
+            setPendingInvitations(invites);
+          }
+        } catch (err) {
+          // Non-fatal — just don't show the banner
+          console.error('Failed to load invitations:', err);
         }
       }
     };
@@ -100,6 +112,17 @@ function App() {
         <div className="min-h-screen bg-primary">
           {/* Admin dashboard is now handled within the page components */}
 
+          {/* Pending invitation banner */}
+          {isSignedIn && pendingInvitations.length > 0 && (
+            <div className="bg-green-700 text-white text-center py-2 px-4 text-sm">
+              You have {pendingInvitations.length} pending group invitation
+              {pendingInvitations.length > 1 ? 's' : ''}.{' '}
+              <a href={`/invite/${pendingInvitations[0].token}`} className="underline font-semibold">
+                View invitation
+              </a>
+            </div>
+          )}
+
           {/* Routes */}
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -107,6 +130,7 @@ function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/leagues/:leagueId" element={<LeagueAdminPage />} />
             <Route path="/leagues" element={<LeaguesPage />} />
+            <Route path="/invite/:token" element={<InvitePage />} />
             <Route path="/test" element={<TestPage />} />
           </Routes>
 

@@ -245,17 +245,43 @@ export default function BaseLayout({
                 <span className="text-xl">×</span>
               </button>
             </div>
-            <SignIn 
-              appearance={{ 
-                variables: { 
-                  colorPrimary: '#10B981', 
-                  colorBackground: '#0A0A0A', 
+            <SignIn
+              appearance={{
+                variables: {
+                  colorPrimary: '#10B981',
+                  colorBackground: '#0A0A0A',
                   colorText: '#fff',
                   colorInputBackground: '#1A1A1A',
                   colorInputText: '#fff',
-                } 
-              }} 
-              routing="hash" 
+                },
+                elements: {
+                  // Social buttons need a light background so brand icons (Google, Apple, GitHub) are visible
+                  socialButtonsBlockButton: {
+                    backgroundColor: '#ffffff',
+                    borderColor: '#d1d5db',
+                    color: '#111827',
+                  },
+                  socialButtonsBlockButtonText: {
+                    color: '#111827',
+                  },
+                  socialButtonsIconButton: {
+                    backgroundColor: '#ffffff',
+                    borderColor: '#d1d5db',
+                  },
+                  // Divider text
+                  dividerText: {
+                    color: '#9ca3af',
+                  },
+                  dividerLine: {
+                    backgroundColor: '#374151',
+                  },
+                  // Footer links
+                  footerActionLink: {
+                    color: '#10B981',
+                  },
+                }
+              }}
+              routing="hash"
               signUpUrl="/sign-up"
               afterSignInUrl="/"
             />

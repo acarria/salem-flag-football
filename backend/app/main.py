@@ -1,4 +1,5 @@
 import os
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,10 +9,20 @@ from app.api.admin.main import router as admin_router
 from app.db.db import SessionLocal
 from app.services.admin_service import AdminService
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+_default_origins = "http://localhost:3000,http://127.0.0.1:3000"
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", _default_origins).split(",") if o.strip()]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Bootstrap first admin from ADMIN_EMAIL on startup (no separate script)."""
+    # Log Clerk config so issuer mismatches surface immediately in server logs
+    from app.core.config import settings
+    logger.info("Clerk config — JWKS_URL=%s  ISSUER=%s", settings.CLERK_JWKS_URL, settings.CLERK_ISSUER)
+
     admin_email = os.getenv("ADMIN_EMAIL")
     if admin_email:
         db = SessionLocal()
@@ -30,7 +41,7 @@ app = FastAPI(lifespan=lifespan)
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,4 +55,9 @@ app.include_router(admin_router)
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"} 
+    return {"status": "ok"}
+
+
+# Lambda handler (used when deployed to AWS Lambda via Mangum)
+from mangum import Mangum  # noqa: E402
+handler = Mangum(app, lifespan="off") 

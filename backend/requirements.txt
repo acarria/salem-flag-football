@@ -9,3 +9,5 @@ python-jose
 passlib[bcrypt]
 httpx
 PyJWT
+resend
+mangum
