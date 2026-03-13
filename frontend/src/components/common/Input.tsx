@@ -13,24 +13,24 @@ export default function Input({
   className = '',
   ...props
 }: InputProps) {
-  const inputClasses = `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent ${
-    error ? 'border-red-300' : 'border-gray-300'
+  const inputClasses = `w-full px-3 py-2 bg-[#1E1E1E] border rounded-md focus:outline-none focus:ring-0 focus:border-accent/40 text-white placeholder:text-[#6B6B6B] transition-colors ${
+    error ? 'border-red-500/60' : 'border-white/10'
   } ${className}`;
-  
+
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-xs font-medium text-[#A0A0A0]">
           {label}
         </label>
       )}
       <input className={inputClasses} {...props} />
       {error && (
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-xs text-red-400">{error}</p>
       )}
       {helperText && !error && (
-        <p className="text-sm text-gray-600">{helperText}</p>
+        <p className="text-xs text-[#6B6B6B]">{helperText}</p>
       )}
     </div>
   );
-} 
+}

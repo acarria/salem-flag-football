@@ -143,12 +143,17 @@ export default function ProfilePage() {
     setFieldErrors({});
   };
 
+  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
+  const inputDisabledCls = 'w-full px-3 py-2 bg-[#1A1A1A] border border-white/5 text-[#A0A0A0] text-sm rounded-md outline-none cursor-default';
+  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
+
   if (isLoading) {
     return (
       <BaseLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="text-accent text-xl">Loading profile...</div>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="inline-flex items-center gap-2 text-[#6B6B6B] text-sm">
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+            Loading profile...
           </div>
         </div>
       </BaseLayout>
@@ -158,10 +163,10 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <BaseLayout>
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="text-red-400 text-xl mb-4">Profile not found</div>
-            <Link to="/" className="text-accent hover:text-accent-dark">
+            <div className="text-sm text-[#A0A0A0] mb-3">Profile not found</div>
+            <Link to="/" className="text-sm text-white underline hover:text-[#A0A0A0]">
               Return to Home
             </Link>
           </div>
@@ -172,253 +177,221 @@ export default function ProfilePage() {
 
   return (
     <BaseLayout>
-      <div className="max-w-4xl mx-auto p-4">
-        {/* Profile Header */}
-        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-accent">Profile Information</h2>
-            <div className="flex gap-2">
-              {!isEditing ? (
+      <div className="max-w-2xl mx-auto px-6 py-12">
+
+        {/* Page header */}
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <div className="section-label mb-1">ACCOUNT</div>
+            <h1 className="text-xl font-semibold text-white">Profile</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            {!isEditing ? (
+              <button
+                onClick={() => {
+                  if (profile) setOriginalProfile({ ...profile });
+                  setIsEditing(true);
+                }}
+                className="bg-accent text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-accent-dark transition-colors"
+              >
+                Edit
+              </button>
+            ) : (
+              <>
                 <button
-                  onClick={() => {
-                    // Save current profile as original before editing
-                    if (profile) {
-                      setOriginalProfile({ ...profile });
-                    }
-                    setIsEditing(true);
-                  }}
-                  className="px-4 py-2 rounded bg-accent text-white font-bold hover:bg-accent-dark transition-colors"
+                  onClick={handleCancel}
+                  className="text-sm text-[#6B6B6B] hover:text-white transition-colors"
                 >
-                  Edit Profile
+                  Cancel
                 </button>
-              ) : (
-                <>
-                  <button
-                    onClick={handleCancel}
-                    className="px-4 py-2 rounded border-2 border-accent text-accent font-bold hover:bg-accent hover:text-white transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className={`px-4 py-2 rounded font-bold transition-colors ${
-                      isSaving 
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                        : 'bg-accent text-white hover:bg-accent-dark'
-                    }`}
-                  >
-                    {isSaving ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </>
-              )}
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="bg-accent text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-accent-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? 'Saving...' : 'Save'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Status messages */}
+        {error && (
+          <div className="mb-6 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-6 border border-green-500/30 rounded-lg p-3 text-green-400 text-sm">
+            {success}
+          </div>
+        )}
+
+        {/* Registration status row */}
+        <div className="border-t border-white/5 py-4 flex items-center justify-between mb-6">
+          <span className="text-xs font-medium text-[#A0A0A0]">Registration Status</span>
+          <span className="flex items-center gap-2 text-sm">
+            <span className={`status-dot ${profile.registrationStatus === 'registered' ? 'bg-green-400' : 'bg-[#6B6B6B]'}`}></span>
+            <span className="text-white">
+              {profile.registrationStatus === 'registered' ? 'Registered' : 'Not Registered'}
+            </span>
+          </span>
+        </div>
+
+        {/* Profile form */}
+        <form className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>First Name</label>
+              <input
+                type="text"
+                name="firstName"
+                value={profile.firstName}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+                className={isEditing ? inputCls : inputDisabledCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Last Name</label>
+              <input
+                type="text"
+                name="lastName"
+                value={profile.lastName}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+                className={isEditing ? inputCls : inputDisabledCls}
+              />
             </div>
           </div>
 
-          {/* Status Messages */}
-          {error && (
-            <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded text-red-300">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="mb-4 p-3 bg-green-900/50 border border-green-500 rounded text-green-300">
-              {success}
-            </div>
-          )}
-
-          {/* Registration Status */}
-          <div className="mb-4 p-3 bg-black bg-opacity-30 rounded border border-accent">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300">Registration Status:</span>
-              <span className={`font-bold ${
-                profile.registrationStatus === 'registered' ? 'text-green-400' : 'text-yellow-400'
-              }`}>
-                {profile.registrationStatus === 'registered' ? 'Registered' : 'Not Registered'}
-              </span>
-            </div>
-            {profile.registrationStatus === 'registered' && profile.teamId && (
-              <span className="text-gray-300">• Team ID: {profile.teamId}</span>
+          <div>
+            <label className={labelCls}>Email</label>
+            <input
+              type="email"
+              name="email"
+              value={profile.email}
+              onChange={handleInputChange}
+              disabled={!isEditing}
+              className={isEditing ? inputCls : inputDisabledCls}
+            />
+            {fieldErrors.email && (
+              <div className="mt-1 text-red-400 text-xs">
+                {typeof fieldErrors.email === 'string' ? fieldErrors.email : fieldErrors.email.message}
+              </div>
             )}
           </div>
 
-          {/* Profile Form */}
-          <form className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">First Name</label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={profile.firstName}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
-                    !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Last Name</label>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={profile.lastName}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
-                    !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                />
-              </div>
-            </div>
+          <div>
+            <label className={labelCls}>Phone Number</label>
+            <input
+              type="tel"
+              name="phone"
+              value={profile.phone}
+              onChange={handleInputChange}
+              disabled={!isEditing}
+              placeholder="(555) 123-4567"
+              className={isEditing ? inputCls : inputDisabledCls}
+            />
+            {fieldErrors.phone && (
+              <div className="mt-1 text-red-400 text-xs">{fieldErrors.phone as string}</div>
+            )}
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+              <label className={labelCls}>Date of Birth</label>
               <input
-                type="email"
-                name="email"
-                value={profile.email}
+                type="date"
+                name="dateOfBirth"
+                value={profile.dateOfBirth}
                 onChange={handleInputChange}
                 disabled={!isEditing}
-                className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
-                  !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={isEditing ? inputCls : inputDisabledCls}
               />
-              {fieldErrors.email && (
-                <div className="mt-1 text-red-400 text-sm">
-                  {typeof fieldErrors.email === 'string' 
-                    ? fieldErrors.email 
-                    : fieldErrors.email.message
-                  }
-                </div>
-              )}
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Phone Number</label>
-              <input
-                type="tel"
-                name="phone"
-                value={profile.phone}
+              <label className={labelCls}>Gender</label>
+              <select
+                name="gender"
+                value={profile.gender}
                 onChange={handleInputChange}
                 disabled={!isEditing}
-                placeholder="(555) 123-4567"
-                className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
-                  !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={isEditing ? inputCls : inputDisabledCls}
+              >
+                <option value="">Select...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="prefer-not-to-say">Prefer not to say</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-1">
+            <label className={`flex items-start gap-3 ${isEditing ? 'cursor-pointer' : 'cursor-default'}`}>
+              <input
+                type="checkbox"
+                name="communicationsAccepted"
+                checked={profile.communicationsAccepted}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+                className={`mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0 ${!isEditing ? 'opacity-50' : ''}`}
               />
-              {fieldErrors.phone && (
-                <div className="mt-1 text-red-400 text-sm">{fieldErrors.phone as string}</div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Date of Birth</label>
-                <input
-                  type="date"
-                  name="dateOfBirth"
-                  value={profile.dateOfBirth}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
-                    !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Gender</label>
-                <select
-                  name="gender"
-                  value={profile.gender}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className={`w-full p-3 rounded bg-black border border-accent text-white focus:outline-none focus:ring-2 focus:ring-accent ${
-                    !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <option value="">Select Gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                  <option value="prefer-not-to-say">Prefer not to say</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="pt-4">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="communicationsAccepted"
-                  checked={profile.communicationsAccepted}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className={`mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2 ${
-                    !isEditing ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                />
-                <span className="text-sm text-gray-300">
-                  I consent to receive communications about league activities, schedules, and updates via email.
-                </span>
-              </label>
-            </div>
-          </form>
-        </div>
+              <span className="text-xs text-[#A0A0A0] leading-relaxed">
+                I consent to receive communications about league activities, schedules, and updates via email.
+              </span>
+            </label>
+          </div>
+        </form>
 
         {/* League Information */}
         {profile.registrationStatus === 'registered' && (
-          <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6">
-            <h3 className="text-xl font-bold text-accent mb-4">League Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-semibold text-gray-300 mb-2">Current Team</h4>
-                <p className="text-accent font-bold">Team ID: {profile.teamId || 'Not assigned'}</p>
+          <div className="border-t border-white/5 mt-10 pt-8">
+            <div className="section-label mb-4">LEAGUE INFORMATION</div>
+            <div className="space-y-0">
+              <div className="border-b border-white/5 py-3 flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Team</span>
+                <span className="text-sm text-white">{profile.teamId || 'Not assigned'}</span>
               </div>
-              <div>
-                <h4 className="font-semibold text-gray-300 mb-2">Registration Date</h4>
-                <p className="text-white">{profile.registrationDate ? new Date(profile.registrationDate).toLocaleDateString() : 'N/A'}</p>
+              <div className="border-b border-white/5 py-3 flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Registration Date</span>
+                <span className="text-sm text-white">
+                  {profile.registrationDate ? new Date(profile.registrationDate).toLocaleDateString() : 'N/A'}
+                </span>
               </div>
-              <div>
-                <h4 className="font-semibold text-gray-300 mb-2">Season Status</h4>
-                <p className="text-green-400">Active</p>
+              <div className="border-b border-white/5 py-3 flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Season Status</span>
+                <span className="flex items-center gap-2 text-sm text-white">
+                  <span className="status-dot bg-green-400"></span>
+                  Active
+                </span>
               </div>
-              <div>
-                <h4 className="font-semibold text-gray-300 mb-2">Next Game</h4>
-                <p className="text-white">Tuesday, 6:00 PM at Salem Common</p>
+              <div className="py-3 flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Next Game</span>
+                <span className="text-sm text-white">Tuesday, 6:00 PM at Salem Common</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6 mt-6">
-          <h3 className="text-xl font-bold text-accent mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link 
-              to="/rules" 
-              className="p-4 bg-black bg-opacity-30 rounded-lg border border-accent hover:bg-accent hover:text-white transition-colors text-center"
-            >
-              <div className="text-2xl mb-2">📋</div>
-              <div className="font-semibold">View Rules</div>
+        {/* Quick Links */}
+        <div className="border-t border-white/5 mt-10 pt-6">
+          <div className="section-label mb-4">QUICK LINKS</div>
+          <div className="flex flex-wrap gap-6">
+            <Link to="/rules" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
+              League Rules <span>→</span>
             </Link>
-            <Link 
-              to="/" 
-              className="p-4 bg-black bg-opacity-30 rounded-lg border border-accent hover:bg-accent hover:text-white transition-colors text-center"
-            >
-              <div className="text-2xl mb-2">📅</div>
-              <div className="font-semibold">View Schedule</div>
+            <Link to="/" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
+              Schedule <span>→</span>
             </Link>
-            <Link 
-              to="/contact" 
-              className="p-4 bg-black bg-opacity-30 rounded-lg border border-accent hover:bg-accent hover:text-white transition-colors text-center"
-            >
-              <div className="text-2xl mb-2">📞</div>
-              <div className="font-semibold">Contact League</div>
+            <Link to="/contact" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
+              Contact League <span>→</span>
             </Link>
           </div>
         </div>
+
       </div>
     </BaseLayout>
   );
