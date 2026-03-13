@@ -6,17 +6,26 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#0A0A0A', // Carbon Black
-        accent: '#10B981', // Emerald Green - Primary accent
-        'accent-dark': '#059669', // Darker Emerald for gradients
-        gunmetal: '#1A1A1A', // Slightly lighter carbon for cards
-        darkgunmetal: '#0D0D0D', // Darker carbon
-        // Keep old names for backward compatibility during migration
-        pumpkin: '#10B981', // Map to green
-        deeporange: '#059669', // Map to darker green
+        primary: '#0A0A0A',
+        accent: '#10B981',
+        'accent-dark': '#059669',
+        gunmetal: '#1A1A1A',
+        darkgunmetal: '#0D0D0D',
+        pumpkin: '#10B981',
+        deeporange: '#059669',
+        'surface-0': '#0A0A0A',
+        'surface-1': '#111111',
+        'surface-2': '#161616',
+        'surface-3': '#1E1E1E',
+        'border-subtle': '#FFFFFF0D',
+        'border-default': '#FFFFFF1A',
+        'text-primary': '#FFFFFF',
+        'text-secondary': '#A0A0A0',
+        'text-tertiary': '#6B6B6B',
       },
       fontFamily: {
         sans: [
+          'Inter',
           '-apple-system',
           'BlinkMacSystemFont',
           '"Segoe UI"',

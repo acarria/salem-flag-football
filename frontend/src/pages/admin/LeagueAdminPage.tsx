@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import BaseLayout from '../../components/layout/BaseLayout';
-import { League, LeagueMember, Field, Team, LeagueSchedule, ScheduledGame, GameUpdateRequest, LeagueCreateRequest, LeagueUpdateRequest, TournamentFormat } from '../../services';
+import {
+  League, LeagueMember, Field, Team, LeagueSchedule, ScheduledGame,
+  GameUpdateRequest, LeagueCreateRequest, LeagueUpdateRequest, TournamentFormat
+} from '../../services';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
-import { LeagueFieldAssociationModal, LeagueFormModal } from './components';
+import InlineEditableField from '../../components/common/InlineEditableField';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
-type TabType = 'overview' | 'members' | 'fields' | 'teams' | 'schedule';
 type GameFormat = '7v7' | '6v6' | '5v5';
+
+const inputCls =
+  'w-full px-2.5 py-1.5 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors';
 
 export default function LeagueAdminPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
@@ -16,831 +22,625 @@ export default function LeagueAdminPage() {
   const { user } = useUser();
   const { request: authenticatedRequest } = useAuthenticatedApi();
 
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeSection, setActiveSection] = useState('overview');
   const [league, setLeague] = useState<League | null>(null);
   const [members, setMembers] = useState<LeagueMember[]>([]);
-  const [fields, setFields] = useState<Field[]>([]); // Fields associated with this league
-  const [allFields, setAllFields] = useState<Field[]>([]); // All available fields
+  const [fields, setFields] = useState<Field[]>([]);
+  const [allFields, setAllFields] = useState<Field[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [schedule, setSchedule] = useState<LeagueSchedule | null>(null);
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
-  const [showFieldModal, setShowFieldModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [leagueFormData, setLeagueFormData] = useState<Partial<LeagueCreateRequest>>({
-    name: '',
-    description: '',
-    start_date: '',
-    num_weeks: 8,
-    format: '7v7',
-    tournament_format: 'round_robin',
-    game_duration: 60,
-    games_per_week: 1,
-    min_teams: 4,
-    max_teams: undefined,
-    registration_deadline: '',
-    registration_fee: undefined,
-    regular_season_weeks: undefined,
-    playoff_weeks: undefined,
-    swiss_rounds: undefined,
-    swiss_pairing_method: undefined,
-    compass_draw_rounds: undefined,
-    playoff_teams: undefined,
-    playoff_format: undefined,
-  });
+
+  const [isEditingOverview, setIsEditingOverview] = useState(false);
+  const [leagueFormData, setLeagueFormData] = useState<Partial<LeagueCreateRequest>>({});
+
+  const [confirmCancelGame, setConfirmCancelGame] = useState<string | null>(null);
+
+  const sectionRefs = useRef<{ [key: string]: HTMLElement | null }>({});
 
   useEffect(() => {
-    if (!isSignedIn || !leagueId) {
-      navigate('/admin');
-      return;
-    }
-
+    if (!isSignedIn || !leagueId) { navigate('/admin'); return; }
     const userEmail = user?.emailAddresses?.[0]?.emailAddress;
-    const adminEmail = 'alexcarria1@gmail.com';
-    
-    if (userEmail !== adminEmail) {
-      navigate('/admin');
-      return;
-    }
-
-    loadLeagueData();
+    if (userEmail !== 'alexcarria1@gmail.com') { navigate('/admin'); return; }
+    loadAll();
   }, [isSignedIn, leagueId, user, navigate]);
 
-  const loadLeagueData = async () => {
+  const loadAll = async () => {
     if (!leagueId) return;
-    
     setIsLoading(true);
-    setError(null);
-    
     try {
-      const leagueData = await authenticatedRequest<League>(`/admin/leagues/${leagueId}`);
+      const [leagueData, membersData, fieldsData, allFieldsData, teamsData, scheduleData] = await Promise.all([
+        authenticatedRequest<League>(`/admin/leagues/${leagueId}`),
+        authenticatedRequest<LeagueMember[]>(`/admin/leagues/${leagueId}/members`),
+        authenticatedRequest<Field[]>(`/admin/leagues/${leagueId}/fields`),
+        authenticatedRequest<Field[]>('/admin/fields'),
+        authenticatedRequest<Team[]>(`/admin/leagues/${leagueId}/teams`),
+        authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`).catch(() => null),
+      ]);
       setLeague(leagueData);
-    } catch (err) {
-      console.error('Failed to load league:', err);
-      setError('Failed to load league data. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadMembers = async () => {
-    if (!leagueId) return;
-    
-    try {
-      const membersData = await authenticatedRequest<LeagueMember[]>(`/admin/leagues/${leagueId}/members`);
       setMembers(membersData);
-    } catch (err) {
-      console.error('Failed to load members:', err);
-      setError('Failed to load members. Please try again.');
-    }
-  };
-
-  const loadFields = async () => {
-    if (!leagueId) return;
-    
-    try {
-      const fieldsData = await authenticatedRequest<Field[]>(`/admin/leagues/${leagueId}/fields`);
       setFields(fieldsData);
-    } catch (err) {
-      console.error('Failed to load fields:', err);
-      setError('Failed to load fields. Please try again.');
-    }
-  };
-
-  const loadAllFields = async () => {
-    try {
-      // Load all available fields for the association modal
-      const allFieldsData = await authenticatedRequest<Field[]>(`/admin/fields`);
       setAllFields(allFieldsData);
-    } catch (err) {
-      console.error('Failed to load all fields:', err);
-      // Don't show error for this as it's not critical
-    }
-  };
-
-  const loadTeams = async () => {
-    if (!leagueId) return;
-    
-    try {
-      const teamsData = await authenticatedRequest<Team[]>(`/admin/leagues/${leagueId}/teams`);
       setTeams(teamsData);
-    } catch (err) {
-      console.error('Failed to load teams:', err);
-      setError('Failed to load teams. Please try again.');
-    }
-  };
-
-  const loadSchedule = async () => {
-    if (!leagueId) return;
-    
-    try {
-      const scheduleData = await authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
       setSchedule(scheduleData);
+      populateFormData(leagueData);
     } catch (err) {
-      console.error('Failed to load schedule:', err);
-      setError('Failed to load schedule. Please try again.');
-    }
-  };
-
-  useEffect(() => {
-    if (!leagueId) return;
-    
-    switch (activeTab) {
-      case 'members':
-        loadMembers();
-        break;
-      case 'fields':
-        loadFields();
-        loadAllFields(); // Also load all fields when viewing fields tab
-        break;
-      case 'teams':
-        loadTeams();
-        break;
-      case 'schedule':
-        loadSchedule();
-        break;
-    }
-  }, [activeTab, leagueId]);
-
-  // Field association handlers
-  const handleAssociateField = async (fieldId: string) => {
-    if (!leagueId) return;
-
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await authenticatedRequest<void>(`/admin/leagues/${leagueId}/fields/${fieldId}`, {
-        method: 'POST',
-      });
-      
-      setSuccess('Field associated with league successfully!');
-      // Reload both associated fields and all fields to update the modal
-      await Promise.all([loadFields(), loadAllFields()]);
-    } catch (err: any) {
-      console.error('Failed to associate field:', err);
-      let errorMessage = 'Failed to associate field. Please try again.';
-      if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      setError(errorMessage);
+      setError('Failed to load league data.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDisassociateField = async (fieldId: string) => {
-    if (!leagueId) return;
-
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await authenticatedRequest<void>(`/admin/leagues/${leagueId}/fields/${fieldId}`, {
-        method: 'DELETE',
-      });
-      
-      setSuccess('Field disassociated from league successfully!');
-      // Reload both associated fields and all fields to update the modal
-      await Promise.all([loadFields(), loadAllFields()]);
-    } catch (err: any) {
-      console.error('Failed to disassociate field:', err);
-      let errorMessage = 'Failed to disassociate field. Please try again.';
-      if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // League editing handlers
-  const openEditModal = () => {
-    if (!league) return;
-    
+  const populateFormData = (l: League) => {
     setLeagueFormData({
-      name: league.name,
-      description: league.description || '',
-      start_date: league.start_date,
-      num_weeks: league.num_weeks,
-      format: league.format as GameFormat,
-      tournament_format: league.tournament_format as TournamentFormat,
-      game_duration: league.game_duration,
-      games_per_week: league.games_per_week,
-      min_teams: league.min_teams,
-      max_teams: league.max_teams || undefined,
-      registration_deadline: league.registration_deadline || '',
-      registration_fee: typeof league.registration_fee === 'number' ? league.registration_fee : (league.registration_fee ? Number(league.registration_fee) : undefined),
-      regular_season_weeks: league.regular_season_weeks || undefined,
-      playoff_weeks: league.playoff_weeks || undefined,
-      swiss_rounds: league.swiss_rounds || undefined,
-      swiss_pairing_method: league.swiss_pairing_method || undefined,
-      compass_draw_rounds: league.compass_draw_rounds || undefined,
-      playoff_teams: league.playoff_teams || undefined,
-      playoff_format: league.playoff_format || undefined,
+      name: l.name,
+      description: l.description || '',
+      start_date: l.start_date,
+      num_weeks: l.num_weeks,
+      format: l.format as GameFormat,
+      tournament_format: l.tournament_format as TournamentFormat,
+      game_duration: l.game_duration,
+      games_per_week: l.games_per_week,
+      min_teams: l.min_teams,
+      max_teams: l.max_teams || undefined,
+      registration_deadline: l.registration_deadline || '',
+      registration_fee: typeof l.registration_fee === 'number' ? l.registration_fee : (l.registration_fee ? Number(l.registration_fee) : undefined),
+      regular_season_weeks: l.regular_season_weeks || undefined,
+      playoff_weeks: l.playoff_weeks || undefined,
+      swiss_rounds: l.swiss_rounds || undefined,
+      playoff_teams: l.playoff_teams || undefined,
+      playoff_format: l.playoff_format || undefined,
     });
-    setShowEditModal(true);
-  };
-
-  const handleUpdateLeague = async () => {
-    if (!leagueId || !league) return;
-
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const updatedLeague = await authenticatedRequest<League>(`/admin/leagues/${leagueId}`, {
-        method: 'PUT',
-        body: JSON.stringify(leagueFormData as LeagueUpdateRequest),
-      });
-      
-      setSuccess('League updated successfully!');
-      setShowEditModal(false);
-      setLeague(updatedLeague);
-      await loadLeagueData();
-    } catch (err: any) {
-      console.error('Failed to update league:', err);
-      let errorMessage = 'Failed to update league. Please try again.';
-      if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleLeagueInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    
-    setLeagueFormData((prev: Partial<LeagueCreateRequest>) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setLeagueFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const handleUpdateLeague = async () => {
+    if (!leagueId || !league) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const updated = await authenticatedRequest<League>(`/admin/leagues/${leagueId}`, {
+        method: 'PUT',
+        body: JSON.stringify(leagueFormData as LeagueUpdateRequest),
+      });
+      setSuccess('League updated!');
+      setIsEditingOverview(false);
+      setLeague(updated);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update league.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAssociateField = async (fieldId: string) => {
+    if (!leagueId) return;
+    try {
+      await authenticatedRequest<void>(`/admin/leagues/${leagueId}/fields/${fieldId}`, { method: 'POST' });
+      setSuccess('Field added!');
+      const [f, af] = await Promise.all([
+        authenticatedRequest<Field[]>(`/admin/leagues/${leagueId}/fields`),
+        authenticatedRequest<Field[]>('/admin/fields'),
+      ]);
+      setFields(f);
+      setAllFields(af);
+    } catch (err: any) {
+      setError(err.message || 'Failed to associate field.');
+    }
+  };
+
+  const handleDisassociateField = async (fieldId: string) => {
+    if (!leagueId) return;
+    try {
+      await authenticatedRequest<void>(`/admin/leagues/${leagueId}/fields/${fieldId}`, { method: 'DELETE' });
+      setSuccess('Field removed!');
+      const [f, af] = await Promise.all([
+        authenticatedRequest<Field[]>(`/admin/leagues/${leagueId}/fields`),
+        authenticatedRequest<Field[]>('/admin/fields'),
+      ]);
+      setFields(f);
+      setAllFields(af);
+    } catch (err: any) {
+      setError(err.message || 'Failed to disassociate field.');
+    }
   };
 
   const handleUpdateGame = async (gameId: string, data: GameUpdateRequest) => {
     if (!leagueId) return;
-    setError(null);
-    setSuccess(null);
     try {
       await authenticatedRequest(`/admin/leagues/${leagueId}/games/${gameId}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
+        method: 'PUT', body: JSON.stringify(data),
       });
-      setSuccess('Game updated successfully!');
-      await loadSchedule();
+      setSuccess('Game updated!');
+      const scheduleData = await authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
+      setSchedule(scheduleData);
     } catch (err: any) {
       setError(err.message || 'Failed to update game.');
     }
   };
 
-  const resetLeagueForm = () => {
-    if (!league) return;
-    
-    setLeagueFormData({
-      name: league.name,
-      description: league.description || '',
-      start_date: league.start_date,
-      num_weeks: league.num_weeks,
-      format: league.format as GameFormat,
-      tournament_format: league.tournament_format as TournamentFormat,
-      game_duration: league.game_duration,
-      games_per_week: league.games_per_week,
-      min_teams: league.min_teams,
-      max_teams: league.max_teams || undefined,
-      registration_deadline: league.registration_deadline || '',
-      registration_fee: typeof league.registration_fee === 'number' ? league.registration_fee : (league.registration_fee ? Number(league.registration_fee) : undefined),
-      regular_season_weeks: league.regular_season_weeks || undefined,
-      playoff_weeks: league.playoff_weeks || undefined,
-      swiss_rounds: league.swiss_rounds || undefined,
-      swiss_pairing_method: league.swiss_pairing_method || undefined,
-      compass_draw_rounds: league.compass_draw_rounds || undefined,
-      playoff_teams: league.playoff_teams || undefined,
-      playoff_format: league.playoff_format || undefined,
+  // IntersectionObserver for sidebar active section
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: '-20% 0px -70% 0px', threshold: 0 }
+    );
+
+    Object.values(sectionRefs.current).forEach((el) => {
+      if (el) observer.observe(el);
     });
-  };
 
-  const getTournamentFormatDescription = (format: TournamentFormat) => {
-    switch (format) {
-      case 'round_robin':
-        return 'Each team plays every other team once';
-      case 'swiss':
-        return 'Teams are paired against opponents with similar records';
-      case 'playoff_bracket':
-        return 'Regular season followed by elimination tournament';
-      case 'compass_draw':
-        return 'Teams play in compass directions (N, S, E, W)';
-      default:
-        return '';
-    }
-  };
+    return () => observer.disconnect();
+  }, [league]);
 
-  if (!isSignedIn || !league) {
-    return null;
+  if (!isSignedIn || (!league && !isLoading)) return null;
+  if (isLoading && !league) {
+    return (
+      <BaseLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-sm text-[#6B6B6B]">Loading…</div>
+        </div>
+      </BaseLayout>
+    );
   }
+  if (!league) return null;
 
-  const tabs = [
-    { id: 'overview' as TabType, label: 'Overview', icon: '📊' },
-    { id: 'members' as TabType, label: 'Members', icon: '👥' },
-    { id: 'fields' as TabType, label: 'Fields', icon: '📍' },
-    { id: 'teams' as TabType, label: 'Teams', icon: '🏈' },
-    { id: 'schedule' as TabType, label: 'Schedule', icon: '📅' },
+  const sections = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'members', label: 'Members' },
+    { id: 'fields', label: 'Fields' },
+    { id: 'teams', label: 'Teams' },
+    { id: 'schedule', label: 'Schedule' },
   ];
+
+  const unassociatedFields = allFields.filter(
+    (f) => !fields.some((af) => af.id === f.id) && f.is_active
+  );
 
   return (
     <BaseLayout>
-      <div className="max-w-7xl mx-auto p-4">
-        {/* Header */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/admin')}
-            className="mb-4 text-accent hover:text-accent-dark transition-colors flex items-center gap-2"
+      <div className="flex min-h-[calc(100vh-3.5rem)]">
+        {/* Sidebar */}
+        <aside className="hidden lg:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)] w-56 bg-[#0D0D0D] border-r border-white/5 p-6 flex-shrink-0">
+          <Link
+            to="/admin"
+            className="text-xs text-[#6B6B6B] hover:text-white transition-colors flex items-center gap-1.5 mb-6"
           >
-            ← Back to Admin Dashboard
-          </button>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-accent mb-2">{league.name}</h1>
-              <p className="text-gray-300">{league.description || 'League administration'}</p>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-400">Status</div>
-              <span className={`font-semibold ${league.is_active ? 'text-green-400' : 'text-red-400'}`}>
-                {league.is_active ? 'Active' : 'Inactive'}
-              </span>
+            ← Dashboard
+          </Link>
+
+          <div className="mb-1">
+            <div className="text-sm font-semibold text-white truncate">{league.name}</div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`status-dot ${league.is_active ? 'bg-accent' : 'bg-[#6B6B6B]'}`} />
+              <span className="text-xs text-[#6B6B6B]">{league.is_active ? 'Active' : 'Inactive'}</span>
             </div>
           </div>
-        </div>
 
-        {/* Status Messages */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-300">
-            {error}
-            <button 
-              onClick={() => setError(null)}
-              className="float-right text-red-400 hover:text-red-200"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        {success && (
-          <div className="mb-6 p-4 bg-green-900/50 border border-green-500 rounded-lg text-green-300">
-            {success}
-            <button 
-              onClick={() => setSuccess(null)}
-              className="float-right text-green-400 hover:text-green-200"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+          <hr className="border-white/5 my-4" />
 
-        {/* Tabs */}
-        <div className="border-b border-gray-700 mb-6">
-          <div className="flex space-x-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-b-2 border-accent text-accent'
-                    : 'text-gray-400 hover:text-gray-200'
+          <nav className="space-y-0.5">
+            {sections.map((sec) => (
+              <a
+                key={sec.id}
+                href={`#${sec.id}`}
+                className={`block px-3 py-2 rounded-md text-sm transition-colors ${
+                  activeSection === sec.id
+                    ? 'text-white bg-white/5'
+                    : 'text-[#6B6B6B] hover:text-white hover:bg-white/[0.03]'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label}
-              </button>
+                {sec.label}
+              </a>
             ))}
-          </div>
-        </div>
+          </nav>
+        </aside>
 
-        {/* Tab Content */}
-        <div className="bg-gunmetal bg-opacity-95 border-2 border-accent rounded-xl p-6">
-          {activeTab === 'overview' && (
-            <OverviewTab 
-              league={league}
-              onEdit={openEditModal}
-            />
+        {/* Main scrollable content */}
+        <main className="flex-1 px-6 lg:px-10 py-8 space-y-16 max-w-4xl">
+          {/* Status messages */}
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex justify-between">
+              {error}
+              <button onClick={() => setError(null)} className="text-red-400/60 hover:text-red-400 ml-4">✕</button>
+            </div>
           )}
-          
-          {activeTab === 'members' && (
-            <MembersTab 
-              members={members} 
-              isLoading={isLoading}
-              onRefresh={loadMembers}
-            />
-          )}
-          
-          {activeTab === 'fields' && (
-            <FieldsTab 
-              fields={fields}
-              league={league}
-              isLoading={isLoading}
-              onRefresh={loadFields}
-              onManageFields={async () => {
-                await loadAllFields(); // Load all fields before opening modal
-                setShowFieldModal(true);
-              }}
-            />
-          )}
-          
-          {showFieldModal && league && (
-            <LeagueFieldAssociationModal
-              league={league}
-              associatedFields={fields}
-              allFields={allFields}
-              onAssociate={handleAssociateField}
-              onDisassociate={handleDisassociateField}
-              onCancel={() => {
-                setShowFieldModal(false);
-              }}
-              isLoading={isLoading}
-            />
+          {success && (
+            <div className="p-3 bg-accent/10 border border-accent/20 rounded-lg text-accent text-sm flex justify-between">
+              {success}
+              <button onClick={() => setSuccess(null)} className="text-accent/60 hover:text-accent ml-4">✕</button>
+            </div>
           )}
 
-          {showEditModal && (
-            <LeagueFormModal
-              title="Edit League"
-              formData={leagueFormData}
-              onInputChange={handleLeagueInputChange}
-              onSubmit={handleUpdateLeague}
-              onCancel={() => {
-                setShowEditModal(false);
-                resetLeagueForm();
-              }}
-              isLoading={isLoading}
-              getTournamentFormatDescription={getTournamentFormatDescription}
-            />
-          )}
-          
-          {activeTab === 'teams' && (
-            <TeamsTab 
-              teams={teams}
-              isLoading={isLoading}
-              onRefresh={loadTeams}
-            />
-          )}
-          
-          {activeTab === 'schedule' && (
-            <ScheduleTab
-              schedule={schedule}
-              isLoading={isLoading}
-              onRefresh={loadSchedule}
-              onUpdateGame={handleUpdateGame}
-            />
-          )}
-        </div>
+          {/* Overview Section */}
+          <section
+            id="overview"
+            className="scroll-mt-20"
+            ref={(el) => { sectionRefs.current.overview = el; }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-base font-semibold text-white">Overview</h2>
+              {!isEditingOverview ? (
+                <button
+                  onClick={() => setIsEditingOverview(true)}
+                  className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors border border-white/10"
+                >
+                  Edit
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUpdateLeague}
+                    disabled={isLoading}
+                    className="text-xs font-medium bg-accent text-white px-3 py-1.5 rounded-md hover:bg-accent-dark transition-colors disabled:opacity-50"
+                  >
+                    {isLoading ? 'Saving…' : 'Save changes'}
+                  </button>
+                  <button
+                    onClick={() => { setIsEditingOverview(false); populateFormData(league); }}
+                    className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+              <InlineEditableField
+                label="League Name"
+                name="name"
+                value={leagueFormData.name}
+                isEditing={isEditingOverview}
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Description"
+                name="description"
+                value={leagueFormData.description}
+                isEditing={isEditingOverview}
+                type="textarea"
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Start Date"
+                name="start_date"
+                value={leagueFormData.start_date}
+                displayValue={league.start_date ? new Date(league.start_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
+                isEditing={isEditingOverview}
+                type="date"
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Game Format"
+                name="format"
+                value={leagueFormData.format}
+                isEditing={isEditingOverview}
+                type="select"
+                options={[{ value: '7v7', label: '7v7' }, { value: '6v6', label: '6v6' }, { value: '5v5', label: '5v5' }]}
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Tournament Format"
+                name="tournament_format"
+                value={leagueFormData.tournament_format}
+                displayValue={league.tournament_format.replace(/_/g, ' ')}
+                isEditing={isEditingOverview}
+                type="select"
+                options={[
+                  { value: 'round_robin', label: 'Round Robin' },
+                  { value: 'swiss', label: 'Swiss' },
+                  { value: 'playoff_bracket', label: 'Playoff Bracket' },
+                  { value: 'compass_draw', label: 'Compass Draw' },
+                ]}
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Weeks"
+                name="num_weeks"
+                value={leagueFormData.num_weeks}
+                isEditing={isEditingOverview}
+                type="number"
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Game Duration (min)"
+                name="game_duration"
+                value={leagueFormData.game_duration}
+                isEditing={isEditingOverview}
+                type="number"
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Games Per Week"
+                name="games_per_week"
+                value={leagueFormData.games_per_week}
+                isEditing={isEditingOverview}
+                type="number"
+                onChange={handleLeagueInputChange}
+              />
+              <InlineEditableField
+                label="Registration Fee"
+                name="registration_fee"
+                value={leagueFormData.registration_fee}
+                displayValue={`$${typeof league.registration_fee === 'number' ? league.registration_fee.toFixed(2) : Number(league.registration_fee || 0).toFixed(2)}`}
+                isEditing={isEditingOverview}
+                type="number"
+                onChange={handleLeagueInputChange}
+              />
+              {/* Read-only stats */}
+              <div className="space-y-1">
+                <div className="text-xs text-[#6B6B6B]">Registered Players</div>
+                <div className="text-sm font-medium text-white">{league.registered_players_count}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-[#6B6B6B]">Teams</div>
+                <div className="text-sm font-medium text-white">{league.registered_teams_count}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-[#6B6B6B]">Status</div>
+                <div className="flex items-center gap-2">
+                  <span className={`status-dot ${league.is_active ? 'bg-accent' : 'bg-[#6B6B6B]'}`} />
+                  <span className="text-sm font-medium text-white">{league.is_active ? 'Active' : 'Inactive'}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Members Section */}
+          <section
+            id="members"
+            className="scroll-mt-20"
+            ref={(el) => { sectionRefs.current.members = el; }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-base font-semibold text-white">Members <span className="text-[#6B6B6B] font-normal ml-1">({members.length})</span></h2>
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await authenticatedRequest<LeagueMember[]>(`/admin/leagues/${leagueId}/members`);
+                    setMembers(data);
+                  } catch { /* ignore */ }
+                }}
+                className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
+                title="Refresh"
+              >
+                ↺
+              </button>
+            </div>
+
+            <div className="admin-surface overflow-hidden">
+              {members.length === 0 ? (
+                <div className="py-10 text-center text-sm text-[#6B6B6B]">No members registered yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        {['Name', 'Email', 'Team', 'Group', 'Status', 'Payment', 'Waiver'].map((h) => (
+                          <th key={h} className="text-left py-3 px-3 text-xs uppercase tracking-wider text-[#6B6B6B] font-medium whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members.map((m) => (
+                        <tr key={m.id} className="admin-row">
+                          <td className="py-2.5 px-3 text-sm text-white">{m.first_name} {m.last_name}</td>
+                          <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{m.email}</td>
+                          <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{m.team_name || '—'}</td>
+                          <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{m.group_name || '—'}</td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`status-dot ${m.registration_status === 'registered' ? 'bg-accent' : 'bg-[#6B6B6B]'}`} />
+                              <span className="text-xs text-[#A0A0A0]">{m.registration_status}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`status-dot ${m.payment_status === 'paid' ? 'bg-accent' : m.payment_status === 'pending' ? 'bg-yellow-500' : 'bg-[#6B6B6B]'}`} />
+                              <span className="text-xs text-[#A0A0A0]">{m.payment_status}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`status-dot ${m.waiver_status === 'signed' ? 'bg-accent' : 'bg-[#6B6B6B]'}`} />
+                              <span className="text-xs text-[#A0A0A0]">{m.waiver_status}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Fields Section */}
+          <section
+            id="fields"
+            className="scroll-mt-20"
+            ref={(el) => { sectionRefs.current.fields = el; }}
+          >
+            <div className="mb-6">
+              <h2 className="text-base font-semibold text-white">Fields <span className="text-[#6B6B6B] font-normal ml-1">({fields.length})</span></h2>
+            </div>
+
+            {/* Assigned fields */}
+            <div className="admin-surface overflow-hidden mb-4">
+              {fields.length === 0 ? (
+                <div className="py-8 text-center text-sm text-[#6B6B6B]">No fields associated yet.</div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      {['Name', 'Field #', 'Facility', 'Address'].map((h) => (
+                        <th key={h} className="text-left py-3 px-3 text-xs uppercase tracking-wider text-[#6B6B6B] font-medium">{h}</th>
+                      ))}
+                      <th className="w-20" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fields.map((field) => (
+                      <tr key={field.id} className="admin-row">
+                        <td className="py-2.5 px-3 text-sm text-white">{field.name}</td>
+                        <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{field.field_number || '—'}</td>
+                        <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{field.facility_name || '—'}</td>
+                        <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{field.street_address}, {field.city}, {field.state}</td>
+                        <td className="py-2.5 px-3">
+                          <button
+                            onClick={() => handleDisassociateField(field.id)}
+                            className="text-xs text-[#A0A0A0] hover:text-red-400 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Available field chips */}
+            {unassociatedFields.length > 0 && (
+              <div>
+                <div className="section-label mb-3">Available to add</div>
+                <div className="flex flex-wrap gap-2">
+                  {unassociatedFields.map((field) => (
+                    <button
+                      key={field.id}
+                      onClick={() => handleAssociateField(field.id)}
+                      className="text-xs border border-white/10 hover:border-accent/40 text-[#A0A0A0] hover:text-white rounded-full px-3 py-1.5 transition-colors"
+                    >
+                      + {field.name}{field.field_number ? ` #${field.field_number}` : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Teams Section */}
+          <section
+            id="teams"
+            className="scroll-mt-20"
+            ref={(el) => { sectionRefs.current.teams = el; }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-base font-semibold text-white">Teams <span className="text-[#6B6B6B] font-normal ml-1">({teams.length})</span></h2>
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await authenticatedRequest<Team[]>(`/admin/leagues/${leagueId}/teams`);
+                    setTeams(data);
+                  } catch { /* ignore */ }
+                }}
+                className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
+                title="Refresh"
+              >
+                ↺
+              </button>
+            </div>
+
+            {teams.length === 0 ? (
+              <div className="admin-surface py-10 text-center text-sm text-[#6B6B6B]">No teams created yet.</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {teams.map((team) => (
+                  <div key={team.id} className="bg-[#111111] border border-white/5 hover:border-white/10 rounded-xl p-4 transition-colors">
+                    <div className="flex items-center gap-3">
+                      {team.color && (
+                        <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: team.color }} />
+                      )}
+                      <span className="text-sm font-medium text-white">{team.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Schedule Section */}
+          <section
+            id="schedule"
+            className="scroll-mt-20"
+            ref={(el) => { sectionRefs.current.schedule = el; }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-base font-semibold text-white">Schedule</h2>
+                {schedule && schedule.total_games > 0 && (
+                  <p className="text-xs text-[#6B6B6B] mt-0.5">{schedule.total_games} games</p>
+                )}
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
+                    setSchedule(data);
+                  } catch { /* ignore */ }
+                }}
+                className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
+                title="Refresh"
+              >
+                ↺
+              </button>
+            </div>
+
+            {!schedule || schedule.total_games === 0 ? (
+              <div className="admin-surface py-10 text-center text-sm text-[#6B6B6B]">No schedule generated yet.</div>
+            ) : (
+              <ScheduleContent
+                schedule={schedule}
+                onUpdateGame={handleUpdateGame}
+                onCancelGame={(gameId) => setConfirmCancelGame(gameId)}
+              />
+            )}
+          </section>
+        </main>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!confirmCancelGame}
+        title="Cancel Game"
+        message="Are you sure you want to cancel this game?"
+        confirmLabel="Cancel Game"
+        variant="warning"
+        onConfirm={async () => {
+          if (confirmCancelGame) {
+            await handleUpdateGame(confirmCancelGame, { status: 'cancelled' });
+          }
+          setConfirmCancelGame(null);
+        }}
+        onCancel={() => setConfirmCancelGame(null)}
+      />
     </BaseLayout>
   );
 }
 
-// Overview Tab Component
-function OverviewTab({ 
-  league,
-  onEdit
-}: { 
-  league: League;
-  onEdit: () => void;
-}) {
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-accent">League Overview</h2>
-        <button
-          onClick={onEdit}
-          className="px-4 py-2 bg-accent text-white font-bold rounded hover:bg-accent-dark transition-colors"
-        >
-          Edit League
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Format</div>
-          <div className="text-lg font-semibold text-white">{league.format}</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Tournament Format</div>
-          <div className="text-lg font-semibold text-white capitalize">{league.tournament_format.replace('_', ' ')}</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Game Duration</div>
-          <div className="text-lg font-semibold text-white">{league.game_duration} minutes</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Start Date</div>
-          <div className="text-lg font-semibold text-white">
-            {new Date(league.start_date).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Number of Weeks</div>
-          <div className="text-lg font-semibold text-white">{league.num_weeks}</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Games Per Week</div>
-          <div className="text-lg font-semibold text-white">{league.games_per_week}</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Registered Players</div>
-          <div className="text-lg font-semibold text-white">{league.registered_players_count}</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Teams</div>
-          <div className="text-lg font-semibold text-white">{league.registered_teams_count}</div>
-        </div>
-        
-        <div className="bg-black bg-opacity-30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Registration Fee</div>
-          <div className="text-lg font-semibold text-white">
-            ${typeof league.registration_fee === 'number' 
-              ? league.registration_fee.toFixed(2) 
-              : Number(league.registration_fee || 0).toFixed(2)}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Members Tab Component
-function MembersTab({ 
-  members, 
-  isLoading,
-  onRefresh 
-}: { 
-  members: LeagueMember[];
-  isLoading: boolean;
-  onRefresh: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-accent">League Members ({members.length})</h2>
-        <button
-          onClick={onRefresh}
-          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-        >
-          Refresh
-        </button>
-      </div>
-      
-      {isLoading ? (
-        <div className="text-center py-8">
-          <div className="text-accent text-xl">Loading members...</div>
-        </div>
-      ) : members.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-gray-400 text-xl">No members registered yet.</div>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-gray-600">
-                <th className="text-left p-3 text-accent font-semibold">Name</th>
-                <th className="text-left p-3 text-accent font-semibold">Email</th>
-                <th className="text-left p-3 text-accent font-semibold">Team</th>
-                <th className="text-left p-3 text-accent font-semibold">Group</th>
-                <th className="text-left p-3 text-accent font-semibold">Status</th>
-                <th className="text-left p-3 text-accent font-semibold">Payment</th>
-                <th className="text-left p-3 text-accent font-semibold">Waiver</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => (
-                <tr key={member.id} className="border-b border-gray-700 hover:bg-black hover:bg-opacity-30">
-                  <td className="p-3 text-white">
-                    {member.first_name} {member.last_name}
-                  </td>
-                  <td className="p-3 text-gray-300">{member.email}</td>
-                  <td className="p-3 text-gray-300">{member.team_name || '-'}</td>
-                  <td className="p-3 text-gray-300">{member.group_name || '-'}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      member.registration_status === 'registered' ? 'bg-green-900 text-green-200' :
-                      'bg-gray-700 text-gray-300'
-                    }`}>
-                      {member.registration_status}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      member.payment_status === 'paid' ? 'bg-green-900 text-green-200' :
-                      member.payment_status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                      'bg-gray-700 text-gray-300'
-                    }`}>
-                      {member.payment_status}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      member.waiver_status === 'signed' ? 'bg-green-900 text-green-200' :
-                      'bg-gray-700 text-gray-300'
-                    }`}>
-                      {member.waiver_status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Fields Tab Component
-function FieldsTab({ 
-  fields,
-  league,
-  isLoading,
-  onRefresh,
-  onManageFields
-}: { 
-  fields: Field[];
-  league: League;
-  isLoading: boolean;
-  onRefresh: () => void;
-  onManageFields: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-accent">Fields ({fields.length})</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={onManageFields}
-            className="px-4 py-2 bg-accent text-white rounded hover:bg-accent-dark transition-colors"
-          >
-            Manage Fields
-          </button>
-          <button
-            onClick={onRefresh}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-      
-      {isLoading ? (
-        <div className="text-center py-8">
-          <div className="text-accent text-xl">Loading fields...</div>
-        </div>
-      ) : fields.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-gray-400 text-xl mb-4">No fields configured yet.</div>
-          <button
-            onClick={onManageFields}
-            className="px-4 py-2 bg-accent text-white rounded hover:bg-accent-dark transition-colors"
-          >
-            Add Your First Field
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {fields.map((field) => (
-            <div
-              key={field.id}
-              className={`bg-black bg-opacity-30 rounded-lg p-4 border ${
-                field.is_active ? 'border-gray-700' : 'border-gray-800 opacity-60'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-accent">{field.name}</h3>
-                  {field.field_number && (
-                    <div className="text-sm text-gray-400">#{field.field_number}</div>
-                  )}
-                </div>
-                <span
-                  className={`px-2 py-1 rounded text-xs font-semibold ${
-                    field.is_active
-                      ? 'bg-green-900 text-green-200'
-                      : 'bg-gray-700 text-gray-300'
-                  }`}
-                >
-                  {field.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              
-              {field.facility_name && (
-                <div className="text-sm text-gray-300 mb-2">
-                  <span className="text-gray-400">Facility:</span> {field.facility_name}
-                </div>
-              )}
-              
-              <div className="text-sm text-gray-300">
-                {field.street_address}, {field.city}, {field.state} {field.zip_code}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Teams Tab Component
-function TeamsTab({ 
-  teams,
-  isLoading,
-  onRefresh
-}: { 
-  teams: Team[];
-  isLoading: boolean;
-  onRefresh: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-accent">Teams ({teams.length})</h2>
-        <button
-          onClick={onRefresh}
-          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-        >
-          Refresh
-        </button>
-      </div>
-      
-      {isLoading ? (
-        <div className="text-center py-8">
-          <div className="text-accent text-xl">Loading teams...</div>
-        </div>
-      ) : teams.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-gray-400 text-xl">No teams have been created yet.</div>
-          <div className="text-gray-500 text-sm mt-2">Generate teams from the main admin dashboard.</div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teams.map((team) => (
-            <div
-              key={team.id}
-              className="bg-black bg-opacity-30 rounded-lg p-4 border border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                {team.color && (
-                  <div
-                    className="w-8 h-8 rounded-full border-2 border-white"
-                    style={{ backgroundColor: team.color }}
-                  />
-                )}
-                <h3 className="text-lg font-bold text-white">{team.name}</h3>
-              </div>
-              <div className="text-sm text-gray-400">
-                Team ID: {team.id}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Schedule Tab Component
-function ScheduleTab({
+function ScheduleContent({
   schedule,
-  isLoading,
-  onRefresh,
   onUpdateGame,
+  onCancelGame,
 }: {
-  schedule: LeagueSchedule | null;
-  isLoading: boolean;
-  onRefresh: () => void;
+  schedule: LeagueSchedule;
   onUpdateGame: (gameId: string, data: GameUpdateRequest) => Promise<void>;
+  onCancelGame: (gameId: string) => void;
 }) {
   const [scoringGameId, setScoringGameId] = useState<string | null>(null);
   const [scoreInputs, setScoreInputs] = useState<{ team1: string; team2: string }>({ team1: '', team2: '' });
@@ -871,9 +671,7 @@ function ScheduleTab({
     try {
       await onUpdateGame(gameId, { team1_score: t1, team2_score: t2 });
       setScoringGameId(null);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const handleSaveEdit = async (gameId: string) => {
@@ -882,219 +680,130 @@ function ScheduleTab({
     try {
       await onUpdateGame(gameId, { game_date: editInputs.game_date, game_time: editInputs.game_time });
       setEditingGameId(null);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
-  const handleCancelGame = async (gameId: string) => {
-    if (!window.confirm('Cancel this game?')) return;
-    setSaving(true);
-    try {
-      await onUpdateGame(gameId, { status: 'cancelled' });
-    } finally {
-      setSaving(false);
-    }
+  const statusDot = (status: string) => {
+    const color =
+      status === 'completed' ? 'bg-accent' :
+      status === 'in_progress' ? 'bg-blue-400' :
+      status === 'cancelled' ? 'bg-red-500' :
+      'bg-[#6B6B6B]';
+    return <span className={`status-dot ${color}`} />;
   };
-
-  const statusBadge = (status: string) => {
-    const cls =
-      status === 'completed' ? 'bg-green-900 text-green-200' :
-      status === 'in_progress' ? 'bg-blue-900 text-blue-200' :
-      status === 'cancelled' ? 'bg-red-900 text-red-300 line-through' :
-      'bg-gray-700 text-gray-300';
-    return <span className={`px-2 py-1 rounded text-xs font-semibold ${cls}`}>{status}</span>;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="text-center py-8">
-        <div className="text-accent text-xl">Loading schedule...</div>
-      </div>
-    );
-  }
-
-  if (!schedule || schedule.total_games === 0) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-accent">Schedule</h2>
-          <button onClick={onRefresh} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
-            Refresh
-          </button>
-        </div>
-        <div className="text-center py-8">
-          <div className="text-gray-400 text-xl">No schedule has been generated yet.</div>
-          <div className="text-gray-500 text-sm mt-2">Generate schedule from the main admin dashboard.</div>
-        </div>
-      </div>
-    );
-  }
 
   const weeks = Object.keys(schedule.schedule_by_week).map(Number).sort((a, b) => a - b);
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h2 className="text-2xl font-bold text-accent">Schedule</h2>
-          <div className="text-sm text-gray-400 mt-1">
-            {schedule.total_games} games across {weeks.length} weeks
+    <div className="space-y-8">
+      {weeks.map((week) => (
+        <div key={week}>
+          <div className="section-label mb-3">Week {week}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {schedule.schedule_by_week[week].map((game) => (
+              <div key={game.game_id} className="admin-surface p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="text-sm font-medium text-white">{game.team1_name} vs {game.team2_name}</div>
+                    <div className="text-xs text-[#6B6B6B] mt-0.5">
+                      {new Date(game.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {game.time}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {statusDot(game.status)}
+                    <span className={`text-xs text-[#A0A0A0] ${game.status === 'cancelled' ? 'line-through' : ''}`}>{game.status}</span>
+                  </div>
+                </div>
+
+                {game.status === 'completed' && game.team1_score != null && game.team2_score != null && (
+                  <div className="text-xs font-medium text-[#A0A0A0] bg-white/5 rounded px-2.5 py-1.5 mb-2 text-center">
+                    {game.team1_name} <span className="text-white font-semibold">{game.team1_score}</span> — <span className="text-white font-semibold">{game.team2_score}</span> {game.team2_name}
+                  </div>
+                )}
+
+                {scoringGameId === game.game_id ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-[#6B6B6B] block mb-1">{game.team1_name}</label>
+                        <input type="number" min="0" value={scoreInputs.team1}
+                          onChange={(e) => setScoreInputs({ ...scoreInputs, team1: e.target.value })}
+                          className={inputCls + ' text-center'} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-[#6B6B6B] block mb-1">{game.team2_name}</label>
+                        <input type="number" min="0" value={scoreInputs.team2}
+                          onChange={(e) => setScoreInputs({ ...scoreInputs, team2: e.target.value })}
+                          className={inputCls + ' text-center'} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleSaveScore(game.game_id)} disabled={saving}
+                        className="flex-1 text-xs font-medium text-accent px-3 py-1.5 rounded hover:bg-white/5 transition-colors border border-accent/20 disabled:opacity-50">
+                        {saving ? 'Saving…' : 'Save Score'}
+                      </button>
+                      <button onClick={() => setScoringGameId(null)}
+                        className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : editingGameId === game.game_id ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-[#6B6B6B] block mb-1">Date</label>
+                        <input type="date" value={editInputs.game_date}
+                          onChange={(e) => setEditInputs({ ...editInputs, game_date: e.target.value })}
+                          className={inputCls} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-[#6B6B6B] block mb-1">Time</label>
+                        <input type="time" value={editInputs.game_time}
+                          onChange={(e) => setEditInputs({ ...editInputs, game_time: e.target.value })}
+                          className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleSaveEdit(game.game_id)} disabled={saving}
+                        className="flex-1 text-xs font-medium text-accent px-3 py-1.5 rounded hover:bg-white/5 transition-colors border border-accent/20 disabled:opacity-50">
+                        {saving ? 'Saving…' : 'Save Changes'}
+                      </button>
+                      <button onClick={() => setEditingGameId(null)}
+                        className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : game.status !== 'cancelled' && (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {game.status !== 'completed' && (
+                      <button onClick={() => startScoring(game)}
+                        className="text-xs text-[#A0A0A0] hover:text-white px-2.5 py-1 rounded hover:bg-white/5 transition-colors">
+                        Record Score
+                      </button>
+                    )}
+                    {game.status === 'completed' && (
+                      <button onClick={() => startScoring(game)}
+                        className="text-xs text-[#A0A0A0] hover:text-white px-2.5 py-1 rounded hover:bg-white/5 transition-colors">
+                        Edit Score
+                      </button>
+                    )}
+                    <button onClick={() => startEditing(game)}
+                      className="text-xs text-[#A0A0A0] hover:text-white px-2.5 py-1 rounded hover:bg-white/5 transition-colors">
+                      Reschedule
+                    </button>
+                    <button onClick={() => onCancelGame(game.game_id)} disabled={saving}
+                      className="text-xs text-[#A0A0A0] hover:text-red-400 px-2.5 py-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50">
+                      Cancel Game
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
-        <button onClick={onRefresh} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
-          Refresh
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        {weeks.map((week) => (
-          <div key={week} className="bg-black bg-opacity-30 rounded-lg p-4">
-            <h3 className="text-lg font-bold text-accent mb-4">Week {week}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {schedule.schedule_by_week[week].map((game) => (
-                <div key={game.game_id} className="bg-gunmetal border border-gray-700 rounded-lg p-3">
-                  {/* Header row */}
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1">
-                      <div className="font-semibold text-white">{game.team1_name} vs {game.team2_name}</div>
-                      <div className="text-sm text-gray-400 mt-1">
-                        {new Date(game.date + 'T00:00:00').toLocaleDateString('en-US', {
-                          weekday: 'short', month: 'short', day: 'numeric',
-                        })} at {game.time}
-                      </div>
-                    </div>
-                    {statusBadge(game.status)}
-                  </div>
-
-                  {/* Completed score display */}
-                  {game.status === 'completed' && game.team1_score != null && game.team2_score != null && (
-                    <div className="text-sm font-semibold text-white bg-black/20 rounded px-2 py-1 mb-2 text-center">
-                      {game.team1_name} {game.team1_score} — {game.team2_score} {game.team2_name}
-                    </div>
-                  )}
-
-                  {/* Score entry inline form */}
-                  {scoringGameId === game.game_id ? (
-                    <div className="mt-2 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs text-gray-400 block mb-1">{game.team1_name}</label>
-                          <input
-                            type="number" min="0"
-                            value={scoreInputs.team1}
-                            onChange={(e) => setScoreInputs({ ...scoreInputs, team1: e.target.value })}
-                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-center"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400 block mb-1">{game.team2_name}</label>
-                          <input
-                            type="number" min="0"
-                            value={scoreInputs.team2}
-                            onChange={(e) => setScoreInputs({ ...scoreInputs, team2: e.target.value })}
-                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-center"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleSaveScore(game.game_id)}
-                          disabled={saving}
-                          className="flex-1 px-3 py-1 bg-green-700 text-white text-sm rounded hover:bg-green-600 disabled:opacity-50"
-                        >
-                          {saving ? 'Saving…' : 'Save Score'}
-                        </button>
-                        <button
-                          onClick={() => setScoringGameId(null)}
-                          className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-500"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : editingGameId === game.game_id ? (
-                    /* Edit date/time inline form */
-                    <div className="mt-2 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs text-gray-400 block mb-1">Date</label>
-                          <input
-                            type="date"
-                            value={editInputs.game_date}
-                            onChange={(e) => setEditInputs({ ...editInputs, game_date: e.target.value })}
-                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400 block mb-1">Time</label>
-                          <input
-                            type="time"
-                            value={editInputs.game_time}
-                            onChange={(e) => setEditInputs({ ...editInputs, game_time: e.target.value })}
-                            className="w-full px-2 py-1 bg-black/40 border border-gray-600 rounded text-white text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleSaveEdit(game.game_id)}
-                          disabled={saving}
-                          className="flex-1 px-3 py-1 bg-accent text-white text-sm rounded hover:bg-accent-dark disabled:opacity-50"
-                        >
-                          {saving ? 'Saving…' : 'Save Changes'}
-                        </button>
-                        <button
-                          onClick={() => setEditingGameId(null)}
-                          className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-500"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Action buttons */
-                    game.status !== 'cancelled' && (
-                      <div className="flex gap-2 mt-2 flex-wrap">
-                        {game.status !== 'completed' && (
-                          <button
-                            onClick={() => startScoring(game)}
-                            className="px-3 py-1 bg-green-800 text-green-100 text-xs rounded hover:bg-green-700"
-                          >
-                            Record Score
-                          </button>
-                        )}
-                        {game.status === 'completed' && (
-                          <button
-                            onClick={() => startScoring(game)}
-                            className="px-3 py-1 bg-yellow-800 text-yellow-100 text-xs rounded hover:bg-yellow-700"
-                          >
-                            Edit Score
-                          </button>
-                        )}
-                        <button
-                          onClick={() => startEditing(game)}
-                          className="px-3 py-1 bg-gray-600 text-gray-100 text-xs rounded hover:bg-gray-500"
-                        >
-                          Reschedule
-                        </button>
-                        <button
-                          onClick={() => handleCancelGame(game.game_id)}
-                          disabled={saving}
-                          className="px-3 py-1 bg-red-900 text-red-200 text-xs rounded hover:bg-red-800 disabled:opacity-50"
-                        >
-                          Cancel Game
-                        </button>
-                      </div>
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      ))}
     </div>
   );
 }
-

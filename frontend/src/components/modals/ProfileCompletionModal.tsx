@@ -159,131 +159,150 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
            !isValidDateOfBirth(profileData.dateOfBirth);
   };
 
+  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
+  const inputErrCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-red-500/60 focus:border-red-500/80 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
+  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
-      <div className="bg-gunmetal border-2 border-accent rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative">
-        <h2 className="text-2xl font-bold text-accent mb-4 text-center">Complete Your Profile</h2>
-        <p className="text-gray-300 text-sm mb-6 text-center">
-          Please provide your personal information to continue using the league platform.
-        </p>
-        <p className="text-red-400 text-sm mb-6 text-center">
-          ⚠️ This information is required to create your account. If you cancel, your session will be removed.
-        </p>
-        
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-[#111111] border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="mb-6">
+          <h2 className="text-base font-semibold text-white mb-1">Complete Your Profile</h2>
+          <p className="text-sm text-[#A0A0A0]">
+            Please provide your personal information to continue using the league platform.
+          </p>
+          <p className="text-xs text-red-400 mt-2">
+            This information is required to create your account. If you cancel, your session will be removed.
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.firstName ? 'border-red-500' : ''}`}
-              name="firstName"
-              placeholder="First Name"
-              value={profileData.firstName}
-              onChange={handleInput}
-              autoComplete="given-name"
-            />
-            <input
-              className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.lastName ? 'border-red-500' : ''}`}
-              name="lastName"
-              placeholder="Last Name"
-              value={profileData.lastName}
-              onChange={handleInput}
-              autoComplete="family-name"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>First Name</label>
+              <input
+                className={fieldErrors.firstName ? inputErrCls : inputCls}
+                name="firstName"
+                placeholder="First"
+                value={profileData.firstName}
+                onChange={handleInput}
+                autoComplete="given-name"
+              />
+              {fieldErrors.firstName && <div className="text-red-400 text-xs mt-1">{fieldErrors.firstName}</div>}
+            </div>
+            <div>
+              <label className={labelCls}>Last Name</label>
+              <input
+                className={fieldErrors.lastName ? inputErrCls : inputCls}
+                name="lastName"
+                placeholder="Last"
+                value={profileData.lastName}
+                onChange={handleInput}
+                autoComplete="family-name"
+              />
+              {fieldErrors.lastName && <div className="text-red-400 text-xs mt-1">{fieldErrors.lastName}</div>}
+            </div>
           </div>
-          {fieldErrors.firstName && <div className="text-red-400 text-xs">{fieldErrors.firstName}</div>}
-          {fieldErrors.lastName && <div className="text-red-400 text-xs">{fieldErrors.lastName}</div>}
-          
-          <input
-            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.email ? 'border-red-500' : ''}`}
-            name="email"
-            placeholder="Email"
-            value={profileData.email}
-            onChange={handleInput}
-            autoComplete="email"
-            type="email"
-          />
-          {fieldErrors.email && <div className="text-red-400 text-xs">{fieldErrors.email}</div>}
-          
-          <input
-            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.phone ? 'border-red-500' : ''}`}
-            name="phone"
-            placeholder="Phone"
-            value={profileData.phone}
-            onChange={handleInput}
-            autoComplete="tel"
-            type="tel"
-          />
-          {fieldErrors.phone && <div className="text-red-400 text-xs">{fieldErrors.phone}</div>}
-          
-          <input
-            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.dateOfBirth ? 'border-red-500' : ''}`}
-            name="dateOfBirth"
-            placeholder="Date of Birth"
-            value={profileData.dateOfBirth}
-            onChange={handleInput}
-            autoComplete="bday"
-            type="date"
-          />
-          {fieldErrors.dateOfBirth && <div className="text-red-400 text-xs">{fieldErrors.dateOfBirth}</div>}
-          
-          <select
-            className={`w-full p-2 rounded bg-black border border-accent text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent ${fieldErrors.gender ? 'border-red-500' : ''}`}
-            name="gender"
-            value={profileData.gender}
-            onChange={handleInput}
-          >
-            <option value="">Select Gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-            <option value="prefer-not-to-say">Prefer not to say</option>
-          </select>
-          {fieldErrors.gender && <div className="text-red-400 text-xs">{fieldErrors.gender}</div>}
-          
-          <div className="space-y-3 pt-2">
+
+          <div>
+            <label className={labelCls}>Email</label>
+            <input
+              className={fieldErrors.email ? inputErrCls : inputCls}
+              name="email"
+              placeholder="you@example.com"
+              value={profileData.email}
+              onChange={handleInput}
+              autoComplete="email"
+              type="email"
+            />
+            {fieldErrors.email && <div className="text-red-400 text-xs mt-1">{fieldErrors.email}</div>}
+          </div>
+
+          <div>
+            <label className={labelCls}>Phone</label>
+            <input
+              className={fieldErrors.phone ? inputErrCls : inputCls}
+              name="phone"
+              placeholder="(555) 000-0000"
+              value={profileData.phone}
+              onChange={handleInput}
+              autoComplete="tel"
+              type="tel"
+            />
+            {fieldErrors.phone && <div className="text-red-400 text-xs mt-1">{fieldErrors.phone}</div>}
+          </div>
+
+          <div>
+            <label className={labelCls}>Date of Birth</label>
+            <input
+              className={fieldErrors.dateOfBirth ? inputErrCls : inputCls}
+              name="dateOfBirth"
+              value={profileData.dateOfBirth}
+              onChange={handleInput}
+              autoComplete="bday"
+              type="date"
+            />
+            {fieldErrors.dateOfBirth && <div className="text-red-400 text-xs mt-1">{fieldErrors.dateOfBirth}</div>}
+          </div>
+
+          <div>
+            <label className={labelCls}>Gender</label>
+            <select
+              className={fieldErrors.gender ? inputErrCls : inputCls}
+              name="gender"
+              value={profileData.gender}
+              onChange={handleInput}
+            >
+              <option value="">Select...</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+              <option value="prefer-not-to-say">Prefer not to say</option>
+            </select>
+            {fieldErrors.gender && <div className="text-red-400 text-xs mt-1">{fieldErrors.gender}</div>}
+          </div>
+
+          <div className="space-y-3 pt-1">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 name="termsAccepted"
                 checked={profileData.termsAccepted}
                 onChange={handleInput}
-                className="mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2"
+                className="mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0"
               />
-              <span className="text-sm text-gray-300">
-                I agree to the <a href="/terms" className="text-accent hover:text-accent-dark underline">Terms of Service</a> and acknowledge that by creating an account and providing my information, I am bound by these terms.
+              <span className="text-xs text-[#A0A0A0] leading-relaxed">
+                I agree to the <a href="/terms" className="text-white underline hover:text-[#A0A0A0]">Terms of Service</a> and acknowledge that by creating an account and providing my information, I am bound by these terms.
               </span>
             </label>
             {fieldErrors.termsAccepted && <div className="text-red-400 text-xs">{fieldErrors.termsAccepted}</div>}
-            
+
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 name="communicationsAccepted"
                 checked={profileData.communicationsAccepted}
                 onChange={handleInput}
-                className="mt-1 w-4 h-4 text-accent bg-black border-accent rounded focus:ring-accent focus:ring-2"
+                className="mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0"
               />
-              <span className="text-sm text-gray-300">
+              <span className="text-xs text-[#A0A0A0] leading-relaxed">
                 I consent to receive communications about league activities, schedules, and updates via email.
               </span>
             </label>
           </div>
-          
+
           <button
             type="submit"
             disabled={!isFormValid()}
-            className={`w-full py-3 rounded font-bold transition-colors mt-4 ${
-              isFormValid() 
-                ? 'bg-accent text-white hover:bg-accent-dark' 
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            }`}
+            className="w-full bg-accent text-white text-sm font-medium py-2 px-5 rounded-md hover:bg-accent-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-2"
           >
             Complete Profile
           </button>
-          
+
           <button
             type="button"
             onClick={onCancel}
-            className="w-full py-2 rounded font-bold border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors mt-2"
+            className="w-full py-2 text-sm text-[#6B6B6B] hover:text-red-400 transition-colors"
           >
             Cancel & Remove Session
           </button>
