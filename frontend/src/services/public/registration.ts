@@ -15,4 +15,8 @@ export class RegistrationApiService extends BaseApiService {
       body: JSON.stringify(registrationData),
     });
   }
+
+  async unregisterFromLeague(leagueId: string): Promise<any> {
+    return this.request<any>(`/registration/leagues/${leagueId}`, { method: 'DELETE' });
+  }
 }

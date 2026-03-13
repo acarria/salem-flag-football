@@ -419,6 +419,48 @@ async def get_my_invitations(
 
 
 # ---------------------------------------------------------------------------
+# Unregister from a league
+# ---------------------------------------------------------------------------
+
+@router.delete("/leagues/{league_id}", summary="Unregister the current player from a league")
+async def unregister_from_league(
+    league_id: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    clerk_user_id = user.get("id") or user.get("user_id")
+    if not clerk_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    league_player = db.query(LeaguePlayer).filter(
+        LeaguePlayer.league_id == league_id,
+        LeaguePlayer.player_id == player.id,
+        LeaguePlayer.is_active == True,
+    ).first()
+    if not league_player:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    if league_player.team_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Teams have already been assigned; contact the league admin to be removed.",
+        )
+
+    league_player.is_active = False
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to unregister: {str(e)}")
+
+    return {"success": True, "message": "You have been unregistered from the league."}
+
+
+# ---------------------------------------------------------------------------
 # Player registration history
 # ---------------------------------------------------------------------------
 

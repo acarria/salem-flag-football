@@ -18,6 +18,8 @@ export default function LeaguesPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
   const [registeredLeagues, setRegisteredLeagues] = useState<Set<string>>(new Set());
+  const [unregisterConfirm, setUnregisterConfirm] = useState<string | null>(null);
+  const [isUnregistering, setIsUnregistering] = useState(false);
 
   useEffect(() => {
     loadLeagues();
@@ -124,6 +126,28 @@ export default function LeaguesPage() {
   };
 
   const isLeagueRegistered = (league: League) => isSignedIn && registeredLeagues.has(league.id);
+
+  const handleUnregister = async (leagueId: string) => {
+    setIsUnregistering(true);
+    setError(null);
+    try {
+      await authenticatedRequest(`/registration/leagues/${leagueId}`, { method: 'DELETE' });
+      setRegisteredLeagues(prev => {
+        const next = new Set(prev);
+        next.delete(leagueId);
+        return next;
+      });
+      setUnregisterConfirm(null);
+      setSuccess('You have been unregistered from the league.');
+      await loadLeagues();
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to unregister. Please try again.';
+      setError(msg);
+      setUnregisterConfirm(null);
+    } finally {
+      setIsUnregistering(false);
+    }
+  };
 
   return (
     <BaseLayout>
@@ -265,10 +289,38 @@ export default function LeaguesPage() {
                       {/* Register action */}
                       <div className="flex items-center gap-4">
                         {isLeagueRegistered(league) ? (
-                          <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
-                            <span className="status-dot bg-blue-400"></span>
-                            You are registered for this league
-                          </div>
+                          unregisterConfirm === league.id ? (
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-[#A0A0A0]">Are you sure? This cannot be undone.</span>
+                              <button
+                                onClick={() => handleUnregister(league.id)}
+                                disabled={isUnregistering}
+                                className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-40"
+                              >
+                                {isUnregistering ? 'Removing…' : 'Confirm'}
+                              </button>
+                              <button
+                                onClick={() => setUnregisterConfirm(null)}
+                                disabled={isUnregistering}
+                                className="text-xs text-[#6B6B6B] hover:text-white transition-colors disabled:opacity-40"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
+                                <span className="status-dot bg-blue-400"></span>
+                                You are registered for this league
+                              </div>
+                              <button
+                                onClick={() => setUnregisterConfirm(league.id)}
+                                className="text-xs text-[#6B6B6B] hover:text-red-400 transition-colors"
+                              >
+                                Unregister
+                              </button>
+                            </div>
+                          )
                         ) : (
                           <button
                             onClick={handleRegisterForLeague}
