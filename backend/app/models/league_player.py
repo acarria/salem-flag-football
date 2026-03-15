@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Index
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Index, CheckConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -10,7 +10,12 @@ class LeaguePlayer(Base):
         Index("ix_league_players_league_id", "league_id"),
         Index("ix_league_players_player_id", "player_id"),
         Index("ix_league_players_group_id", "group_id"),
-        Index("ix_league_players_league_player", "league_id", "player_id", unique=True),
+        Index("ix_league_players_league_player", "league_id", "player_id", unique=True,
+              postgresql_where=text("is_active = TRUE")),
+        CheckConstraint(
+            "registration_status IN ('confirmed', 'pending', 'declined', 'expired')",
+            name="ck_league_players_registration_status",
+        ),
     )
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     league_id = Column(UUID(as_uuid=True), ForeignKey("leagues.id"), nullable=False)

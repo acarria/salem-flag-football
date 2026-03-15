@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Index
+from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -10,6 +10,10 @@ class GroupInvitation(Base):
     __table_args__ = (
         Index("ix_group_invitations_league_id", "league_id"),
         Index("ix_group_invitations_group_id", "group_id"),
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'declined', 'expired', 'revoked')",
+            name="ck_group_invitations_status",
+        ),
     )
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=False)
@@ -17,8 +21,8 @@ class GroupInvitation(Base):
     email = Column(String, nullable=False, index=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
-    token = Column(String, nullable=False, unique=True, index=True)
-    status = Column(String, nullable=False, default="pending")  # pending | accepted | declined | expired
+    token = Column(String, nullable=True, unique=True, index=True)
+    status = Column(String, nullable=False, default="pending")  # pending | accepted | declined | expired | revoked
     invited_by = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
     player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)

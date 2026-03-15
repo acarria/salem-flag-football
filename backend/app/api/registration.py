@@ -46,17 +46,15 @@ async def register_player(
     if not clerk_user_id:
         raise HTTPException(status_code=401, detail="User ID not found in authentication token")
 
-    league = db.query(League).filter(League.id == registration_data.league_id).first()
+    # Single locked read for all checks + cap enforcement (eliminates TOCTOU window)
+    from app.services.league_service import get_player_cap, get_occupied_spots
+    league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     if not league.is_active:
         raise HTTPException(status_code=400, detail="League is not currently active")
     if league.registration_deadline and league.registration_deadline < datetime.now(timezone.utc).date():
         raise HTTPException(status_code=400, detail="Registration deadline has passed")
-
-    # Cap enforcement — lock the league row to prevent concurrent over-registration
-    from app.services.league_service import get_player_cap, get_occupied_spots
-    league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     player_cap = get_player_cap(league.format, league.max_teams)
     if player_cap is not None:
         occupied = get_occupied_spots(league.id, db)
@@ -75,7 +73,7 @@ async def register_player(
     if player:
         player.first_name = registration_data.firstName
         player.last_name = registration_data.lastName
-        player.email = registration_data.email
+        player.email = registration_data.email.lower().strip()
         player.phone = registration_data.phone
         player.date_of_birth = date_of_birth
         player.gender = registration_data.gender if registration_data.gender else None
@@ -86,7 +84,7 @@ async def register_player(
             clerk_user_id=clerk_user_id,
             first_name=registration_data.firstName,
             last_name=registration_data.lastName,
-            email=registration_data.email,
+            email=registration_data.email.lower().strip(),
             phone=registration_data.phone,
             date_of_birth=date_of_birth,
             gender=registration_data.gender if registration_data.gender else None,
@@ -142,8 +140,8 @@ async def register_player(
         try:
             from app.services.team_generation_service import trigger_team_generation_if_ready
             trigger_team_generation_if_ready(registration_data.league_id, db)
-        except Exception:
-            pass  # Non-fatal
+        except Exception as e:
+            logger.exception("Team generation trigger failed after solo registration: %s", e)
         return RegistrationResponse(
             success=True,
             message=f"Successfully registered for {league.name}",
@@ -191,7 +189,9 @@ async def register_group(
     if not clerk_user_id:
         raise HTTPException(status_code=401, detail="User ID not found in authentication token")
 
-    league = db.query(League).filter(League.id == registration_data.league_id).first()
+    # Single locked read for all checks + cap enforcement (eliminates TOCTOU window)
+    from app.services.league_service import get_player_cap, get_occupied_spots
+    league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     if not league.is_active:
@@ -200,7 +200,6 @@ async def register_group(
         raise HTTPException(status_code=400, detail="Registration deadline has passed")
 
     # Determine group size from format (organizer + invitees = format_size)
-    from app.services.league_service import get_player_cap, get_occupied_spots
     format_size = 7 if league.format == '7v7' else 5
     # Max invitees = format_size - 1 (organizer takes one spot)
     max_invitees = format_size - 1
@@ -210,8 +209,6 @@ async def register_group(
             detail=f"A {league.format} group can have at most {max_invitees} invitees (plus you as organizer)",
         )
 
-    # Cap enforcement — lock the league row to prevent concurrent over-registration
-    league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     total_needed = 1 + len(registration_data.players)
     player_cap = get_player_cap(league.format, league.max_teams)
     if player_cap is not None:
@@ -305,8 +302,11 @@ async def register_group(
                     token=inv.token,
                     app_url=settings.APP_URL,
                 )
-            except Exception:
-                pass  # Email failure is non-fatal
+            except Exception as e:
+                logger.error(
+                    "Failed to send invitation email for group %s to invitation %s: %s",
+                    group.id, inv.id, e
+                )
 
     return RegistrationResponse(
         success=True,
@@ -323,15 +323,16 @@ async def register_group(
 # ---------------------------------------------------------------------------
 
 @router.get("/invite/{token}", response_model=InvitationDetailResponse, summary="Get invitation details (public)")
-async def get_invitation(token: str, db: Session = Depends(get_db)) -> InvitationDetailResponse:
+@limiter.limit("10/minute")
+async def get_invitation(request: Request, token: str, db: Session = Depends(get_db)) -> InvitationDetailResponse:
     inv = db.query(GroupInvitation).filter(GroupInvitation.token == token).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    # Mark as expired if past expiry date
+    # Compute expired status without writing — authoritative expiry runs in deadline_handler
+    effective_status = inv.status
     if inv.status == "pending" and inv.expires_at < datetime.now(timezone.utc):
-        inv.status = "expired"
-        db.commit()
+        effective_status = "expired"
 
     group = db.query(Group).filter(Group.id == inv.group_id).first()
     league = db.query(League).filter(League.id == inv.league_id).first()
@@ -347,13 +348,15 @@ async def get_invitation(token: str, db: Session = Depends(get_db)) -> Invitatio
         invitee_first_name=inv.first_name,
         invitee_last_name=inv.last_name,
         invitee_email=inv.email,
-        status=inv.status,
+        status=effective_status,
         expires_at=inv.expires_at.isoformat(),
     )
 
 
 @router.post("/invite/{token}/accept", summary="Accept a group invitation (authenticated)")
+@limiter.limit("10/minute")
 async def accept_invitation(
+    request: Request,
     token: str,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -380,6 +383,14 @@ async def accept_invitation(
             detail="Please complete your player profile before accepting an invitation.",
         )
 
+    # Email ownership check: ensure the invitation was sent to the authenticated user's email
+    jwt_email = user.get("email", "").lower()
+    if not jwt_email or jwt_email != inv.email.lower():
+        raise HTTPException(
+            status_code=403,
+            detail="This invitation was not sent to your email address.",
+        )
+
     # Check not already registered
     existing = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == inv.league_id,
@@ -402,6 +413,7 @@ async def accept_invitation(
 
     inv.status = "accepted"
     inv.player_id = player.id
+    inv.token = None  # Invalidate token after use
 
     try:
         db.commit()
@@ -414,14 +426,16 @@ async def accept_invitation(
     try:
         from app.services.team_generation_service import trigger_team_generation_if_ready
         trigger_team_generation_if_ready(inv.league_id, db)
-    except Exception:
-        pass  # Non-fatal
+    except Exception as e:
+        logger.exception("Team generation trigger failed after invitation acceptance: %s", e)
 
     return {"success": True, "message": "Invitation accepted. You are now registered for the league."}
 
 
 @router.post("/invite/{token}/decline", summary="Decline a group invitation")
+@limiter.limit("5/minute")
 async def decline_invitation(
+    request: Request,
     token: str,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -432,12 +446,9 @@ async def decline_invitation(
     if inv.status != "pending":
         raise HTTPException(status_code=400, detail="Invitation is no longer active")
 
-    # Verify the requesting user is the intended invitee
-    player = db.query(Player).filter(
-        Player.clerk_user_id == user.get("id")
-    ).first()
-    if not player or player.email.lower() != inv.email.lower():
-        raise HTTPException(status_code=403, detail="Not authorized to decline this invitation")
+    jwt_email = user.get("email", "").lower()
+    if not jwt_email or jwt_email != inv.email.lower():
+        raise HTTPException(status_code=403, detail="This invitation was not sent to your email address.")
 
     inv.status = "declined"
     try:
@@ -445,7 +456,7 @@ async def decline_invitation(
         return {"success": True, "message": "Invitation declined."}
     except Exception as e:
         db.rollback()
-        logger.exception("Failed to decline invitation for token %s: %s", token, e)
+        logger.exception("Failed to decline invitation (id=%s): %s", inv.id, e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 

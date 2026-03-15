@@ -39,14 +39,14 @@ export class AdminApiService extends BaseApiService {
     });
   }
 
-  async removeAdminEmail(email: string): Promise<any> {
-    return this.request<any>(`/admin/admins/${email}`, {
+  async removeAdminEmail(email: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/admin/admins/${email}`, {
       method: 'DELETE',
     });
   }
 
   // Team Generation
-  async generateTeams(leagueId: number, request: TeamGenerationRequest): Promise<TeamGenerationResponse> {
+  async generateTeams(leagueId: string, request: TeamGenerationRequest): Promise<TeamGenerationResponse> {
     return this.request<TeamGenerationResponse>(`/admin/leagues/${leagueId}/generate-teams`, {
       method: 'POST',
       body: JSON.stringify(request),
@@ -54,7 +54,7 @@ export class AdminApiService extends BaseApiService {
   }
 
   // Schedule Generation
-  async generateScheduleForLeague(leagueId: number, request: ScheduleGenerationRequest): Promise<ScheduleGenerationResponse> {
+  async generateScheduleForLeague(leagueId: string, request: ScheduleGenerationRequest): Promise<ScheduleGenerationResponse> {
     return this.request<ScheduleGenerationResponse>(`/admin/leagues/${leagueId}/generate-schedule`, {
       method: 'POST',
       body: JSON.stringify(request),
@@ -65,43 +65,25 @@ export class AdminApiService extends BaseApiService {
     return this.request<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
   }
 
-  async updateGame(leagueId: string, gameId: string, data: GameUpdateRequest): Promise<any> {
-    return this.request<any>(`/admin/leagues/${leagueId}/games/${gameId}`, {
+  async updateGame(leagueId: string, gameId: string, data: GameUpdateRequest): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/admin/leagues/${leagueId}/games/${gameId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   // Member Management
-  async getLeagueMembers(leagueId: number): Promise<LeagueMember[]> {
+  async getLeagueMembers(leagueId: string): Promise<LeagueMember[]> {
     return this.request<LeagueMember[]>(`/admin/leagues/${leagueId}/members`);
   }
 
-  async getLeagueTeams(leagueId: number): Promise<Team[]> {
+  async getLeagueTeams(leagueId: string): Promise<Team[]> {
     return this.request<Team[]>(`/admin/leagues/${leagueId}/teams`);
   }
 
-  // Fake Data Creation
-  async addFakeData(leagueId: number): Promise<any> {
-    return this.request<any>(`/admin/leagues/${leagueId}/add-fake-data`, {
-      method: 'POST',
-    });
-  }
-
-  // Legacy admin endpoints (for backward compatibility)
-  async getAdminDashboard(): Promise<any> {
-    return this.request<any>('/admin/dashboard');
-  }
-
-  async generateSchedule(): Promise<any> {
-    return this.request<any>('/admin/schedule/generate', {
-      method: 'POST',
-    });
-  }
-
-  async randomizeTeams(): Promise<any> {
-    return this.request<any>('/admin/teams/randomize', {
-      method: 'POST',
+  async removeAdminEmailConfig(email: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/admin/admins/${email}`, {
+      method: 'DELETE',
     });
   }
 }

@@ -1,6 +1,9 @@
 import { ZodSchema } from 'zod';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+if (process.env.NODE_ENV === 'production' && !API_BASE_URL.startsWith('https://')) {
+  console.error('REACT_APP_API_URL must use HTTPS in production. Current value:', API_BASE_URL);
+}
 
 // Base API service class
 export class BaseApiService {

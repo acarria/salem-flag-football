@@ -1,4 +1,5 @@
 import html
+import logging
 import httpx
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
@@ -7,6 +8,8 @@ from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from app.services.email_service import send_contact_message
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,25 +57,34 @@ class ContactRequest(BaseModel):
 
 
 async def verify_recaptcha(token: str) -> bool:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://www.google.com/recaptcha/api/siteverify",
-            data={
-                "secret": settings.RECAPTCHA_SECRET_KEY,
-                "response": token,
-            },
-        )
-        data = resp.json()
-        return data.get("success", False)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                "https://www.google.com/recaptcha/api/siteverify",
+                data={
+                    "secret": settings.RECAPTCHA_SECRET_KEY,
+                    "response": token,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("success", False) and data.get("score", 1.0) >= 0.5
+    except httpx.TimeoutException:
+        logger.error("reCAPTCHA verification timed out")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable.")
+    except Exception as e:
+        logger.error("reCAPTCHA verification failed: %s", e)
+        raise HTTPException(status_code=400, detail="Could not verify reCAPTCHA.")
 
 
 @router.post("")
 @limiter.limit("5/hour")
 async def contact(request: Request, body: ContactRequest):
-    if settings.RECAPTCHA_SECRET_KEY:
-        valid = await verify_recaptcha(body.recaptcha_token)
-        if not valid:
-            raise HTTPException(status_code=400, detail="reCAPTCHA verification failed")
+    if not settings.RECAPTCHA_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Contact form is temporarily unavailable.")
+    valid = await verify_recaptcha(body.recaptcha_token)
+    if not valid:
+        raise HTTPException(status_code=400, detail="reCAPTCHA verification failed")
 
     if not settings.CONTACT_EMAIL:
         raise HTTPException(status_code=500, detail="Contact email not configured")

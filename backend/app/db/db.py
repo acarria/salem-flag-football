@@ -6,7 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/flagfootball")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    import warnings
+    warnings.warn(
+        "DATABASE_URL not set — using insecure local default. Set DATABASE_URL in production.",
+        stacklevel=2,
+    )
+    DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/flagfootball"
 
 # Use NullPool on Lambda (stateless, ephemeral) to avoid exhausting RDS connections.
 # Fall back to the default QueuePool for long-running local/Docker processes.

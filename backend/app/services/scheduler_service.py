@@ -59,15 +59,18 @@ def schedule_deadline_job(league_id: UUID, deadline_date) -> None:
             Target={
                 "Arn": _DEADLINE_LAMBDA_ARN,
                 "RoleArn": _SCHEDULER_ROLE_ARN,
-                "Input": json.dumps({"league_id": str(league_id)}),
+                "Input": json.dumps({"source": "aws.scheduler", "league_id": str(league_id)}),
             },
             # Replace existing schedule if deadline was updated
             ActionAfterCompletion="DELETE",
         )
         logger.info("Scheduled EventBridge deadline job %s for %s", schedule_name, run_at.isoformat())
     except Exception as exc:
-        # Try update if schedule already exists (EventBridge returns ResourceConflictException)
-        if "Conflict" in str(exc) or "AlreadyExists" in str(exc):
+        # Try update if schedule already exists (EventBridge returns ConflictException)
+        from botocore.exceptions import ClientError
+        if isinstance(exc, ClientError) and exc.response["Error"]["Code"] in (
+            "ConflictException", "ResourceConflictException"
+        ):
             try:
                 import boto3
                 client = boto3.client("scheduler")
@@ -78,7 +81,7 @@ def schedule_deadline_job(league_id: UUID, deadline_date) -> None:
                     Target={
                         "Arn": _DEADLINE_LAMBDA_ARN,
                         "RoleArn": _SCHEDULER_ROLE_ARN,
-                        "Input": json.dumps({"league_id": str(league_id)}),
+                        "Input": json.dumps({"source": "aws.scheduler", "league_id": str(league_id)}),
                     },
                     ActionAfterCompletion="DELETE",
                 )

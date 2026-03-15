@@ -15,4 +15,4 @@ router.include_router(admin_management.router, prefix="/admin")
 @router.get("/admin/test-auth", summary="Test authentication")
 async def test_auth(admin_user=Depends(get_admin_user)):
     """Test endpoint to verify authentication is working"""
-    return {"message": "Authentication successful", "user": admin_user}
+    return {"message": "Authentication successful", "is_admin": True}

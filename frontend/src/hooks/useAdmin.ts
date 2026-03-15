@@ -1,35 +1,33 @@
 import { useState, useEffect } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useAuth } from '@clerk/clerk-react';
+import { useAuthenticatedApi } from './useAuthenticatedApi';
 
 export const useAdmin = () => {
   const { isSignedIn } = useAuth();
-  const { user } = useUser();
+  const { request } = useAuthenticatedApi();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      console.log('Checking admin status...', { isSignedIn, userEmail: user?.emailAddresses?.[0]?.emailAddress });
-      
-      if (isSignedIn && user?.emailAddresses?.[0]?.emailAddress) {
-        // For now, check if the user's email matches the admin email
-        const userEmail = user.emailAddresses[0].emailAddress;
-        const adminEmail = 'alexcarria1@gmail.com'; // This should come from environment or config
-        
-        if (userEmail === adminEmail) {
-          console.log('✅ User email matches admin email');
-          setIsAdmin(true);
-        } else {
-          console.log('❌ User email does not match admin email');
-          setIsAdmin(false);
-        }
-      } else {
-        console.log('❌ User not signed in or no email address');
+      if (!isSignedIn) {
         setIsAdmin(false);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const result = await request<{ is_admin: boolean }>('/admin/me');
+        setIsAdmin(result.is_admin);
+      } catch {
+        setIsAdmin(false);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     checkAdminStatus();
-  }, [isSignedIn, user]);
+  }, [isSignedIn, request]);
 
-  return { isAdmin, user };
-}; 
+  return { isAdmin, isLoading };
+};

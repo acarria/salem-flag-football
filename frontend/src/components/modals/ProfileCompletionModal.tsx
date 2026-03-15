@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getEmailError, getPhoneError, isValidEmail, isValidUSPhone } from '../../utils/validation';
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
@@ -16,44 +17,6 @@ interface ProfileData {
   gender: string;
   termsAccepted: boolean;
   communicationsAccepted: boolean;
-}
-
-// Email validation with typo check
-const COMMON_EMAIL_TYPOS = [
-  'gmal.com', 'gmial.com', 'gmaill.com', 'gmail.con', 'gmail.co', 'gmail.cmo',
-  'yaho.com', 'yahoo.con', 'yahoo.cmo', 'hotmial.com', 'hotmil.com', 'hotmail.con', 'hotmail.cmo',
-  'outlok.com', 'outlook.con', 'outlook.cmo', 'icloud.con', 'icloud.cmo',
-  'google.con', 'google.cmo',
-];
-
-function isValidEmail(email: string): string | null {
-  // Basic email regex
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  if (!emailRegex.test(email)) return 'Invalid email format.';
-  const domain = email.split('@')[1]?.toLowerCase() || '';
-  for (const typo of COMMON_EMAIL_TYPOS) {
-    if (domain.endsWith(typo)) {
-      return `Did you mean ${domain.replace(typo, typo.replace('con', 'com'))}?`;
-    }
-  }
-  return null;
-}
-
-// US phone validation (accepts (xxx) xxx-xxxx, xxx-xxx-xxxx, xxxxxxxxxx, +1xxxxxxxxxx)
-function isValidUSPhone(phone: string): string | null {
-  // Remove non-digits
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 11 && digits.startsWith('1')) {
-    // Remove leading 1
-    phone = digits.slice(1);
-  } else if (digits.length === 10) {
-    phone = digits;
-  } else {
-    return 'Phone must be a valid US number (10 digits).';
-  }
-  // Area code cannot start with 0 or 1
-  if (/^[01]/.test(phone)) return 'Area code cannot start with 0 or 1.';
-  return null;
 }
 
 // Date of birth validation (must be 18+ years old)
@@ -111,25 +74,25 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
 
   const validateForm = () => {
     const errors: { [key: string]: string } = {};
-    
+
     if (!profileData.firstName) errors.firstName = 'First name is required.';
     if (!profileData.lastName) errors.lastName = 'Last name is required.';
-    
-    const emailError = isValidEmail(profileData.email);
-    if (!profileData.email) errors.email = 'Email is required.';
-    else if (emailError) errors.email = emailError;
-    
-    const phoneError = isValidUSPhone(profileData.phone);
-    if (!profileData.phone) errors.phone = 'Phone is required.';
-    else if (phoneError) errors.phone = phoneError;
-    
+
+    const emailError = getEmailError(profileData.email);
+    if (emailError) {
+      errors.email = typeof emailError === 'string' ? emailError : emailError.message;
+    }
+
+    const phoneError = getPhoneError(profileData.phone);
+    if (phoneError) errors.phone = phoneError;
+
     const dobError = isValidDateOfBirth(profileData.dateOfBirth);
     if (!profileData.dateOfBirth) errors.dateOfBirth = 'Date of birth is required.';
     else if (dobError) errors.dateOfBirth = dobError;
-    
+
     if (!profileData.gender) errors.gender = 'Gender is required.';
     if (!profileData.termsAccepted) errors.termsAccepted = 'You must accept the terms of service.';
-    
+
     return errors;
   };
 
@@ -147,16 +110,13 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
 
   // Check if form is valid for submit button
   const isFormValid = () => {
-    return profileData.firstName && 
-           profileData.lastName && 
-           profileData.email && 
-           profileData.phone && 
-           profileData.dateOfBirth && 
-           profileData.gender && 
-           profileData.termsAccepted &&
-           !isValidEmail(profileData.email) &&
-           !isValidUSPhone(profileData.phone) &&
-           !isValidDateOfBirth(profileData.dateOfBirth);
+    return profileData.firstName &&
+           profileData.lastName &&
+           isValidEmail(profileData.email) &&
+           isValidUSPhone(profileData.phone) &&
+           !isValidDateOfBirth(profileData.dateOfBirth) &&
+           profileData.gender &&
+           profileData.termsAccepted;
   };
 
   const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';

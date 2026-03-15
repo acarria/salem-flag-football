@@ -50,7 +50,6 @@ def send_contact_message(
     resend.Emails.send({
         "from": settings.EMAIL_FROM,
         "to": settings.CONTACT_EMAIL,
-        "reply_to": sender_email,
         "subject": f"[Contact] {escape(subject)}",
         "html": html,
     })

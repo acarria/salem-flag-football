@@ -225,7 +225,13 @@ async def generate_teams(
     
     # Commit all changes
     db.commit()
-    
+
+    # Pre-fetch all assigned players in a single query to avoid N+1
+    all_assigned_ids = [lp.player_id for team_lps in team_assignments.values() for lp in team_lps]
+    players_map = {
+        p.id: p for p in db.query(Player).filter(Player.id.in_(all_assigned_ids)).all()
+    }
+
     # Prepare response details
     team_details = []
     for team in teams:
@@ -238,11 +244,12 @@ async def generate_teams(
             "players": [
                 {
                     "player_id": lp.player_id,
-                    "first_name": db.query(Player).filter(Player.id == lp.player_id).first().first_name,
-                    "last_name": db.query(Player).filter(Player.id == lp.player_id).first().last_name,
+                    "first_name": players_map[lp.player_id].first_name,
+                    "last_name": players_map[lp.player_id].last_name,
                     "group_id": lp.group_id
                 }
                 for lp in team_players
+                if lp.player_id in players_map
             ]
         })
     
@@ -254,94 +261,3 @@ async def generate_teams(
         team_details=team_details
     )
 
-@router.post("/leagues/{league_id}/add-fake-data", summary="Add fake data for testing")
-async def add_fake_data(
-    league_id: UUID,
-    db: Session = Depends(get_db),
-    admin_user=Depends(get_admin_user)
-):
-    """Add fake players and groups to a league for testing purposes"""
-    # Verify league exists
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
-    
-    from datetime import date, timedelta
-
-    first_names = ["John", "Jane", "Mike", "Sarah", "David", "Lisa", "Tom", "Amy", "Chris", "Emma",
-                   "Alex", "Rachel", "Ryan", "Jessica", "Kevin", "Michelle", "Brian", "Stephanie",
-                   "Jason", "Nicole", "Eric", "Amanda", "Mark", "Heather", "Scott", "Melissa"]
-    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
-                  "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
-                  "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
-                  "White", "Harris", "Sanchez"]
-
-    # Create an organizer player first so groups have a valid created_by UUID
-    organizer = Player(
-        clerk_user_id=f"fake_organizer_{league_id}",
-        first_name="Test",
-        last_name="Organizer",
-        email=f"organizer_{league_id}@example.com",
-        phone="555-0000",
-        date_of_birth=date(1985, 1, 1),
-        gender="M",
-        communications_accepted=True,
-        registration_status="registered",
-        created_by=admin_user["id"]
-    )
-    db.add(organizer)
-    db.flush()
-
-    # Create some fake groups
-    group_names = ["Friends United", "Work Buddies", "College Alumni", "Neighborhood Crew", "Gym Rats"]
-    groups = []
-
-    for i, name in enumerate(group_names):
-        group = Group(
-            league_id=league_id,
-            name=name,
-            created_by=organizer.id,
-            created_by_clerk=admin_user["id"]
-        )
-        db.add(group)
-        db.flush()
-        groups.append(group)
-
-    players_created = 0
-    for i in range(24):  # Create 24 fake players
-        player = Player(
-            clerk_user_id=f"fake_user_{league_id}_{i}",
-            first_name=first_names[i % len(first_names)],
-            last_name=last_names[i % len(last_names)],
-            email=f"player{i}_{league_id}@example.com",
-            phone=f"555-{1000+i:04d}",
-            date_of_birth=date(1990, 1, 1) + timedelta(days=i*30),
-            gender="M" if i % 2 == 0 else "F",
-            communications_accepted=True,
-            registration_status="registered",
-            created_by=admin_user["id"]
-        )
-        db.add(player)
-        db.flush()
-
-        # Create league player entry
-        group_id = groups[i % len(groups)].id if i < 20 else None  # First 20 players are in groups
-        league_player = LeaguePlayer(
-            league_id=league_id,
-            player_id=player.id,
-            group_id=group_id,
-            registration_status="confirmed",
-            payment_status="paid",
-            waiver_status="signed",
-            created_by=admin_user["id"]
-        )
-        db.add(league_player)
-        players_created += 1
-    
-    db.commit()
-    
-    return {
-        "message": f"Added {players_created} fake players and {len(groups)} groups to league",
-        "players_created": players_created,
-        "groups_created": len(groups)
-    }

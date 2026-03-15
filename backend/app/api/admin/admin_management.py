@@ -1,20 +1,31 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from math import ceil
+
+logger = logging.getLogger(__name__)
 from app.db.db import get_db
 from app.models.admin_config import AdminConfig
 from app.models.player import Player
 from app.models.league_player import LeaguePlayer
 from app.api.schemas.admin import (
-    AdminConfigResponse, AdminConfigCreateRequest, AdminConfigUpdateRequest, 
+    AdminConfigResponse, AdminConfigCreateRequest, AdminConfigUpdateRequest,
     UserResponse, PaginatedUserResponse
 )
 from app.api.admin.dependencies import get_admin_user
+from app.utils.clerk_jwt import get_current_user
 from app.services.admin_service import AdminService
 
 router = APIRouter()
+
+
+@router.get("/me", summary="Check if current user is an admin")
+async def get_admin_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    email = user.get("email", "")
+    return {"is_admin": bool(email and AdminService.is_admin_email(db, email))}
 
 @router.get("/admins", response_model=List[AdminConfigResponse], summary="Get all admin configurations")
 async def get_admin_configs(
@@ -37,7 +48,8 @@ async def add_admin_email(
         return AdminConfigResponse.from_orm(admin_config)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to add admin: {str(e)}")
+        logger.exception("Failed to add admin: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.put("/admins/{email}", response_model=AdminConfigResponse, summary="Update admin configuration")
 async def update_admin_config(
@@ -62,7 +74,8 @@ async def update_admin_config(
         return AdminConfigResponse.from_orm(admin_config)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update admin: {str(e)}")
+        logger.exception("Failed to update admin: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/admins/{email}", summary="Remove admin privileges")
 async def remove_admin_email(
@@ -78,7 +91,8 @@ async def remove_admin_email(
         return {"message": f"Admin privileges removed from {email}"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to remove admin: {str(e)}")
+        logger.exception("Failed to remove admin: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/users", response_model=PaginatedUserResponse, summary="Get all users (paginated)")
 async def get_all_users(
@@ -105,15 +119,20 @@ async def get_all_users(
             Player.is_active == True
         ).order_by(Player.created_at.desc()).offset(offset).limit(page_size).all()
         
-        # For each player, count the number of leagues they're registered for
+        # Fetch league counts for all players on this page in a single query
+        player_ids = [p.id for p in players]
+        counts_query = (
+            db.query(LeaguePlayer.player_id, func.count(LeaguePlayer.id))
+            .filter(LeaguePlayer.player_id.in_(player_ids), LeaguePlayer.is_active == True)
+            .group_by(LeaguePlayer.player_id)
+            .all()
+        )
+        leagues_counts = {player_id: count for player_id, count in counts_query}
+
         result = []
         for player in players:
-            # Count league registrations from LeaguePlayer table
-            leagues_count = db.query(func.count(LeaguePlayer.id)).filter(
-                LeaguePlayer.player_id == player.id,
-                LeaguePlayer.is_active == True
-            ).scalar() or 0
-            
+            leagues_count = leagues_counts.get(player.id, 0)
+
             result.append(UserResponse(
                 clerk_user_id=player.clerk_user_id,
                 first_name=player.first_name,
@@ -136,4 +155,5 @@ async def get_all_users(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
+        logger.exception("Failed to fetch users: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")

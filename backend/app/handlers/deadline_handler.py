@@ -7,14 +7,36 @@ Event payload:
 This Lambda:
   1. Expires any still-pending group invitations (freeing reserved spots)
   2. Calls trigger_team_generation_if_ready with whoever is confirmed at deadline time
+
+SECURITY: Invocation source is restricted at the IAM resource policy level — only the
+EventBridge Scheduler execution role is permitted to invoke this function (enforced in the
+SAM template via the ScheduleEvent event source). Do not grant other principals invoke
+permission on this function.
 """
 import logging
+import os
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
+# Expected source identifier injected by the EventBridge Scheduler payload.
+# This provides a defence-in-depth check in addition to IAM resource policy enforcement.
+_EXPECTED_SOURCE = "aws.scheduler"
+
 
 def handler(event, context):
+    # Validate that the event originates from EventBridge Scheduler.
+    # The SAM ScheduleEvent source automatically injects "source": "aws.scheduler".
+    # Any direct Lambda invocation without this field is rejected.
+    source = event.get("source")
+    if source != _EXPECTED_SOURCE:
+        logger.error(
+            "Deadline handler rejected event with unexpected source %r (expected %r)",
+            source,
+            _EXPECTED_SOURCE,
+        )
+        return {"statusCode": 403, "error": "Forbidden: unexpected invocation source"}
+
     try:
         league_id = UUID(event["league_id"])
     except (KeyError, ValueError) as e:

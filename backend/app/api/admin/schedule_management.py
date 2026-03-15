@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -19,6 +20,8 @@ from app.api.schemas.admin import (
     GameUpdateRequest
 )
 from app.api.admin.dependencies import get_admin_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -931,7 +934,8 @@ async def update_game(
         }
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update game: {str(e)}")
+        logger.exception("Failed to update game: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 
 # Global Field Management Endpoints (fields are independent, not tied to leagues)
@@ -989,7 +993,8 @@ async def create_field_global(
         return FieldResponse.model_validate(field)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create field: {str(e)}")
+        logger.exception("Failed to create field: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/fields", response_model=List[FieldResponse], summary="Get all fields")
 async def get_all_fields(
@@ -1084,7 +1089,8 @@ async def update_field_global(
         return FieldResponse.model_validate(field)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update field: {str(e)}")
+        logger.exception("Failed to update field: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/fields/{field_id}", summary="Delete a field")
 async def delete_field_global(
@@ -1123,7 +1129,8 @@ async def delete_field_global(
         return {"message": "Field deleted successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete field: {str(e)}")
+        logger.exception("Failed to delete field: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 # League-Field Association Endpoints
 @router.post("/leagues/{league_id}/fields/{field_id}", response_model=Dict[str, str], summary="Associate a field with a league")
@@ -1180,7 +1187,8 @@ async def associate_field_with_league(
         return {"message": "Field associated with league successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to associate field with league: {str(e)}")
+        logger.exception("Failed to associate field with league: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/leagues/{league_id}/fields/{field_id}", summary="Disassociate a field from a league")
 async def disassociate_field_from_league(
@@ -1224,7 +1232,8 @@ async def disassociate_field_from_league(
         return {"message": "Field disassociated from league successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to disassociate field from league: {str(e)}")
+        logger.exception("Failed to disassociate field from league: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 # League-Specific Field Endpoints (backward compatibility - uses league_fields junction table)
 @router.post("/leagues/{league_id}/fields", response_model=FieldResponse, summary="Create a new field and associate it with a league")
@@ -1288,7 +1297,8 @@ async def create_field(
         return FieldResponse.model_validate(field)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create field: {str(e)}")
+        logger.exception("Failed to create field: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/leagues/{league_id}/fields", response_model=List[FieldResponse], summary="Get all fields for a league")
 async def get_fields(
@@ -1424,7 +1434,8 @@ async def update_field(
         return FieldResponse.model_validate(field)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update field: {str(e)}")
+        logger.exception("Failed to update field: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/leagues/{league_id}/fields/{field_id}", summary="Delete a field")
 async def delete_field(
@@ -1474,7 +1485,8 @@ async def delete_field(
         return {"message": "Field disassociated from league successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to disassociate field from league: {str(e)}")
+        logger.exception("Failed to disassociate field from league: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 # Field Availability Management Endpoints (field-only, not league-specific)
 @router.post("/field-availability", response_model=FieldAvailabilityResponse, summary="Create field availability")
@@ -1546,7 +1558,8 @@ async def create_field_availability(
         return response
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create field availability: {str(e)}")
+        logger.exception("Failed to create field availability: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get all field availability records")
 async def get_all_field_availability(
@@ -1740,7 +1753,8 @@ async def update_field_availability(
         return response
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update field availability: {str(e)}")
+        logger.exception("Failed to update field availability: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/field-availability/{availability_id}", summary="Delete field availability record")
 async def delete_field_availability(
@@ -1782,7 +1796,8 @@ async def delete_field_availability(
         return {"message": "Field availability record deleted successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete field availability: {str(e)}")
+        logger.exception("Failed to delete field availability: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.post("/leagues/{league_id}/generate-playoff-bracket", response_model=ScheduleGenerationResponse, summary="Generate playoff bracket after regular season")
 async def generate_playoff_bracket(
@@ -2056,6 +2071,7 @@ async def create_field_availability(
         start_time=avail_data.start_time,
         end_time=avail_data.end_time,
         notes=avail_data.notes,
+        created_by=admin_user["id"],
     )
     db.add(availability)
     try:
@@ -2063,7 +2079,8 @@ async def create_field_availability(
         db.refresh(availability)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create availability: {str(e)}")
+        logger.exception("Failed to create availability: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     return FieldAvailabilityResponse(
         **availability.__dict__,
@@ -2122,7 +2139,8 @@ async def update_field_availability(
         db.refresh(availability)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update availability: {str(e)}")
+        logger.exception("Failed to update availability: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     return FieldAvailabilityResponse(**availability.__dict__, field_name=field.name)
 
@@ -2147,6 +2165,7 @@ async def delete_field_availability(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete availability: {str(e)}")
+        logger.exception("Failed to delete availability: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     return {"message": "Availability window deleted."}

@@ -3,13 +3,15 @@ import { useUser, useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
 import { getEmailError, getPhoneError } from '../utils/validation';
-import { apiService, UserProfile } from '../services';
+import { UserProfile } from '../services';
 import { invitationService } from '../services/public/invitations';
 import { MyGroup } from '../services/core/types';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 export default function ProfilePage() {
   const { user } = useUser();
   const { getToken } = useAuth();
+  const { request } = useAuthenticatedApi();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -36,7 +38,10 @@ export default function ProfilePage() {
           setError('');
 
           // Try to fetch existing profile from API
-          const existingProfile = await apiService.getUserProfile(user.id);
+          const existingProfile = await request<UserProfile>('/user/me').catch((err: any) => {
+            if (err?.status === 404 || err?.message?.includes('404')) return null;
+            throw err;
+          });
 
           if (existingProfile) {
             setProfile(existingProfile);
@@ -137,7 +142,7 @@ export default function ProfilePage() {
     }
 
     try {
-      const updatedProfile = await apiService.updateUserProfile(user.id, profile);
+      const updatedProfile = await request<UserProfile>('/user/me', { method: 'PUT', body: JSON.stringify(profile) });
       setProfile(updatedProfile);
       setOriginalProfile(updatedProfile);
       setSuccess('Profile updated successfully!');

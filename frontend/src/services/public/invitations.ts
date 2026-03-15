@@ -35,9 +35,10 @@ class InvitationApiService extends BaseApiService {
     });
   }
 
-  async declineInvitation(token: string): Promise<any> {
+  async declineInvitation(token: string, authToken: string): Promise<any> {
     return this.request<any>(`/registration/invite/${token}/decline`, {
       method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
     });
   }
 

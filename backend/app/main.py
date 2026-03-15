@@ -4,13 +4,28 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
 from app.api import user, registration, team, league, contact
 from app.api.admin.main import router as admin_router
-from app.db.db import SessionLocal
+from app.db.db import SessionLocal, Base, engine
 from app.services.admin_service import AdminService
+
+# Import all models so Base.metadata is fully populated before create_all
+import app.models.admin_config  # noqa: F401
+import app.models.field  # noqa: F401
+import app.models.field_availability  # noqa: F401
+import app.models.game  # noqa: F401
+import app.models.group  # noqa: F401
+import app.models.group_invitation  # noqa: F401
+import app.models.league  # noqa: F401
+import app.models.league_field  # noqa: F401
+import app.models.league_player  # noqa: F401
+import app.models.player  # noqa: F401
+import app.models.team  # noqa: F401
+import app.models.user  # noqa: F401
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,10 +36,16 @@ _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", _default_origins).
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Bootstrap first admin from ADMIN_EMAIL on startup (no separate script)."""
+    """Bootstrap DB and first admin on startup."""
     # Log Clerk config so issuer mismatches surface immediately in server logs
     from app.core.config import settings
     logger.info("Clerk config — JWKS_URL=%s  ISSUER=%s", settings.CLERK_JWKS_URL, settings.CLERK_ISSUER)
+
+    # In local dev (non-Lambda), create all tables directly from models.
+    # On Lambda, tables are managed by Alembic migrations run before deploy.
+    if not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        Base.metadata.create_all(bind=engine)
+        logger.info("DB tables ensured via create_all (local dev)")
 
     admin_email = os.getenv("ADMIN_EMAIL")
     if admin_email:
@@ -40,6 +61,20 @@ async def lifespan(app: FastAPI):
     yield
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # HSTS: safe to set unconditionally — browsers only honor it over HTTPS
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        # This is a pure JSON API; restrict resource loading aggressively
+        response.headers["Content-Security-Policy"] = "default-src 'none'"
+        response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        return response
+
+
 app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
@@ -53,6 +88,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(user.router, prefix="/user")
 app.include_router(registration.router, prefix="/registration")

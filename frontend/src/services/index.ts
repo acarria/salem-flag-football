@@ -40,10 +40,6 @@ class CombinedApiService {
   generateScheduleForLeague = adminApi.generateScheduleForLeague.bind(adminApi);
   getLeagueSchedule = adminApi.getLeagueSchedule.bind(adminApi);
   getLeagueMembers = adminApi.getLeagueMembers.bind(adminApi);
-  addFakeData = adminApi.addFakeData.bind(adminApi);
-  getAdminDashboard = adminApi.getAdminDashboard.bind(adminApi);
-  generateSchedule = adminApi.generateSchedule.bind(adminApi);
-  randomizeTeams = adminApi.randomizeTeams.bind(adminApi);
 
   // User methods
   getUserProfile = userApi.getUserProfile.bind(userApi);

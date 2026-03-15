@@ -50,19 +50,11 @@ export default function LeaguesPage() {
     if (!user || !isSignedIn) return;
 
     try {
-      const registrationChecks = await Promise.all(
-        leagues.map(league =>
-          apiService.checkLeagueRegistration(user.id, league.id)
-            .then(result => ({ leagueId: league.id, isRegistered: result.isRegistered }))
-            .catch(() => ({ leagueId: league.id, isRegistered: false }))
-        )
+      // Fetch all registrations in a single request instead of one per league
+      const registrations = await authenticatedRequest<{ league_id: string; is_active?: boolean }[]>(
+        `/registration/player/${user.id}/leagues`
       );
-
-      const registeredSet = new Set<string>();
-      registrationChecks.forEach(check => {
-        if (check.isRegistered) registeredSet.add(check.leagueId);
-      });
-
+      const registeredSet = new Set<string>(registrations.map(r => r.league_id));
       setRegisteredLeagues(registeredSet);
     } catch (err) {
       console.error('Failed to check registration status:', err);
@@ -89,16 +81,7 @@ export default function LeaguesPage() {
     setSuccess('Registration submitted successfully!');
     setShowRegistrationModal(false);
     await loadLeagues();
-    if (selectedLeague && user) {
-      try {
-        const result = await apiService.checkLeagueRegistration(user.id, selectedLeague.id);
-        if (result.isRegistered) {
-          setRegisteredLeagues(prev => new Set([...Array.from(prev), selectedLeague.id]));
-        }
-      } catch (err) {
-        console.error('Failed to check registration status:', err);
-      }
-    }
+    await checkRegistrationStatus();
   };
 
   const formatDate = (dateString: string) => {

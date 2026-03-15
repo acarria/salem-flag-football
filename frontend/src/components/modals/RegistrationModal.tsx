@@ -69,7 +69,10 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
             setSelectedLeague(leaguesData[0].id);
           }
 
-          const profile = await apiService.getUserProfile(user.id);
+          const profile = await authenticatedRequest<UserProfile>('/user/me').catch((err: any) => {
+            if (err?.status === 404 || err?.message?.includes('404')) return null;
+            throw err;
+          });
           setUserProfile(profile);
 
           if (leaguesData.length > 0) {
@@ -156,7 +159,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const checkLeagueRegistrationStatus = async (leagueId: string) => {
     if (!user) return;
     try {
-      const result = await apiService.checkLeagueRegistration(user.id, leagueId);
+      const result = await authenticatedRequest<{ isRegistered: boolean }>(`/user/profile/${user.id}/registered/${leagueId}`);
       setIsLeagueRegistered(result.isRegistered);
       if (result.isRegistered) {
         setError('You are already registered for this league. You cannot register twice.');

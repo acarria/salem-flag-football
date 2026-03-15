@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useAuth } from '@clerk/clerk-react';
 import { useNavigate, Link } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
+import { useAdmin } from '../hooks/useAdmin';
 import {
   League, LeagueCreateRequest, AdminConfig, AdminConfigCreateRequest,
   PaginatedUserResponse, Field, FieldCreateRequest, FieldAvailability, FieldAvailabilityCreateRequest
@@ -18,7 +19,7 @@ const selectCls = inputCls + ' bg-[#1E1E1E]';
 
 export default function AdminPage() {
   const { isSignedIn } = useAuth();
-  const { user } = useUser();
+  const { isAdmin, isLoading: isAdminLoading } = useAdmin();
   const navigate = useNavigate();
   const { request: authenticatedRequest } = useAuthenticatedApi();
 
@@ -72,14 +73,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isSignedIn) { navigate('/'); return; }
-    const userEmail = user?.emailAddresses?.[0]?.emailAddress;
-    if (userEmail !== 'alexcarria1@gmail.com') { navigate('/'); return; }
+    if (isAdminLoading) return;
+    if (!isAdmin) { navigate('/'); return; }
     loadLeagues();
     loadAdmins();
     loadUsers(1);
     loadAllFields();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn, user, navigate]);
+  }, [isSignedIn, isAdmin, isAdminLoading, navigate]);
 
   const loadLeagues = async () => {
     setIsLoading(true);

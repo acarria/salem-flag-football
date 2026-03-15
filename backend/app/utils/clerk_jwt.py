@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import logging
 from jose import jwt, JWTError
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 JWKS_CACHE = {"keys": None, "fetched_at": 0}
 JWKS_CACHE_TTL = 60 * 60  # 1 hour
+_JWKS_LOCK = asyncio.Lock()
 
 # Normalize issuer: strip trailing slash so both "…dev" and "…dev/" validate.
 _CLERK_ISSUER_NORMALIZED = settings.CLERK_ISSUER.rstrip("/")
@@ -17,12 +19,16 @@ async def get_jwks():
     now = int(time.time())
     if JWKS_CACHE["keys"] and now - JWKS_CACHE["fetched_at"] < JWKS_CACHE_TTL:
         return JWKS_CACHE["keys"]
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        resp = await client.get(settings.CLERK_JWKS_URL)
-        resp.raise_for_status()
-        JWKS_CACHE["keys"] = resp.json()
-        JWKS_CACHE["fetched_at"] = now
-        return JWKS_CACHE["keys"]
+    async with _JWKS_LOCK:
+        # Re-check after acquiring lock (another coroutine may have refreshed)
+        if JWKS_CACHE["keys"] and now - JWKS_CACHE["fetched_at"] < JWKS_CACHE_TTL:
+            return JWKS_CACHE["keys"]
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(settings.CLERK_JWKS_URL)
+            resp.raise_for_status()
+            JWKS_CACHE["keys"] = resp.json()
+            JWKS_CACHE["fetched_at"] = int(time.time())
+            return JWKS_CACHE["keys"]
 
 async def _fetch_clerk_email(user_id: str) -> str:
     """Fetch primary email for a Clerk user via the backend API."""
@@ -58,7 +64,7 @@ async def get_current_user(request: Request):
     try:
         # Log issuer for diagnostics before full validation
         unverified = jwt.get_unverified_claims(token)
-        token_iss = unverified.get("iss", "")
+        token_iss = str(unverified.get("iss", ""))[:200]
         if token_iss.rstrip("/") != _CLERK_ISSUER_NORMALIZED:
             logger.error(
                 "Issuer mismatch — token iss=%r, configured CLERK_ISSUER=%r",
@@ -90,8 +96,10 @@ async def get_current_user(request: Request):
         return payload
 
     except JWTError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {str(e)}")
+        logger.exception("JWT validation failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Authentication error: {str(e)}") 
+        logger.exception("JWT validation failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token") 

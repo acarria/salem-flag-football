@@ -137,6 +137,37 @@ Key tables: `users`, `leagues`, `players`, `teams`, `groups`, `group_invitations
 - `main.py` lifespan cleaned up (scheduler start/stop removed; was dead code under `lifespan="off"`)
 - `boto3` added to `requirements.txt`; `APScheduler` removed
 
+### **Security Hardening** *(2026-03-15)*
+
+**Authentication & Access Control**
+- Removed hardcoded admin email from `AdminPage.tsx`; admin check now uses the `useAdmin` hook backed by the database exclusively
+- `useAdmin` hook gains `isLoading` state to prevent premature redirects while the DB check is in flight
+- Invitation accept/decline endpoints fail closed — empty JWT email or mismatched email returns 403 (previously fail-open)
+- Group invitation token set to `NULL` after acceptance; `group_invitations.token` column made nullable
+
+**Rate Limiting & Input Hygiene**
+- `GET /registration/invite/{token}` rate-limited to `10/minute` (was unlimited)
+- Player email normalized to lowercase + stripped on create and update paths
+
+**HTTP Security Headers**
+- `SecurityHeadersMiddleware` added to `main.py` setting `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Content-Security-Policy`, and `Permissions-Policy`
+
+**Error Handling & Observability**
+- All 500 responses return generic messages; no exception detail leaked to clients
+- reCAPTCHA verification wrapped with 5-second timeout and structured exception handling (503/400 with generic messages)
+- Invitation email send failures logged with entity IDs instead of silently swallowed
+
+**Infrastructure**
+- Backend `requirements.txt` pinned to exact versions (from running container, 2026-03-15)
+- `DATABASE_URL` missing from env now emits `warnings.warn` instead of using the default silently
+- SAM `AllowedOrigin` default changed from `*` to `REPLACE_WITH_PROD_ORIGIN` with explicit CORS-credentials warning
+- `DeadlineFunction` and `SchedulerExecutionRole` added to SAM template; handler validates `event["source"] == "aws.scheduler"`
+- Frontend production HTTPS guard: logs console error if `REACT_APP_API_URL` does not start with `https://` in production builds
+- `CheckConstraint` added to `league_players.registration_status`; Alembic migration created
+
+**PII**
+- Logger calls across `registration.py` and `user.py` audited; raw email strings replaced with entity IDs
+
 ### **Authentication Hardening** *(prior)*
 - Clerk JWT issuer normalization (trailing slash handling)
 - Email resolved via Clerk API when absent from JWT
@@ -160,9 +191,9 @@ Key tables: `users`, `leagues`, `players`, `teams`, `groups`, `group_invitations
 ### **High Priority**
 
 #### **1. AWS SAM Deployment**
-- [ ] Write `template.yaml` (API function, deadline function, scheduler role, RDS Proxy)
-- [ ] `DeadlineFunction` SAM resource pointing at `app.handlers.deadline_handler.handler`
-- [ ] `SchedulerRole` IAM role (trust: `scheduler.amazonaws.com`, permission: `lambda:InvokeFunction`)
+- [x] Write `template.yaml` — API Gateway HTTP API + `FlagFootballFunction`
+- [x] `DeadlineFunction` SAM resource pointing at `app.handlers.deadline_handler.handler`
+- [x] `SchedulerExecutionRole` IAM role (trust: `scheduler.amazonaws.com`, permission: `lambda:InvokeFunction` scoped to `DeadlineFunction`)
 - [ ] RDS Proxy setup for Lambda → RDS connection management
 - [ ] CI/CD pipeline (GitHub Actions → `sam build && sam deploy`)
 
@@ -407,11 +438,53 @@ DEADLINE_LAMBDA_ARN=arn:aws:lambda:...  # deadline_handler Lambda ARN
 
 ## Security
 
-- All secrets in `.env` (excluded from version control)
-- For production: AWS Secrets Manager or Parameter Store
-- Clerk JWT validation via JWKS endpoint
-- Admin access controlled via database configuration
-- Rate limiting via `slowapi`
+### Authentication & Authorization
+- **Clerk JWT validation** via JWKS endpoint (`utils/clerk_jwt.py`); issuer normalization handles trailing-slash variants
+- **Admin access** controlled exclusively by the database (`admin_config` table via `AdminService`) — no hardcoded emails anywhere in the codebase
+- **Email ownership enforcement**: invitation accept/decline endpoints fail closed — if the JWT email is empty or doesn't match the invitation email, a 403 is returned immediately
+- **Invitation token invalidation**: `group_invitations.token` is set to `NULL` after acceptance so a token cannot be replayed
+
+### Rate Limiting
+- Global rate limiting via `slowapi`; key function uses the leftmost `X-Forwarded-For` IP to prevent spoofing
+- Contact form: `5/hour` per IP
+- `GET /registration/invite/{token}`: `10/minute` per IP
+
+### Input Validation & Normalization
+- All Pydantic models on request bodies; no `dict` bodies on any implemented endpoint
+- Player email stored as `.lower().strip()` on create and update
+- Contact form fields HTML-escaped; length-capped at 100 / 200 / 2000 characters
+
+### HTTP Security Headers (all responses)
+Set by `SecurityHeadersMiddleware` in `main.py`:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+- `Content-Security-Policy: default-src 'none'` (pure JSON API)
+- `Permissions-Policy: geolocation=(), camera=(), microphone=()`
+
+### Error Handling & PII
+- All 500 responses return generic `"An internal error occurred. Please try again."` — no exception details leaked to clients
+- JWT validation errors return generic `"Invalid or expired token"` — full error logged server-side only
+- Logger calls use entity IDs (player ID, group ID, invitation ID), not raw email addresses
+
+### reCAPTCHA (Contact Form)
+- Returns 503 if `RECAPTCHA_SECRET_KEY` is unset
+- `httpx` timeout of 5 seconds; `TimeoutException` → 503, other errors → 400; no internal detail leaked
+
+### Secrets Management
+- Secrets in `.env` (excluded from version control via `.gitignore`)
+- Production: AWS SSM Parameter Store resolved at deploy time in SAM template (`{{resolve:ssm:...}}`)
+- `DATABASE_URL` falls back to a local default with a `warnings.warn` if unset — never silently used without notice
+
+### CORS
+- `allow_credentials=True` — `CORS_ORIGINS` must be set to exact frontend origin(s) in production
+- SAM `AllowedOrigin` parameter default is `REPLACE_WITH_PROD_ORIGIN` with an explicit warning; `*` must never be used in production
+- Deploy with: `sam deploy --parameter-overrides AllowedOrigin=https://your-app.com`
+
+### Deadline Lambda Invocation Control
+- `DeadlineFunction` in the SAM template has no API Gateway event source — only `SchedulerExecutionRole` (IAM role scoped to `lambda:InvokeFunction` on that function) can invoke it
+- Handler validates `event["source"] == "aws.scheduler"` as a defence-in-depth check; unexpected sources receive a 403
 
 ## Contributing
 

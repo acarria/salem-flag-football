@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date, timedelta
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
@@ -108,7 +112,8 @@ async def create_league(
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create league: {str(e)}")
+        logger.exception("Failed to create league: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/leagues", response_model=List[LeagueResponse], summary="Get all leagues (admin view)")
 async def get_all_leagues(
@@ -226,7 +231,8 @@ async def update_league(
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update league: {str(e)}")
+        logger.exception("Failed to update league: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/leagues/{league_id}", summary="Delete league")
 async def delete_league(
@@ -246,7 +252,8 @@ async def delete_league(
         return {"message": f"League '{league.name}' has been deleted"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete league: {str(e)}")
+        logger.exception("Failed to delete league: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/leagues/{league_id}/stats", response_model=LeagueStatsResponse, summary="Get league statistics")
 async def get_league_stats(

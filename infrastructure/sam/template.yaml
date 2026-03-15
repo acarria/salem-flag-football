@@ -2,6 +2,15 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Salem Flag Football API — Lambda + API Gateway HTTP API
 
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: 'REPLACE_WITH_PROD_ORIGIN'
+    Description: >
+      Allowed CORS origin — MUST be set to the exact frontend origin in production
+      (e.g. https://your-app.com). Never use '*' in production when AllowCredentials is true,
+      as it allows any origin to send credentialed requests to the API.
+
 Globals:
   Function:
     Timeout: 30
@@ -23,7 +32,7 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins:
-          - '*'
+          - !Ref AllowedOrigin
         AllowMethods:
           - GET
           - POST
@@ -55,6 +64,40 @@ Resources:
             ApiId: !Ref FlagFootballApi
             Path: /
             Method: ANY
+    Metadata:
+      DockerfileUri: ../../backend/Dockerfile
+
+  # IAM role that EventBridge Scheduler assumes to invoke the DeadlineFunction.
+  # Restricted to lambda:InvokeFunction on DeadlineFunction only.
+  SchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeDeadlineLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt DeadlineFunction.Arn
+
+  DeadlineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageConfig:
+        Command: ['app.handlers.deadline_handler.handler']
+      Architectures:
+        - x86_64
+      # No API Gateway event — invoked exclusively by EventBridge Scheduler via SchedulerExecutionRole.
+      # The resource policy is automatically scoped to that role; no other principal can invoke this function.
     Metadata:
       DockerfileUri: ../../backend/Dockerfile
 

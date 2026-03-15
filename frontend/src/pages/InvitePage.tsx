@@ -48,7 +48,9 @@ const InvitePage: React.FC = () => {
     if (!token) return;
     setActionLoading(true);
     try {
-      await invitationService.declineInvitation(token);
+      const authToken = await getToken();
+      if (!authToken) throw new Error('Not authenticated');
+      await invitationService.declineInvitation(token, authToken);
       setDone('declined');
     } catch (err: any) {
       setError(err.message || 'Failed to decline invitation.');
