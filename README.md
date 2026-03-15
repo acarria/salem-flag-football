@@ -1,406 +1,159 @@
 # Salem Flag Football League Platform
 
-A comprehensive flag football league management platform for the Salem Flag Football League in Salem, Massachusetts. This platform handles player registration, league management, team organization, and provides a modern web interface for both players and administrators.
+Flag football league management platform — player registration, team generation, scheduling, and standings for the Salem Flag Football League.
 
-## Architecture
+## Stack
 
-This is a full-stack monorepo with the following structure:
+| Layer | Technology |
+|---|---|
+| Frontend | React + TypeScript + Tailwind CSS |
+| Backend | FastAPI (Python) + SQLAlchemy |
+| Database | PostgreSQL + Alembic migrations |
+| Auth | Clerk (JWT) |
+| Email | Resend |
+| Local dev | Docker Compose |
+| Production | AWS SAM — Lambda (Mangum) + API Gateway HTTP API + EventBridge Scheduler + RDS via RDS Proxy |
 
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Backend**: FastAPI (Python) + SQLAlchemy + PostgreSQL
-- **Authentication**: Clerk (JWT-based)
-- **Database**: PostgreSQL with Alembic migrations
-- **Deployment (local)**: Docker Compose
-- **Deployment (production target)**: AWS SAM — Lambda + API Gateway + EventBridge Scheduler + RDS (via RDS Proxy)
+## Local Development
 
-> The backend is Lambda-ready via [Mangum](https://mangum.io/). `main.py` exports `handler = Mangum(app, lifespan="off")`. Do not introduce in-process background schedulers (e.g. APScheduler) — all deferred work uses EventBridge Scheduler or SQS.
-
-## Current Functionality
-
-### Implemented Features
-
-#### **Authentication & User Management**
-- JWT-based authentication via Clerk
-- User profile creation and management
-- Admin role verification and access control
-- Profile completion workflow for new users
-
-#### **League Management (Admin)**
-- **League Creation**: Full CRUD operations for leagues
-  - Support for multiple tournament formats (Round Robin, Swiss, Playoff Bracket, Compass Draw)
-  - Game formats: `7v7` and `5v5` (6v6 removed)
-  - Configurable season settings (weeks, game duration, max teams ≤ 10)
-  - Registration fee and deadline management
-- **League Statistics**: Real-time player/team counts, registration status, days until start/deadline
-- **League Member Management**: View and manage all registered players in a league
-- **Team Generation**:
-  - Automated team creation with group preservation
-  - Manual trigger: `POST /admin/leagues/{id}/generate-teams`
-  - **Event-driven auto-trigger**: fires automatically when all spots are confirmed and no pending invitations remain
-- **Schedule Generation**: Automated schedule creation with field availability integration
-- **Schedule Editing**: Admins can edit individual games (time, field, teams)
-- **Score Recording**: Stores scores; standings calculated live from results
-- **Field Availability Admin UI**: Expandable per-field panel in the admin dashboard to create, view, and delete recurring or one-time availability slots
-- **Admin Management**: Add/remove admin users with role-based permissions
-- **Test Data Generation**: Add fake players and data for testing
-
-#### **Registration System**
-
-**Registration Cap Model:**
-- Effective occupancy = `confirmed players + pending group invitations`
-- Pending invitations hold reserved spots so a group organizer can guarantee space for their full team before all members respond
-- Solo players see the league as full if `occupied >= player_cap` (`max_teams × players_per_team`)
-- The public `League` response includes `is_registration_open`, `player_cap`, and `spots_remaining` — computed server-side
-
-**Solo Registration:**
-- Player registers directly → status immediately set to `"confirmed"`
-- Cap is checked before confirming; returns 400 if full
-- Auto-triggers team generation check after every confirmation
-
-**Group Registration (Invitation-based):**
-- Organizer registers and is immediately confirmed
-- Exactly `format_size - 1` invitees required (7v7 = 6, 5v5 = 4)
-- Checks that `format_size` spots are available before creating the group
-- Invitees receive email invitations with a 7-day expiring token
-- Invitees accept/decline via `/invite/:token` (no login to view, login required to accept)
-- On acceptance, auto-triggers team generation check — teams generate automatically when every spot is filled with zero pending invitations remaining
-
-**Registration Status Values:** `"confirmed"` | `"pending"` (invite not yet accepted) | `"declined"` | `"expired"`
-
-#### **Group Viewing (Profile Page)**
-- Players can view all groups they belong to from their profile
-- Shows each member's name, email, and status badge (confirmed / pending / declined / expired)
-- Organizers can revoke pending invitations directly from the profile page
-
-#### **Team Management**
-- Team creation and assignment
-- Player-to-team relationships with league scoping
-- Team color customization
-
-#### **Field Management**
-- Full CRUD for fields with address information
-- Associate fields with leagues
-- **Field Availability**: Recurring (day-of-week + date range) and one-time availability windows
-  - Admin UI to manage slots per field inline in the `/admin` dashboard
-  - Automatic time slot generation from availability windows for schedule generation
-
-#### **Schedule & Standings**
-- Automated schedule generation with field availability integration
-- Maximum game duration enforcement (60 minutes)
-- Schedule editing for admins
-- Scores stored on `Game` model; standings calculated live (W/L/T, points, run differential)
-- Playoff bracket generation seeded from regular season standings
-
-#### **Deadline-Triggered Team Generation**
-- When a league's `registration_deadline` is set, `scheduler_service.schedule_deadline_job()` registers an AWS EventBridge Scheduler one-time rule
-- At 23:59 UTC on the deadline date, `handlers/deadline_handler.py` is invoked:
-  1. Expires any still-pending group invitations (freeing reserved spots)
-  2. Calls `trigger_team_generation_if_ready` to generate teams from whoever is confirmed
-- Requires `SCHEDULER_ROLE_ARN` and `DEADLINE_LAMBDA_ARN` env vars (see below); gracefully skips with a log warning if absent (local dev)
-
-#### **Database Schema**
-Key tables: `users`, `leagues`, `players`, `teams`, `groups`, `group_invitations`, `league_players`, `games`, `fields`, `field_availability`, `league_fields`, `admin_config`
-- All primary and foreign keys use **UUIDs**
-
----
-
-## Recent Changes
-
-### **Registration Limits & Cap Enforcement** *(2026-03-14)*
-- Server-computed `is_registration_open`, `player_cap`, `spots_remaining` on all public league responses
-- Reserved-spot model: pending invitations count toward occupancy
-- Solo registration status changed from `"pending"` → `"confirmed"` (no separate approval flow)
-- Group registration enforces exact format size (`format_size - 1` invitees) and checks that `format_size` spots are available
-- `max_teams` capped at 10 via backend validator; `6v6` format removed (valid: `7v7`, `5v5`)
-- Frontend registration modal dynamically adjusts max invitees based on league format; shows "Registration Closed" banner if `is_registration_open` is false
-
-### **Event-Driven Team Generation** *(2026-03-14)*
-- `services/team_generation_service.py`: `trigger_team_generation_if_ready` auto-fires when `confirmed_count == player_cap AND pending_invites == 0`
-- Fixed legacy bug: team generation query was filtering on `status == "registered"` (now `"confirmed"`)
-- Trigger called non-fatally after every solo registration and every invite acceptance
-- "Generate Teams" and "Generate Schedule" buttons added to the league admin page
-
-### **Group Viewing on Profile** *(2026-03-14)*
-- `GET /registration/groups/mine` — returns all groups the caller belongs to with member details
-- `DELETE /registration/groups/invitations/{id}` — organizer revokes a pending invitation
-- Profile page "My Groups" section with status badges and revoke capability
-
-### **Field Availability Admin UI** *(2026-03-14)*
-- Expandable "Availability ▾" panel per field row in the admin dashboard
-- Add recurring slots (day-of-week + date range) or one-time slots; delete slots inline
-- 4 CRUD endpoints: `POST/GET/PUT/DELETE /admin/fields/{field_id}/availability`
-
-### **Lambda / AWS SAM Migration** *(2026-03-14)*
-- APScheduler removed; deadline scheduling replaced with AWS EventBridge Scheduler (`boto3`)
-- `db/db.py`: detects Lambda via `AWS_LAMBDA_FUNCTION_NAME`; uses `NullPool` on Lambda, `QueuePool` locally
-- `handlers/deadline_handler.py` created as the EventBridge target Lambda
-- `main.py` lifespan cleaned up (scheduler start/stop removed; was dead code under `lifespan="off"`)
-- `boto3` added to `requirements.txt`; `APScheduler` removed
-
-### **Security Hardening** *(2026-03-15)*
-
-**Authentication & Access Control**
-- Removed hardcoded admin email from `AdminPage.tsx`; admin check now uses the `useAdmin` hook backed by the database exclusively
-- `useAdmin` hook gains `isLoading` state to prevent premature redirects while the DB check is in flight
-- Invitation accept/decline endpoints fail closed — empty JWT email or mismatched email returns 403 (previously fail-open)
-- Group invitation token set to `NULL` after acceptance; `group_invitations.token` column made nullable
-
-**Rate Limiting & Input Hygiene**
-- `GET /registration/invite/{token}` rate-limited to `10/minute` (was unlimited)
-- Player email normalized to lowercase + stripped on create and update paths
-
-**HTTP Security Headers**
-- `SecurityHeadersMiddleware` added to `main.py` setting `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Content-Security-Policy`, and `Permissions-Policy`
-
-**Error Handling & Observability**
-- All 500 responses return generic messages; no exception detail leaked to clients
-- reCAPTCHA verification wrapped with 5-second timeout and structured exception handling (503/400 with generic messages)
-- Invitation email send failures logged with entity IDs instead of silently swallowed
-
-**Infrastructure**
-- Backend `requirements.txt` pinned to exact versions (from running container, 2026-03-15)
-- `DATABASE_URL` missing from env now emits `warnings.warn` instead of using the default silently
-- SAM `AllowedOrigin` default changed from `*` to `REPLACE_WITH_PROD_ORIGIN` with explicit CORS-credentials warning
-- `DeadlineFunction` and `SchedulerExecutionRole` added to SAM template; handler validates `event["source"] == "aws.scheduler"`
-- Frontend production HTTPS guard: logs console error if `REACT_APP_API_URL` does not start with `https://` in production builds
-- `CheckConstraint` added to `league_players.registration_status`; Alembic migration created
-
-**PII**
-- Logger calls across `registration.py` and `user.py` audited; raw email strings replaced with entity IDs
-
-### **Authentication Hardening** *(prior)*
-- Clerk JWT issuer normalization (trailing slash handling)
-- Email resolved via Clerk API when absent from JWT
-- Diagnostic startup logging for Clerk config
-
-### **Score Recording & Real Standings** *(prior)*
-- Score submission stored on `Game` model; live standings from results
-- Playoff bracket generation seeded from regular season standings
-
-### **UUID Migration** *(prior)*
-- All PKs/FKs migrated from integer IDs to UUIDs
-
-### **Backend & Frontend Modularization** *(prior)*
-- Admin API split into `league_management.py`, `team_management.py`, `schedule_management.py`, `admin_management.py`
-- Frontend services split into `core/`, `admin/`, `public/`
-
----
-
-## Work to be Done
-
-### **High Priority**
-
-#### **1. AWS SAM Deployment**
-- [x] Write `template.yaml` — API Gateway HTTP API + `FlagFootballFunction`
-- [x] `DeadlineFunction` SAM resource pointing at `app.handlers.deadline_handler.handler`
-- [x] `SchedulerExecutionRole` IAM role (trust: `scheduler.amazonaws.com`, permission: `lambda:InvokeFunction` scoped to `DeadlineFunction`)
-- [ ] RDS Proxy setup for Lambda → RDS connection management
-- [ ] CI/CD pipeline (GitHub Actions → `sam build && sam deploy`)
-
-#### **2. Standings & Results**
-- [x] Store scores and outcomes on `Game` model
-- [x] Live standings (W/L/T, points, run differential)
-- [x] Admin score submission interface
-- [ ] Real-time standings updates (WebSocket or polling)
-- [ ] Support for different scoring systems
-
-#### **3. Payment Integration**
-- [ ] Stripe integration
-- [ ] Payment status tracking
-- [ ] Receipt generation
-- [ ] Payment reminder system
-
-#### **4. Waiver Management**
-- [ ] Digital waiver system
-- [ ] Waiver status tracking and reminders
-
-### **Medium Priority**
-
-#### **5. Communication System**
-- [ ] Registration confirmation emails
-- [ ] Schedule update notifications
-- [ ] Payment and waiver reminders
-- [ ] In-app messaging
-
-#### **6. Advanced Tournament Features**
-- [ ] Swiss pairing algorithms
-- [x] Playoff bracket generation
-- [ ] Compass draw support
-- [x] Tournament progression tracking
-
-#### **7. Player Management**
-- [x] Team balancing with group preservation
-- [ ] Player skill level assessment
-- [ ] Player availability tracking
-- [ ] Substitute player management
-
-### **Low Priority**
-
-#### **8. Analytics & Reporting**
-- [ ] League participation analytics
-- [ ] Player performance tracking
-- [ ] Financial reporting
-- [ ] Data export
-
-#### **9. Mobile App**
-- [ ] React Native app
-- [ ] Push notifications
-
-#### **10. Advanced Features**
-- [ ] Weather integration for cancellations
-- [ ] Social features
-
----
-
-## Getting Started
-
-### **Prerequisites**
-- Docker and Docker Compose
-- Node.js 18+ (for local frontend dev)
-- Python 3.10+ (for local backend dev)
-
-### **Quick Start with Docker**
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd salem-flag-football
-   ```
-
-2. **Set up environment:**
-   ```bash
-   cp env.example .env
-   # Fill in your Clerk keys and other values
-   ```
-
-3. **Build and start all services:**
-   ```bash
-   docker-compose up --build
-   ```
-
-4. **Access the application:**
-   - **Frontend**: http://localhost:3000
-   - **Backend API**: http://localhost:8000
-   - **API Docs**: http://localhost:8000/docs
-
-### **Local Development**
-
-#### Frontend
 ```bash
-cd frontend
-npm install
-npm start
+cp env.example .env          # fill in Clerk keys and other values
+docker-compose up --build    # starts db, backend (8000), frontend (3000)
 ```
 
-#### Backend
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- Interactive API docs: http://localhost:8000/docs
 
-#### Database
+To run without Docker:
+
 ```bash
-cd backend
+# Backend
+cd backend && pip install -r requirements.txt
 alembic upgrade head
-```
+uvicorn app.main:app --reload
 
----
+# Frontend
+cd frontend && npm install && npm start
+```
 
 ## Project Structure
 
 ```
 salem-flag-football/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── admin/               # Admin-only endpoints
-│   │   │   │   ├── league_management.py
-│   │   │   │   ├── team_management.py
-│   │   │   │   ├── schedule_management.py
-│   │   │   │   └── admin_management.py
-│   │   │   ├── schemas/             # Pydantic models
-│   │   │   ├── registration.py      # Solo + group registration, invite flow, group viewing
-│   │   │   ├── league.py            # Public league endpoints
-│   │   │   ├── user.py
-│   │   │   └── team.py
-│   │   ├── handlers/
-│   │   │   └── deadline_handler.py  # EventBridge-invoked Lambda for deadline team generation
-│   │   ├── models/                  # SQLAlchemy ORM models (UUID PKs)
-│   │   ├── services/
-│   │   │   ├── league_service.py          # get_player_cap, get_occupied_spots
-│   │   │   ├── team_generation_service.py # _run_team_generation, trigger_team_generation_if_ready
-│   │   │   ├── scheduler_service.py       # EventBridge Scheduler integration
-│   │   │   ├── email_service.py           # Resend-based email delivery
-│   │   │   └── admin_service.py
-│   │   ├── utils/                   # Clerk JWT validation
-│   │   ├── core/config.py           # Settings from env vars
-│   │   ├── db/db.py                 # Engine (NullPool on Lambda), SessionLocal
-│   │   └── main.py                  # FastAPI app + Mangum Lambda handler
-│   ├── alembic/                     # DB migrations
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/                   # Includes ProfilePage (My Groups), AdminPage, LeagueAdminPage
-│   │   ├── services/
-│   │   │   ├── core/                # Base API client + shared types (incl. FieldAvailability)
-│   │   │   ├── admin/               # Admin API services
-│   │   │   └── public/              # Public API services (incl. invitations.ts)
-│   │   ├── hooks/
-│   │   └── types/
-│   └── Dockerfile
+├── backend/app/
+│   ├── api/
+│   │   ├── admin/               # Admin-only endpoints (league, team, schedule, fields)
+│   │   │   └── dependencies.py  # Admin role verification
+│   │   ├── schemas/             # Pydantic request/response models
+│   │   ├── registration.py      # Solo + group registration, invite flow, group management
+│   │   ├── league.py            # Public league endpoints
+│   │   ├── user.py
+│   │   └── contact.py
+│   ├── handlers/
+│   │   └── deadline_handler.py  # EventBridge Scheduler target — expires invites, triggers team gen
+│   ├── models/                  # SQLAlchemy ORM models (all PKs are UUIDs)
+│   ├── services/
+│   │   ├── league_service.py          # get_player_cap, get_occupied_spots
+│   │   ├── team_generation_service.py # trigger_team_generation_if_ready
+│   │   ├── scheduler_service.py       # EventBridge Scheduler integration
+│   │   └── email_service.py           # Resend email delivery
+│   ├── utils/clerk_jwt.py       # JWT validation via JWKS
+│   ├── core/config.py           # Settings from env vars
+│   ├── db/db.py                 # NullPool on Lambda, QueuePool locally
+│   └── main.py                  # FastAPI app, middleware, routers, Mangum handler
+├── frontend/src/
+│   ├── pages/                   # AdminPage, LeagueAdminPage, ProfilePage, LeaguesPage, InvitePage
+│   ├── components/modals/       # RegistrationModal, ProfileCompletionModal
+│   ├── services/
+│   │   ├── core/                # Base API client (Clerk token injection)
+│   │   ├── admin/               # Admin API clients
+│   │   └── public/              # Public API clients (invitations, leagues)
+│   ├── hooks/                   # useAdmin, useAuthenticatedApi
+│   └── contexts/AuthContext.tsx
+├── infrastructure/sam/
+│   └── template.yaml            # SAM template: API Gateway, FlagFootballFunction, DeadlineFunction
+├── backend/alembic/             # DB migrations
 └── docker-compose.yml
 ```
 
----
+## Key Concepts
+
+### Registration Cap Model
+
+Effective occupancy = `confirmed players + pending group invitations`. Pending invitations hold reserved spots so a group can form before all members respond.
+
+- `player_cap` = `max_teams × players_per_team` (7v7 → 7 per team, 5v5 → 5 per team)
+- `league_service.get_occupied_spots()` computes current occupancy
+- Public league responses include `is_registration_open`, `player_cap`, `spots_remaining`
+
+### Registration Flows
+
+**Solo**: Player registers → `registration_status = "confirmed"` immediately. Cap checked first; 400 if full.
+
+**Group**: Organizer registers (confirmed immediately) + sends invitations to exactly `format_size - 1` players. Invitees get a 7-day expiring token via email. Acceptance requires authentication; JWT email must match the invitation address. Token is nulled after acceptance.
+
+**Status values**: `"confirmed"` | `"pending"` | `"declined"` | `"expired"`
+
+### Team Generation
+
+`trigger_team_generation_if_ready()` is called after every solo registration and every invite acceptance. It is a no-op unless `confirmed_count == player_cap AND pending_invitations == 0`. Teams are generated with group preservation (group members stay together).
+
+Manual trigger: `POST /admin/leagues/{id}/trigger-team-generation`
+
+### Deadline Handler
+
+When a league deadline is set, `scheduler_service.schedule_deadline_job()` creates an EventBridge Scheduler one-time rule. At the deadline, `handlers/deadline_handler.py`:
+1. Expires all pending invitations for the league
+2. Calls `trigger_team_generation_if_ready`
+
+Requires `SCHEDULER_ROLE_ARN` and `DEADLINE_LAMBDA_ARN` env vars. If absent (local dev), scheduling is skipped with a log warning.
+
+### Admin Access
+
+Admin status is managed via the `admin_config` table and seeded on startup via `ADMIN_EMAIL`. The `dependencies.py` in `api/admin/` enforces this on every admin route.
 
 ## API Reference
 
-### Admin Endpoints (`/admin/...`)
+### Admin (`/admin/...`) — requires admin role
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/admin/leagues` | List all leagues |
-| `POST` | `/admin/leagues` | Create league |
-| `PUT` | `/admin/leagues/{id}` | Update league |
-| `DELETE` | `/admin/leagues/{id}` | Delete league |
+| `GET` | `/admin/me` | Check admin status |
+| `GET/POST` | `/admin/leagues` | List / create leagues |
+| `PUT/DELETE` | `/admin/leagues/{id}` | Update / delete league |
 | `GET` | `/admin/leagues/{id}/members` | League members |
-| `POST` | `/admin/leagues/{id}/generate-teams` | Manually generate teams |
+| `POST` | `/admin/leagues/{id}/generate-teams` | Generate teams |
+| `POST` | `/admin/leagues/{id}/trigger-team-generation` | Force team gen check |
 | `POST` | `/admin/leagues/{id}/generate-schedule` | Generate schedule |
 | `GET` | `/admin/leagues/{id}/schedule` | Get schedule |
-| `PUT` | `/admin/games/{id}` | Edit scheduled game |
+| `PUT` | `/admin/games/{id}` | Edit game |
 | `POST` | `/admin/games/{id}/score` | Record score |
 | `POST` | `/admin/leagues/{id}/generate-playoff-bracket` | Generate playoff bracket |
-| `POST` | `/admin/fields` | Create field |
-| `GET` | `/admin/fields` | List fields |
-| `PUT` | `/admin/fields/{id}` | Update field |
-| `DELETE` | `/admin/fields/{id}` | Delete field |
-| `POST` | `/admin/fields/{field_id}/availability` | Add availability slot |
-| `GET` | `/admin/fields/{field_id}/availability` | List availability slots |
-| `PUT` | `/admin/fields/{field_id}/availability/{avail_id}` | Update slot |
-| `DELETE` | `/admin/fields/{field_id}/availability/{avail_id}` | Delete slot |
+| `GET/POST` | `/admin/fields` | List / create fields |
+| `PUT/DELETE` | `/admin/fields/{id}` | Update / delete field |
+| `POST/GET` | `/admin/fields/{id}/availability` | Add / list availability slots |
+| `PUT/DELETE` | `/admin/fields/{id}/availability/{avail_id}` | Update / delete slot |
 | `POST` | `/admin/leagues/{id}/fields/{field_id}` | Associate field with league |
+| `GET/POST/DELETE` | `/admin/admins` | List / add / remove admins |
 
-### Public / Player Endpoints
+### Public / Player
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/league/public/leagues` | Browse leagues (includes `is_registration_open`, `spots_remaining`) |
+| `GET` | `/league/public/leagues` | Browse leagues |
 | `GET` | `/league/standings` | Live standings |
 | `GET` | `/league/schedule` | Schedule |
-| `POST` | `/registration/player` | Solo registration (status → confirmed immediately) |
+| `GET/PUT` | `/user/me` | Get / update profile |
+| `POST` | `/registration/player` | Solo registration |
 | `POST` | `/registration/group` | Group registration + send invitations |
 | `GET` | `/registration/invite/{token}` | View invitation (public) |
 | `POST` | `/registration/invite/{token}/accept` | Accept invitation (authenticated) |
-| `POST` | `/registration/invite/{token}/decline` | Decline invitation |
+| `POST` | `/registration/invite/{token}/decline` | Decline invitation (authenticated) |
 | `GET` | `/registration/invitations/me` | My pending invitations |
 | `GET` | `/registration/groups/mine` | My groups with member status |
-| `DELETE` | `/registration/groups/invitations/{id}` | Revoke pending invitation (organizer only) |
-
----
+| `DELETE` | `/registration/groups/invitations/{id}` | Revoke invitation (organizer only) |
+| `POST` | `/contact` | Contact form (reCAPTCHA required) |
 
 ## Environment Variables
 
@@ -410,89 +163,57 @@ Copy `env.example` to `.env`:
 # Database
 DATABASE_URL=postgresql://postgres:postgres@db:5432/flagfootball
 
-# Clerk Authentication
+# Clerk
 CLERK_JWKS_URL=https://your-instance.clerk.accounts.dev/.well-known/jwks.json
 CLERK_ISSUER=https://your-instance.clerk.accounts.dev/
 CLERK_SECRET_KEY=sk_test_...
 
-# Email (Resend) — group invitation emails
+# Email (Resend)
 RESEND_API_KEY=re_...
 EMAIL_FROM=onboarding@resend.dev
 APP_URL=http://localhost:3000
 
-# Admin bootstrap — gets super_admin role on first startup
+# Admin bootstrap — seeded as super_admin on first startup
 ADMIN_EMAIL=your-admin@example.com
 
 # Frontend
 REACT_APP_API_URL=http://localhost:8000
 REACT_APP_CLERK_PUBLISHABLE_KEY=pk_test_...
 
-# AWS (production / Lambda only — omit locally)
-SCHEDULER_ROLE_ARN=arn:aws:iam::...  # IAM role EventBridge Scheduler assumes
-DEADLINE_LAMBDA_ARN=arn:aws:lambda:...  # deadline_handler Lambda ARN
+# reCAPTCHA (contact form — omit locally to disable)
+RECAPTCHA_SECRET_KEY=...
+REACT_APP_RECAPTCHA_SITE_KEY=...
+
+# AWS (production / Lambda only — omit locally to skip deadline scheduling)
+SCHEDULER_ROLE_ARN=arn:aws:iam::...
+DEADLINE_LAMBDA_ARN=arn:aws:lambda:...
 ```
 
-> `AWS_LAMBDA_FUNCTION_NAME` is set automatically by the Lambda runtime and is used by `db/db.py` to switch to `NullPool`. Do not set it manually.
-
----
+`AWS_LAMBDA_FUNCTION_NAME` is set automatically by the Lambda runtime — do not set it manually. Its presence switches `db.py` to `NullPool`.
 
 ## Security
 
-### Authentication & Authorization
-- **Clerk JWT validation** via JWKS endpoint (`utils/clerk_jwt.py`); issuer normalization handles trailing-slash variants
-- **Admin access** controlled exclusively by the database (`admin_config` table via `AdminService`) — no hardcoded emails anywhere in the codebase
-- **Email ownership enforcement**: invitation accept/decline endpoints fail closed — if the JWT email is empty or doesn't match the invitation email, a 403 is returned immediately
-- **Invitation token invalidation**: `group_invitations.token` is set to `NULL` after acceptance so a token cannot be replayed
+- **Auth**: Clerk JWT validated via JWKS (`utils/clerk_jwt.py`). Admin access gated by `admin_config` table.
+- **Rate limiting**: `slowapi` on all public endpoints; key uses leftmost `X-Forwarded-For` IP. Contact: `5/hour`. Invite token lookup: `10/minute`.
+- **Input validation**: All endpoints use Pydantic models. Player emails normalized to `lowercase + strip`.
+- **Invitation ownership**: Accept/decline fail closed — JWT email must be non-empty and match the invitation address, otherwise 403.
+- **Token lifecycle**: Invitation tokens are nulled after acceptance and expire after 7 days.
+- **HTTP headers**: `SecurityHeadersMiddleware` sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Content-Security-Policy: default-src 'none'`, `Permissions-Policy`.
+- **Error responses**: All 500s return generic messages. JWT errors return `"Invalid or expired token"`. Full errors logged server-side only.
+- **PII**: Logs use entity IDs, not email addresses.
+- **Secrets**: `.env` locally; SSM Parameter Store in production (`{{resolve:ssm:...}}` in SAM template).
+- **CORS**: `allow_credentials=True` — set `CORS_ORIGINS` to exact frontend origin in production. SAM `AllowedOrigin` must be overridden at deploy time.
+- **Deadline Lambda**: `DeadlineFunction` has no API Gateway source; only `SchedulerExecutionRole` (least-privilege IAM) can invoke it. Handler validates `event["source"] == "aws.scheduler"`.
 
-### Rate Limiting
-- Global rate limiting via `slowapi`; key function uses the leftmost `X-Forwarded-For` IP to prevent spoofing
-- Contact form: `5/hour` per IP
-- `GET /registration/invite/{token}`: `10/minute` per IP
+## Deployment
 
-### Input Validation & Normalization
-- All Pydantic models on request bodies; no `dict` bodies on any implemented endpoint
-- Player email stored as `.lower().strip()` on create and update
-- Contact form fields HTML-escaped; length-capped at 100 / 200 / 2000 characters
+See `infrastructure/README.md`. The SAM template is in `infrastructure/sam/template.yaml`.
 
-### HTTP Security Headers (all responses)
-Set by `SecurityHeadersMiddleware` in `main.py`:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
-- `Content-Security-Policy: default-src 'none'` (pure JSON API)
-- `Permissions-Policy: geolocation=(), camera=(), microphone=()`
+```bash
+cd infrastructure/sam
+sam build
+sam deploy --guided  # first time
+sam deploy --parameter-overrides AllowedOrigin=https://your-app.com  # subsequent
+```
 
-### Error Handling & PII
-- All 500 responses return generic `"An internal error occurred. Please try again."` — no exception details leaked to clients
-- JWT validation errors return generic `"Invalid or expired token"` — full error logged server-side only
-- Logger calls use entity IDs (player ID, group ID, invitation ID), not raw email addresses
-
-### reCAPTCHA (Contact Form)
-- Returns 503 if `RECAPTCHA_SECRET_KEY` is unset
-- `httpx` timeout of 5 seconds; `TimeoutException` → 503, other errors → 400; no internal detail leaked
-
-### Secrets Management
-- Secrets in `.env` (excluded from version control via `.gitignore`)
-- Production: AWS SSM Parameter Store resolved at deploy time in SAM template (`{{resolve:ssm:...}}`)
-- `DATABASE_URL` falls back to a local default with a `warnings.warn` if unset — never silently used without notice
-
-### CORS
-- `allow_credentials=True` — `CORS_ORIGINS` must be set to exact frontend origin(s) in production
-- SAM `AllowedOrigin` parameter default is `REPLACE_WITH_PROD_ORIGIN` with an explicit warning; `*` must never be used in production
-- Deploy with: `sam deploy --parameter-overrides AllowedOrigin=https://your-app.com`
-
-### Deadline Lambda Invocation Control
-- `DeadlineFunction` in the SAM template has no API Gateway event source — only `SchedulerExecutionRole` (IAM role scoped to `lambda:InvokeFunction` on that function) can invoke it
-- Handler validates `event["source"] == "aws.scheduler"` as a defence-in-depth check; unexpected sources receive a 403
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes
-4. Push and open a Pull Request
-
-## License
-
-MIT License — see the LICENSE file for details.
+Secrets must be in SSM Parameter Store at `/flagfootball/*` before deploying (see `template.yaml` for the full list).
