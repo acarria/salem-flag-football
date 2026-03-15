@@ -11,3 +11,5 @@ httpx
 PyJWT
 resend
 mangum
+slowapi
+boto3

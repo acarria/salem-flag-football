@@ -8,6 +8,9 @@ import AdminPage from './pages/AdminPage';
 import LeagueAdminPage from './pages/admin/LeagueAdminPage';
 import LeaguesPage from './pages/LeaguesPage';
 import InvitePage from './pages/InvitePage';
+import RulesPage from './pages/RulesPage';
+import InfoPage from './pages/InfoPage';
+import ContactPage from './pages/ContactPage';
 import TestPage from './components/TestPage';
 import { apiService, UserProfile } from './services';
 import { AuthProvider } from './contexts/AuthContext';
@@ -52,6 +55,7 @@ function App() {
     };
 
     checkProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, isLoaded, userId]);
 
   const handleProfileComplete = async (profileData: any) => {
@@ -131,6 +135,9 @@ function App() {
             <Route path="/admin/leagues/:leagueId" element={<LeagueAdminPage />} />
             <Route path="/leagues" element={<LeaguesPage />} />
             <Route path="/invite/:token" element={<InvitePage />} />
+            <Route path="/rules" element={<RulesPage />} />
+            <Route path="/info" element={<InfoPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/test" element={<TestPage />} />
           </Routes>
 

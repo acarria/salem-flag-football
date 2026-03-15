@@ -10,7 +10,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import InlineEditableField from '../../components/common/InlineEditableField';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 
-type GameFormat = '7v7' | '6v6' | '5v5';
+type GameFormat = '7v7' | '5v5';
 
 const inputCls =
   'w-full px-2.5 py-1.5 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors';
@@ -46,6 +46,7 @@ export default function LeagueAdminPage() {
     const userEmail = user?.emailAddresses?.[0]?.emailAddress;
     if (userEmail !== 'alexcarria1@gmail.com') { navigate('/admin'); return; }
     loadAll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, leagueId, user, navigate]);
 
   const loadAll = async () => {
@@ -331,7 +332,7 @@ export default function LeagueAdminPage() {
                 value={leagueFormData.format}
                 isEditing={isEditingOverview}
                 type="select"
-                options={[{ value: '7v7', label: '7v7' }, { value: '6v6', label: '6v6' }, { value: '5v5', label: '5v5' }]}
+                options={[{ value: '7v7', label: '7v7' }, { value: '5v5', label: '5v5' }]}
                 onChange={handleLeagueInputChange}
               />
               <InlineEditableField
@@ -543,18 +544,36 @@ export default function LeagueAdminPage() {
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-base font-semibold text-white">Teams <span className="text-[#6B6B6B] font-normal ml-1">({teams.length})</span></h2>
-              <button
-                onClick={async () => {
-                  try {
-                    const data = await authenticatedRequest<Team[]>(`/admin/leagues/${leagueId}/teams`);
-                    setTeams(data);
-                  } catch { /* ignore */ }
-                }}
-                className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
-                title="Refresh"
-              >
-                ↺
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!leagueId) return;
+                    try {
+                      await authenticatedRequest(`/admin/leagues/${leagueId}/generate-teams`, { method: 'POST', body: JSON.stringify({}) });
+                      setSuccess('Teams generated!');
+                      const data = await authenticatedRequest<Team[]>(`/admin/leagues/${leagueId}/teams`);
+                      setTeams(data);
+                    } catch (err: any) {
+                      setError(err.message || 'Failed to generate teams.');
+                    }
+                  }}
+                  className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors border border-white/10"
+                >
+                  Generate Teams
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const data = await authenticatedRequest<Team[]>(`/admin/leagues/${leagueId}/teams`);
+                      setTeams(data);
+                    } catch { /* ignore */ }
+                  }}
+                  className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
+                  title="Refresh"
+                >
+                  ↺
+                </button>
+              </div>
             </div>
 
             {teams.length === 0 ? (
@@ -588,18 +607,36 @@ export default function LeagueAdminPage() {
                   <p className="text-xs text-[#6B6B6B] mt-0.5">{schedule.total_games} games</p>
                 )}
               </div>
-              <button
-                onClick={async () => {
-                  try {
-                    const data = await authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
-                    setSchedule(data);
-                  } catch { /* ignore */ }
-                }}
-                className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
-                title="Refresh"
-              >
-                ↺
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!leagueId) return;
+                    try {
+                      await authenticatedRequest(`/admin/leagues/${leagueId}/generate-schedule`, { method: 'POST', body: JSON.stringify({}) });
+                      setSuccess('Schedule generated!');
+                      const data = await authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
+                      setSchedule(data);
+                    } catch (err: any) {
+                      setError(err.message || 'Failed to generate schedule.');
+                    }
+                  }}
+                  className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors border border-white/10"
+                >
+                  Generate Schedule
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const data = await authenticatedRequest<LeagueSchedule>(`/admin/leagues/${leagueId}/schedule`);
+                      setSchedule(data);
+                    } catch { /* ignore */ }
+                  }}
+                  className="text-[#6B6B6B] hover:text-white transition-colors p-1.5 rounded hover:bg-white/5"
+                  title="Refresh"
+                >
+                  ↺
+                </button>
+              </div>
             </div>
 
             {!schedule || schedule.total_games === 0 ? (

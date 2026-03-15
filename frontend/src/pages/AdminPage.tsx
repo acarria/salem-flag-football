@@ -4,14 +4,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
 import {
   League, LeagueCreateRequest, AdminConfig, AdminConfigCreateRequest,
-  User, PaginatedUserResponse, Field, FieldCreateRequest, FieldUpdateRequest
+  PaginatedUserResponse, Field, FieldCreateRequest, FieldAvailability, FieldAvailabilityCreateRequest
 } from '../services';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
-import { LeagueFormModal } from './admin/components';
+
 import ConfirmDialog from '../components/common/ConfirmDialog';
 
 type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'compass_draw';
-type GameFormat = '7v7' | '6v6' | '5v5';
 
 const inputCls =
   'w-full px-2.5 py-1.5 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
@@ -28,13 +27,15 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // League creation
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [formData, setFormData] = useState<Partial<LeagueCreateRequest>>({
+  // League creation (inline row)
+  const [isAddingLeague, setIsAddingLeague] = useState(false);
+  const [leagueDraft, setLeagueDraft] = useState<Partial<LeagueCreateRequest>>({
     name: '', description: '', start_date: '', num_weeks: 8,
     format: '7v7', tournament_format: 'round_robin', game_duration: 60,
     games_per_week: 1, min_teams: 4,
   });
+  const [leagueDraftError, setLeagueDraftError] = useState<string | null>(null);
+  const [isSavingLeague, setIsSavingLeague] = useState(false);
 
   // Admins inline section
   const [admins, setAdmins] = useState<AdminConfig[]>([]);
@@ -61,6 +62,14 @@ export default function AdminPage() {
   // Confirm delete league
   const [confirmDeleteLeague, setConfirmDeleteLeague] = useState<string | null>(null);
 
+  // Field availability state
+  const [expandedFieldAvail, setExpandedFieldAvail] = useState<string | null>(null);
+  const [fieldAvailabilities, setFieldAvailabilities] = useState<Record<string, FieldAvailability[]>>({});
+  const [isAddingAvail, setIsAddingAvail] = useState<string | null>(null);
+  const [availDraft, setAvailDraft] = useState<Partial<FieldAvailabilityCreateRequest>>({
+    is_recurring: false, start_time: '', end_time: '',
+  });
+
   useEffect(() => {
     if (!isSignedIn) { navigate('/'); return; }
     const userEmail = user?.emailAddresses?.[0]?.emailAddress;
@@ -69,6 +78,7 @@ export default function AdminPage() {
     loadAdmins();
     loadUsers(1);
     loadAllFields();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, user, navigate]);
 
   const loadLeagues = async () => {
@@ -104,16 +114,22 @@ export default function AdminPage() {
 
   // League
   const handleCreateLeague = async () => {
-    if (!formData.name || !formData.start_date || !formData.num_weeks) {
-      setError('Name, start date, and number of weeks are required'); return;
+    if (!leagueDraft.name || !leagueDraft.start_date || !leagueDraft.num_weeks) {
+      setLeagueDraftError('Name, start date, and number of weeks are required'); return;
     }
+    setIsSavingLeague(true);
+    setLeagueDraftError(null);
     try {
-      await authenticatedRequest<League>('/admin/leagues', { method: 'POST', body: JSON.stringify(formData) });
+      await authenticatedRequest<League>('/admin/leagues', { method: 'POST', body: JSON.stringify(leagueDraft) });
       setSuccess('League created!');
-      setShowCreateModal(false);
-      resetLeagueForm();
+      setIsAddingLeague(false);
+      resetLeagueDraft();
       loadLeagues();
-    } catch { setError('Failed to create league.'); }
+    } catch (e) {
+      setLeagueDraftError((e as Error).message || 'Failed to create league.');
+    } finally {
+      setIsSavingLeague(false);
+    }
   };
 
   const handleDeleteLeague = async (id: string) => {
@@ -125,21 +141,11 @@ export default function AdminPage() {
     setConfirmDeleteLeague(null);
   };
 
-  const resetLeagueForm = () => setFormData({
+  const resetLeagueDraft = () => setLeagueDraft({
     name: '', description: '', start_date: '', num_weeks: 8,
     format: '7v7', tournament_format: 'round_robin', game_duration: 60,
     games_per_week: 1, min_teams: 4,
   });
-
-  const getTournamentFormatDescription = (format: TournamentFormat) => {
-    switch (format) {
-      case 'round_robin': return 'Each team plays every other team once';
-      case 'swiss': return 'Teams paired against opponents with similar records';
-      case 'playoff_bracket': return 'Regular season followed by elimination tournament';
-      case 'compass_draw': return 'Teams play in compass directions (N, S, E, W)';
-      default: return '';
-    }
-  };
 
   // Admins
   const handleAddAdmin = async () => {
@@ -217,6 +223,48 @@ export default function AdminPage() {
     setFieldDraft(prev => ({ ...prev, [name]: value }));
   };
 
+  // Field availability helpers
+  const loadFieldAvailability = async (fieldId: string) => {
+    try {
+      const data = await authenticatedRequest<FieldAvailability[]>(`/admin/fields/${fieldId}/availability`);
+      setFieldAvailabilities(prev => ({ ...prev, [fieldId]: data }));
+    } catch { /* silent */ }
+  };
+
+  const handleToggleAvailPanel = (fieldId: string) => {
+    if (expandedFieldAvail === fieldId) {
+      setExpandedFieldAvail(null);
+    } else {
+      setExpandedFieldAvail(fieldId);
+      loadFieldAvailability(fieldId);
+    }
+    setIsAddingAvail(null);
+    setAvailDraft({ is_recurring: false, start_time: '', end_time: '' });
+  };
+
+  const handleCreateAvailability = async (fieldId: string) => {
+    try {
+      await authenticatedRequest<FieldAvailability>(`/admin/fields/${fieldId}/availability`, {
+        method: 'POST',
+        body: JSON.stringify({ ...availDraft, field_id: fieldId }),
+      });
+      setSuccess('Availability added!');
+      setIsAddingAvail(null);
+      setAvailDraft({ is_recurring: false, start_time: '', end_time: '' });
+      loadFieldAvailability(fieldId);
+    } catch (e) {
+      setError((e as Error).message || 'Failed to add availability.');
+    }
+  };
+
+  const handleDeleteAvailability = async (fieldId: string, availId: string) => {
+    try {
+      await authenticatedRequest(`/admin/fields/${fieldId}/availability/${availId}`, { method: 'DELETE' });
+      setSuccess('Availability removed!');
+      loadFieldAvailability(fieldId);
+    } catch { setError('Failed to remove availability.'); }
+  };
+
   if (!isSignedIn) return null;
 
   const activeLeagues = leagues.filter(l => l.is_active).length;
@@ -266,19 +314,11 @@ export default function AdminPage() {
               <h2 className="text-base font-semibold text-white">Leagues</h2>
               <p className="text-xs text-[#6B6B6B] mt-0.5">{leagues.length} total</p>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="text-sm font-medium bg-accent text-white px-3.5 py-1.5 rounded-md hover:bg-accent-dark transition-colors"
-            >
-              + Create League
-            </button>
           </div>
 
           <div className="admin-surface overflow-hidden">
             {isLoading ? (
               <div className="py-12 text-center text-sm text-[#6B6B6B]">Loading leagues…</div>
-            ) : leagues.length === 0 ? (
-              <div className="py-12 text-center text-sm text-[#6B6B6B]">No leagues yet.</div>
             ) : (
               <table className="w-full">
                 <thead>
@@ -287,10 +327,13 @@ export default function AdminPage() {
                     <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-[#6B6B6B] font-medium hidden md:table-cell">Format</th>
                     <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-[#6B6B6B] font-medium hidden md:table-cell">Status</th>
                     <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-[#6B6B6B] font-medium hidden sm:table-cell">Players</th>
-                    <th className="w-32" />
+                    <th className="w-44" />
                   </tr>
                 </thead>
                 <tbody>
+                  {leagues.length === 0 && !isAddingLeague && (
+                    <tr><td colSpan={5} className="py-10 text-center text-sm text-[#6B6B6B]">No leagues yet.</td></tr>
+                  )}
                   {leagues.map((league) => (
                     <tr key={league.id} className="admin-row">
                       <td className="py-3 px-4">
@@ -309,13 +352,13 @@ export default function AdminPage() {
                         <div className="flex items-center gap-2 justify-end">
                           <Link
                             to={`/admin/leagues/${league.id}`}
-                            className="text-xs text-[#A0A0A0] hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                            className="text-xs text-[#A0A0A0] hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors whitespace-nowrap"
                           >
                             Manage →
                           </Link>
                           <button
                             onClick={() => setConfirmDeleteLeague(league.id)}
-                            className="text-xs text-[#A0A0A0] hover:text-red-400 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                            className="text-xs text-[#A0A0A0] hover:text-red-400 px-2 py-1 rounded hover:bg-white/5 transition-colors whitespace-nowrap"
                           >
                             Delete
                           </button>
@@ -323,8 +366,177 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
+
+                  {/* New league inline row */}
+                  {isAddingLeague && (
+                    <tr className="bg-white/[0.04] border-t border-white/5">
+                      <td colSpan={5} className="px-4 py-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Name *</label>
+                            <input
+                              name="name"
+                              value={leagueDraft.name || ''}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, name: e.target.value }))}
+                              className={inputCls}
+                              placeholder="League name"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Start Date *</label>
+                            <input
+                              type="date"
+                              name="start_date"
+                              value={leagueDraft.start_date || ''}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, start_date: e.target.value }))}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Format *</label>
+                            <select
+                              name="format"
+                              value={leagueDraft.format || '7v7'}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, format: e.target.value }))}
+                              className={selectCls}
+                            >
+                              <option value="7v7">7v7</option>
+                              <option value="5v5">5v5</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Tournament Format *</label>
+                            <select
+                              name="tournament_format"
+                              value={leagueDraft.tournament_format || 'round_robin'}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, tournament_format: e.target.value as TournamentFormat }))}
+                              className={selectCls}
+                            >
+                              <option value="round_robin">Round Robin</option>
+                              <option value="swiss">Swiss</option>
+                              <option value="playoff_bracket">Playoff Bracket</option>
+                              <option value="compass_draw">Compass Draw</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Num Weeks *</label>
+                            <input
+                              type="number"
+                              name="num_weeks"
+                              value={leagueDraft.num_weeks ?? 8}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, num_weeks: parseInt(e.target.value) || 0 }))}
+                              className={inputCls}
+                              min={1}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Game Duration (min)</label>
+                            <input
+                              type="number"
+                              name="game_duration"
+                              value={leagueDraft.game_duration ?? 60}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, game_duration: parseInt(e.target.value) || 0 }))}
+                              className={inputCls}
+                              min={1}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Min Teams</label>
+                            <input
+                              type="number"
+                              name="min_teams"
+                              value={leagueDraft.min_teams ?? 4}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, min_teams: parseInt(e.target.value) || 0 }))}
+                              className={inputCls}
+                              min={2}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Max Teams</label>
+                            <input
+                              type="number"
+                              name="max_teams"
+                              value={leagueDraft.max_teams ?? ''}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, max_teams: e.target.value ? parseInt(e.target.value) : undefined }))}
+                              className={inputCls}
+                              min={2}
+                              max={10}
+                              placeholder="No limit"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Reg. Deadline</label>
+                            <input
+                              type="date"
+                              name="registration_deadline"
+                              value={(leagueDraft as any).registration_deadline || ''}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, registration_deadline: e.target.value || undefined } as any))}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Reg. Fee ($)</label>
+                            <input
+                              type="number"
+                              name="registration_fee"
+                              value={(leagueDraft as any).registration_fee ?? ''}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, registration_fee: e.target.value ? parseFloat(e.target.value) : undefined } as any))}
+                              className={inputCls}
+                              min={0}
+                              step="0.01"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="md:col-span-1">
+                            <label className="text-xs text-[#6B6B6B] mb-1 block">Description</label>
+                            <input
+                              name="description"
+                              value={leagueDraft.description || ''}
+                              onChange={(e) => setLeagueDraft(prev => ({ ...prev, description: e.target.value }))}
+                              className={inputCls}
+                              placeholder="Optional description"
+                            />
+                          </div>
+                        </div>
+                        {leagueDraftError && (
+                          <p className="text-xs text-red-400 mb-2">{leagueDraftError}</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleCreateLeague}
+                            disabled={isSavingLeague}
+                            className="text-xs text-accent px-3 py-1.5 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
+                          >
+                            {isSavingLeague ? 'Saving…' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setIsAddingLeague(false); resetLeagueDraft(); setLeagueDraftError(null); }}
+                            className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+            )}
+
+            {!isAddingLeague && !isLoading && (
+              <div className="px-4 py-3 border-t border-white/5">
+                <button
+                  onClick={() => { setIsAddingLeague(true); resetLeagueDraft(); setLeagueDraftError(null); }}
+                  className="text-xs text-[#6B6B6B] hover:text-white transition-colors flex items-center gap-1.5"
+                >
+                  <span className="text-base leading-none">+</span>
+                  <span>Add league</span>
+                </button>
+              </div>
             )}
           </div>
         </section>
@@ -358,7 +570,8 @@ export default function AdminPage() {
                   {fields.map((field) => {
                     const isEditing = editingFieldId === field.id;
                     return (
-                      <tr key={field.id} className={`admin-row ${isEditing ? 'bg-white/[0.04]' : ''}`}>
+                      <React.Fragment key={field.id}>
+                      <tr className={`admin-row ${isEditing ? 'bg-white/[0.04]' : ''}`}>
                         <td className="py-2.5 px-3 text-sm">
                           {isEditing
                             ? <input name="name" value={fieldDraft.name || ''} onChange={handleFieldDraftChange} className={inputCls} />
@@ -410,6 +623,12 @@ export default function AdminPage() {
                             ) : (
                               <>
                                 <button
+                                  onClick={() => handleToggleAvailPanel(field.id)}
+                                  className="text-xs text-[#A0A0A0] hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                                >
+                                  Availability {expandedFieldAvail === field.id ? '▲' : '▾'}
+                                </button>
+                                <button
                                   onClick={() => startEditField(field)}
                                   disabled={!!editingFieldId || isAddingField}
                                   className="text-xs text-[#A0A0A0] hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors disabled:opacity-30"
@@ -428,6 +647,141 @@ export default function AdminPage() {
                           </div>
                         </td>
                       </tr>
+                      {/* Availability expand panel */}
+                      {expandedFieldAvail === field.id && (
+                        <tr className="bg-white/[0.02]">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="text-xs text-[#6B6B6B] uppercase tracking-widest mb-3">Availability Windows</div>
+                            {(fieldAvailabilities[field.id] || []).length === 0 ? (
+                              <div className="text-xs text-[#6B6B6B] mb-3">No availability windows configured.</div>
+                            ) : (
+                              <div className="space-y-1.5 mb-3">
+                                {(fieldAvailabilities[field.id] || []).map((av) => (
+                                  <div key={av.id} className="flex items-center justify-between text-xs bg-[#1A1A1A] rounded px-3 py-2">
+                                    <span className="text-[#A0A0A0]">
+                                      {av.is_recurring
+                                        ? `Every ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][av.day_of_week ?? 0]} ${av.start_time}–${av.end_time}`
+                                        : `${av.custom_date} ${av.start_time}–${av.end_time}`}
+                                      {av.notes && <span className="text-[#6B6B6B] ml-2">({av.notes})</span>}
+                                    </span>
+                                    <button
+                                      onClick={() => handleDeleteAvailability(field.id, av.id)}
+                                      className="text-[#6B6B6B] hover:text-red-400 transition-colors ml-4"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {isAddingAvail === field.id ? (
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                                <div>
+                                  <label className="text-xs text-[#6B6B6B] block mb-1">Type</label>
+                                  <select
+                                    value={availDraft.is_recurring ? 'recurring' : 'once'}
+                                    onChange={(e) => setAvailDraft(prev => ({ ...prev, is_recurring: e.target.value === 'recurring' }))}
+                                    className={selectCls}
+                                  >
+                                    <option value="once">One-time</option>
+                                    <option value="recurring">Recurring</option>
+                                  </select>
+                                </div>
+                                {availDraft.is_recurring ? (
+                                  <div>
+                                    <label className="text-xs text-[#6B6B6B] block mb-1">Day of Week</label>
+                                    <select
+                                      value={availDraft.day_of_week ?? ''}
+                                      onChange={(e) => setAvailDraft(prev => ({ ...prev, day_of_week: parseInt(e.target.value) }))}
+                                      className={selectCls}
+                                    >
+                                      <option value="">Select…</option>
+                                      {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((d, i) => (
+                                        <option key={i} value={i}>{d}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <label className="text-xs text-[#6B6B6B] block mb-1">Date</label>
+                                    <input
+                                      type="date"
+                                      value={availDraft.custom_date || ''}
+                                      onChange={(e) => setAvailDraft(prev => ({ ...prev, custom_date: e.target.value }))}
+                                      className={inputCls}
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <label className="text-xs text-[#6B6B6B] block mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={availDraft.start_time || ''}
+                                    onChange={(e) => setAvailDraft(prev => ({ ...prev, start_time: e.target.value }))}
+                                    className={inputCls}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-[#6B6B6B] block mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={availDraft.end_time || ''}
+                                    onChange={(e) => setAvailDraft(prev => ({ ...prev, end_time: e.target.value }))}
+                                    className={inputCls}
+                                  />
+                                </div>
+                                {availDraft.is_recurring && (
+                                  <div className="md:col-span-2">
+                                    <label className="text-xs text-[#6B6B6B] block mb-1">Start From</label>
+                                    <input
+                                      type="date"
+                                      value={availDraft.recurrence_start_date || ''}
+                                      onChange={(e) => setAvailDraft(prev => ({ ...prev, recurrence_start_date: e.target.value }))}
+                                      className={inputCls}
+                                    />
+                                  </div>
+                                )}
+                                <div className="md:col-span-2">
+                                  <label className="text-xs text-[#6B6B6B] block mb-1">Notes (optional)</label>
+                                  <input
+                                    type="text"
+                                    value={availDraft.notes || ''}
+                                    onChange={(e) => setAvailDraft(prev => ({ ...prev, notes: e.target.value }))}
+                                    className={inputCls}
+                                    placeholder="e.g. Field 1 only"
+                                  />
+                                </div>
+                              </div>
+                            ) : null}
+                            <div className="flex gap-2">
+                              {isAddingAvail === field.id ? (
+                                <>
+                                  <button
+                                    onClick={() => handleCreateAvailability(field.id)}
+                                    className="text-xs text-accent px-3 py-1.5 rounded hover:bg-white/5 transition-colors"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => { setIsAddingAvail(null); setAvailDraft({ is_recurring: false, start_time: '', end_time: '' }); }}
+                                    className="text-xs text-[#A0A0A0] hover:text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => setIsAddingAvail(field.id)}
+                                  className="text-xs text-[#6B6B6B] hover:text-white transition-colors flex items-center gap-1.5"
+                                >
+                                  <span className="text-base leading-none">+</span> Add window
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     );
                   })}
 
@@ -640,23 +994,6 @@ export default function AdminPage() {
           </div>
         </section>
       </div>
-
-      {/* Modals */}
-      {showCreateModal && (
-        <LeagueFormModal
-          title="Create New League"
-          formData={formData}
-          onInputChange={(e) => {
-            const { name, value, type } = e.target;
-            const checked = (e.target as HTMLInputElement).checked;
-            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-          }}
-          onSubmit={handleCreateLeague}
-          onCancel={() => { setShowCreateModal(false); resetLeagueForm(); }}
-          isLoading={isLoading}
-          getTournamentFormatDescription={getTournamentFormatDescription}
-        />
-      )}
 
       <ConfirmDialog
         isOpen={!!confirmDeleteLeague}

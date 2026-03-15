@@ -50,9 +50,15 @@ class LeagueCreateRequest(BaseModel):
 
     @validator('format')
     def validate_format(cls, v):
-        valid_formats = ['7v7', '6v6', '5v5']
+        valid_formats = ['7v7', '5v5']
         if v not in valid_formats:
             raise ValueError(f'format must be one of {valid_formats}')
+        return v
+
+    @validator('max_teams')
+    def validate_max_teams(cls, v):
+        if v is not None and v > 10:
+            raise ValueError('max_teams cannot exceed 10')
         return v
 
     @validator('start_date')
@@ -95,6 +101,12 @@ class LeagueUpdateRequest(BaseModel):
     registration_fee: Optional[Decimal] = None
     settings: Optional[dict] = None
     is_active: Optional[bool] = None
+
+    @validator('max_teams')
+    def validate_max_teams(cls, v):
+        if v is not None and v > 10:
+            raise ValueError('max_teams cannot exceed 10')
+        return v
 
 class LeagueResponse(BaseModel):
     id: UUID

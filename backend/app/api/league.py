@@ -7,6 +7,7 @@ from app.models.team import Team
 from app.models.game import Game
 from app.models.league_player import LeaguePlayer
 from app.api.schemas.league import PublicLeagueResponse
+from app.services.league_service import get_player_cap, get_occupied_spots
 from datetime import date
 from typing import List
 from uuid import UUID
@@ -17,21 +18,30 @@ router = APIRouter()
 async def get_public_leagues(db: Session = Depends(get_db)):
     """Get all leagues with registration statistics for public viewing"""
     leagues = db.query(League).order_by(League.created_at.desc()).all()
-    
+
     result = []
     for league in leagues:
-        # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
+        # Count confirmed players and teams
         player_count = db.query(LeaguePlayer).filter(
             LeaguePlayer.league_id == league.id,
-            LeaguePlayer.registration_status == 'registered',
+            LeaguePlayer.registration_status == 'confirmed',
             LeaguePlayer.is_active == True
         ).count()
-        
+
         team_count = db.query(Team).filter(
             Team.league_id == league.id,
             Team.is_active == True
         ).count()
-        
+
+        player_cap = get_player_cap(league.format, league.max_teams)
+        occupied = get_occupied_spots(league.id, db)
+        is_registration_open = (
+            league.is_active
+            and (league.registration_deadline is None or league.registration_deadline >= date.today())
+            and (player_cap is None or occupied < player_cap)
+        )
+        spots_remaining = (player_cap - occupied) if player_cap is not None else None
+
         result.append(PublicLeagueResponse(
             id=league.id,
             name=league.name,
@@ -49,9 +59,12 @@ async def get_public_leagues(db: Session = Depends(get_db)):
             registration_fee=league.registration_fee,
             is_active=league.is_active,
             registered_players_count=player_count,
-            registered_teams_count=team_count
+            registered_teams_count=team_count,
+            is_registration_open=is_registration_open,
+            player_cap=player_cap,
+            spots_remaining=spots_remaining,
         ))
-    
+
     return result
 
 @router.get("/schedule", summary="Get league schedule")

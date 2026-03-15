@@ -102,15 +102,15 @@ async def generate_teams(
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Get all registered players for this league
+    # Get all confirmed players for this league
     registered_players = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league_id,
-        LeaguePlayer.registration_status == 'registered',
+        LeaguePlayer.registration_status == 'confirmed',
         LeaguePlayer.is_active == True
     ).all()
-    
+
     if not registered_players:
-        raise HTTPException(status_code=400, detail="No registered players found for this league")
+        raise HTTPException(status_code=400, detail="No confirmed players found for this league")
     
     # Group players by their group_id
     players_by_group = {}
@@ -330,7 +330,7 @@ async def add_fake_data(
             league_id=league_id,
             player_id=player.id,
             group_id=group_id,
-            registration_status="registered",
+            registration_status="confirmed",
             payment_status="paid",
             waiver_status="signed",
             created_by=admin_user["id"]

@@ -100,7 +100,14 @@ async def create_league(
         db.add(league)
         db.commit()
         db.refresh(league)
-        
+
+        # Schedule deadline job if applicable
+        try:
+            from app.services.scheduler_service import schedule_deadline_job
+            schedule_deadline_job(league.id, league.registration_deadline)
+        except Exception:
+            pass
+
         # Return with player/team counts
         return LeagueResponse(
             **league.__dict__,
@@ -201,18 +208,25 @@ async def update_league(
     try:
         db.commit()
         db.refresh(league)
-        
+
+        # Re-schedule deadline job with new deadline (if changed)
+        try:
+            from app.services.scheduler_service import schedule_deadline_job
+            schedule_deadline_job(league.id, league.registration_deadline)
+        except Exception:
+            pass
+
         # Return with updated counts (using LeaguePlayer for many-to-many relationship)
         player_count = db.query(LeaguePlayer).filter(
             LeaguePlayer.league_id == league.id,
             LeaguePlayer.is_active == True
         ).count()
-        
+
         team_count = db.query(Team).filter(
             Team.league_id == league.id,
             Team.is_active == True
         ).count()
-        
+
         return LeagueResponse(
             **league.__dict__,
             registered_players_count=player_count,

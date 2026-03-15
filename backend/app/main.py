@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import user, registration, team, league
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.api import user, registration, team, league, contact
 from app.api.admin.main import router as admin_router
 from app.db.db import SessionLocal
 from app.services.admin_service import AdminService
@@ -33,10 +35,17 @@ async def lifespan(app: FastAPI):
             db.rollback()
         finally:
             db.close()
+
     yield
 
 
 app = FastAPI(lifespan=lifespan)
+
+limiter = Limiter(
+    key_func=lambda r: r.headers.get("X-Forwarded-For", r.client.host or "unknown").split(",")[0].strip()
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Add CORS middleware
 app.add_middleware(
@@ -52,6 +61,7 @@ app.include_router(registration.router, prefix="/registration")
 app.include_router(team.router, prefix="/team")
 app.include_router(league.router, prefix="/league")
 app.include_router(admin_router)
+app.include_router(contact.router, prefix="/contact")
 
 @app.get("/health")
 def health_check():

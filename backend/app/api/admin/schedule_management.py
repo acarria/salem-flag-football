@@ -2028,3 +2028,125 @@ async def generate_playoff_bracket(
         weeks_scheduled=num_rounds,
         schedule_details=schedule_details
     )
+
+
+# ---------------------------------------------------------------------------
+# Field Availability CRUD
+# ---------------------------------------------------------------------------
+
+@router.post("/fields/{field_id}/availability", response_model=FieldAvailabilityResponse, summary="Add availability window to a field")
+async def create_field_availability(
+    field_id: UUID,
+    avail_data: FieldAvailabilityCreateRequest,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user),
+):
+    """Create an availability window (recurring or one-time) for a specific field."""
+    field = db.query(Field).filter(Field.id == field_id, Field.is_active == True).first()
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+
+    availability = FieldAvailability(
+        field_id=field_id,
+        is_recurring=avail_data.is_recurring,
+        day_of_week=avail_data.day_of_week,
+        recurrence_start_date=avail_data.recurrence_start_date,
+        recurrence_end_date=avail_data.recurrence_end_date,
+        custom_date=avail_data.custom_date,
+        start_time=avail_data.start_time,
+        end_time=avail_data.end_time,
+        notes=avail_data.notes,
+    )
+    db.add(availability)
+    try:
+        db.commit()
+        db.refresh(availability)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create availability: {str(e)}")
+
+    return FieldAvailabilityResponse(
+        **availability.__dict__,
+        field_name=field.name,
+    )
+
+
+@router.get("/fields/{field_id}/availability", response_model=List[FieldAvailabilityResponse], summary="Get all availability windows for a field")
+async def get_field_availability(
+    field_id: UUID,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user),
+):
+    """Return all availability windows for a specific field."""
+    field = db.query(Field).filter(Field.id == field_id).first()
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+
+    availabilities = db.query(FieldAvailability).filter(
+        FieldAvailability.field_id == field_id,
+        FieldAvailability.is_active == True,
+    ).order_by(FieldAvailability.created_at).all()
+
+    return [
+        FieldAvailabilityResponse(**a.__dict__, field_name=field.name)
+        for a in availabilities
+    ]
+
+
+@router.put("/fields/{field_id}/availability/{avail_id}", response_model=FieldAvailabilityResponse, summary="Update a field availability window")
+async def update_field_availability(
+    field_id: UUID,
+    avail_id: UUID,
+    avail_data: FieldAvailabilityUpdateRequest,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user),
+):
+    """Update an existing availability window."""
+    field = db.query(Field).filter(Field.id == field_id).first()
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+
+    availability = db.query(FieldAvailability).filter(
+        FieldAvailability.id == avail_id,
+        FieldAvailability.field_id == field_id,
+    ).first()
+    if not availability:
+        raise HTTPException(status_code=404, detail="Availability window not found")
+
+    update_data = avail_data.dict(exclude_unset=True)
+    for field_name, value in update_data.items():
+        setattr(availability, field_name, value)
+
+    try:
+        db.commit()
+        db.refresh(availability)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update availability: {str(e)}")
+
+    return FieldAvailabilityResponse(**availability.__dict__, field_name=field.name)
+
+
+@router.delete("/fields/{field_id}/availability/{avail_id}", summary="Delete a field availability window")
+async def delete_field_availability(
+    field_id: UUID,
+    avail_id: UUID,
+    db: Session = Depends(get_db),
+    admin_user=Depends(get_admin_user),
+):
+    """Soft-delete an availability window (sets is_active=False)."""
+    availability = db.query(FieldAvailability).filter(
+        FieldAvailability.id == avail_id,
+        FieldAvailability.field_id == field_id,
+    ).first()
+    if not availability:
+        raise HTTPException(status_code=404, detail="Availability window not found")
+
+    availability.is_active = False
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete availability: {str(e)}")
+
+    return {"message": "Availability window deleted."}

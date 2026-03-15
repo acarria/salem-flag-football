@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { League, LeagueCreateRequest, LeagueUpdateRequest, LeagueStats } from '../services';
 import { leagueApi } from '../services';
 

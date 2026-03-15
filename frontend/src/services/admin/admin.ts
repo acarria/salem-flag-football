@@ -3,7 +3,6 @@ import {
   AdminConfig,
   AdminConfigCreateRequest,
   AdminConfigUpdateRequest,
-  User,
   PaginatedUserResponse,
   LeagueMember,
   Team,

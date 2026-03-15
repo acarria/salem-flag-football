@@ -19,7 +19,6 @@ interface RegistrationModalProps {
 
 type RegistrationType = 'solo' | 'group';
 
-const MAX_GROUP_SIZE = 6;  // max invitees (organizer is separate)
 const MIN_GROUP_SIZE = 1;  // at least 1 invitee
 
 function getInitialGroup() {
@@ -34,6 +33,8 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const [type, setType] = useState<RegistrationType>('solo');
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
+  const selectedLeagueObj = leagues.find(l => l.id === selectedLeague) ?? null;
+  const maxInvitees = selectedLeagueObj?.format === '7v7' ? 6 : 4;
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [countryIso, setCountryIso] = useState('US');
@@ -108,6 +109,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
 
       loadData();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user, type]);
 
   const validateSolo = () => {
@@ -215,7 +217,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   };
 
   const handleAddPlayer = () => {
-    if (group.length < MAX_GROUP_SIZE) {
+    if (group.length < maxInvitees) {
       setGroup([...group, { firstName: '', lastName: '', email: '' }]);
     }
   };
@@ -399,6 +401,16 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           <div className="mb-5 text-sm text-red-400">No active leagues available at this time.</div>
         )}
 
+        {/* Registration closed banner */}
+        {selectedLeagueObj && !selectedLeagueObj.is_registration_open && (
+          <div className="mb-5 border border-red-500/30 rounded-lg p-3 bg-red-500/10">
+            <p className="text-red-400 text-sm font-medium">Registration is closed for this league.</p>
+            {selectedLeagueObj.spots_remaining === 0 && (
+              <p className="text-red-400/80 text-xs mt-1">This league is full — no spots remaining.</p>
+            )}
+          </div>
+        )}
+
         {/* Description */}
         <div className="mb-5">
           {type === 'solo' ? (
@@ -410,7 +422,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           ) : (
             <div className="text-sm text-[#A0A0A0] space-y-1">
               <p>Register with friends to stay together during team formation. Each invitee will receive an email to accept.</p>
-              <p>Groups of 2–7 players. May be combined with others to form complete teams.</p>
+              <p>Groups of 2–{maxInvitees} players. May be combined with others to form complete teams.</p>
             </div>
           )}
         </div>
@@ -712,9 +724,9 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
                   type="button"
                   onClick={handleAddPlayer}
                   className="text-sm text-[#A0A0A0] hover:text-white transition-colors disabled:opacity-40"
-                  disabled={group.length >= MAX_GROUP_SIZE}
+                  disabled={group.length >= maxInvitees}
                 >
-                  + Add invitee
+                  + Add invitee ({group.length}/{maxInvitees})
                 </button>
                 {group.length > MIN_GROUP_SIZE && (
                   <button
@@ -735,10 +747,12 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           <button
             type="submit"
             className="w-full bg-accent text-white text-sm font-medium py-2 px-5 rounded-md hover:bg-accent-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-            disabled={isLeagueRegistered}
+            disabled={isLeagueRegistered || (selectedLeagueObj ? !selectedLeagueObj.is_registration_open : false)}
           >
             {isLeagueRegistered
               ? 'Already Registered'
+              : selectedLeagueObj && !selectedLeagueObj.is_registration_open
+              ? 'Registration Closed'
               : type === 'solo'
               ? 'Register'
               : 'Register Group'}

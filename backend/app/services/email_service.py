@@ -30,3 +30,26 @@ def send_group_invitation(
         "subject": f"You're invited to join {group_name} – {league_name}",
         "html": html,
     })
+
+
+def send_contact_message(
+    sender_name: str,
+    sender_email: str,
+    subject: str,
+    message: str,
+):
+    resend.api_key = settings.RESEND_API_KEY
+    html = f"""
+    <h2>New Contact Form Submission</h2>
+    <p><strong>From:</strong> {sender_name} &lt;{sender_email}&gt;</p>
+    <p><strong>Subject:</strong> {subject}</p>
+    <hr />
+    <p>{message.replace(chr(10), '<br />')}</p>
+    """
+    resend.Emails.send({
+        "from": settings.EMAIL_FROM,
+        "to": settings.CONTACT_EMAIL,
+        "reply_to": sender_email,
+        "subject": f"[Contact] {subject}",
+        "html": html,
+    })

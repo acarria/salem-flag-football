@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useUser } from '@clerk/clerk-react';
+import { useUser, useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
 import { getEmailError, getPhoneError } from '../utils/validation';
 import { apiService, UserProfile } from '../services';
+import { invitationService } from '../services/public/invitations';
+import { MyGroup } from '../services/core/types';
 
 export default function ProfilePage() {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -15,11 +18,14 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   type EmailErrorType = string | { message: string; suggestion: string };
-  const [fieldErrors, setFieldErrors] = useState<{ 
-    email?: EmailErrorType; 
-    phone?: string; 
-    [key: string]: string | EmailErrorType | undefined; 
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: EmailErrorType;
+    phone?: string;
+    [key: string]: string | EmailErrorType | undefined;
   }>({});
+
+  const [myGroups, setMyGroups] = useState<MyGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   // Fetch user profile from API
   useEffect(() => {
@@ -28,10 +34,10 @@ export default function ProfilePage() {
         try {
           setIsLoading(true);
           setError('');
-          
+
           // Try to fetch existing profile from API
           const existingProfile = await apiService.getUserProfile(user.id);
-          
+
           if (existingProfile) {
             setProfile(existingProfile);
             setOriginalProfile(existingProfile);
@@ -53,7 +59,7 @@ export default function ProfilePage() {
         } catch (err) {
           console.error('Failed to fetch profile:', err);
           setError('Failed to load profile. Please try again.');
-          
+
           // Fallback to default profile
           const defaultProfile: UserProfile = {
             firstName: user.firstName || '',
@@ -74,6 +80,27 @@ export default function ProfilePage() {
     };
 
     fetchProfile();
+  }, [user]);
+
+  // Fetch my groups
+  useEffect(() => {
+    const fetchGroups = async () => {
+      if (!user) return;
+      setGroupsLoading(true);
+      try {
+        const token = await getToken();
+        if (token) {
+          const groups = await invitationService.getMyGroups(token);
+          setMyGroups(groups);
+        }
+      } catch {
+        // Non-fatal — silently ignore
+      } finally {
+        setGroupsLoading(false);
+      }
+    };
+    fetchGroups();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -141,6 +168,20 @@ export default function ProfilePage() {
     setError('');
     setSuccess('');
     setFieldErrors({});
+  };
+
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await invitationService.revokeInvitation(invitationId, token);
+      // Refresh groups
+      const groups = await invitationService.getMyGroups(token);
+      setMyGroups(groups);
+      setSuccess('Invitation revoked.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to revoke invitation.');
+    }
   };
 
   const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
@@ -375,6 +416,65 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        {/* My Groups */}
+        <div className="border-t border-white/5 mt-10 pt-8">
+          <div className="section-label mb-4">MY GROUPS</div>
+          {groupsLoading ? (
+            <div className="text-sm text-[#6B6B6B]">Loading groups…</div>
+          ) : myGroups.length === 0 ? (
+            <div className="text-sm text-[#6B6B6B]">You are not part of any groups yet.</div>
+          ) : (
+            <div className="space-y-6">
+              {myGroups.map((group) => (
+                <div key={group.group_id} className="bg-[#111111] border border-white/5 rounded-xl p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-sm font-medium text-white">{group.group_name}</div>
+                      <div className="text-xs text-[#6B6B6B] mt-0.5">{group.league_name}</div>
+                    </div>
+                    {group.is_organizer && (
+                      <span className="text-xs text-accent border border-accent/20 rounded-full px-2 py-0.5">Organizer</span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {group.members.map((member, idx) => (
+                      <div key={member.player_id || member.invitation_id || idx} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`status-dot ${
+                            member.status === 'confirmed' ? 'bg-accent' :
+                            member.status === 'pending_invite' ? 'bg-yellow-400' :
+                            'bg-[#6B6B6B]'
+                          }`} />
+                          <span className="text-xs text-[#A0A0A0]">
+                            {member.first_name} {member.last_name}
+                            {member.is_organizer && <span className="text-[#6B6B6B] ml-1">(you)</span>}
+                          </span>
+                          <span className="text-xs text-[#6B6B6B]">{member.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[#6B6B6B]">
+                            {member.status === 'confirmed' ? 'Confirmed' :
+                             member.status === 'pending_invite' ? 'Invite sent' :
+                             member.status}
+                          </span>
+                          {group.is_organizer && member.status === 'pending_invite' && member.invitation_id && (
+                            <button
+                              onClick={() => handleRevokeInvitation(member.invitation_id!)}
+                              className="text-xs text-[#6B6B6B] hover:text-red-400 transition-colors"
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Quick Links */}
         <div className="border-t border-white/5 mt-10 pt-6">

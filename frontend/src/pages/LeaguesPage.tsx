@@ -29,6 +29,7 @@ export default function LeaguesPage() {
     if (isSignedIn && user && leagues.length > 0) {
       checkRegistrationStatus();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, user, leagues]);
 
   const loadLeagues = async () => {
@@ -113,15 +114,8 @@ export default function LeaguesPage() {
 
   const getRegistrationStatus = (league: League) => {
     if (!league.is_active) return { text: 'Inactive', dotColor: 'bg-red-400' };
-    if (league.registration_deadline && new Date(league.registration_deadline) < new Date()) {
-      return { text: 'Closed', dotColor: 'bg-red-400' };
-    }
-    if (league.max_teams && league.registered_teams_count >= league.max_teams) {
-      return { text: 'Full', dotColor: 'bg-yellow-400' };
-    }
-    if (isSignedIn && registeredLeagues.has(league.id)) {
-      return { text: 'Registered', dotColor: 'bg-blue-400' };
-    }
+    if (!league.is_registration_open) return { text: 'Registration Closed', dotColor: 'bg-red-400' };
+    if (isSignedIn && registeredLeagues.has(league.id)) return { text: 'Registered', dotColor: 'bg-blue-400' };
     return { text: 'Open', dotColor: 'bg-green-400' };
   };
 

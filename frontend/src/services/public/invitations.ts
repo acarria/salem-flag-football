@@ -1,4 +1,5 @@
 import { BaseApiService } from '../core/base';
+import { MyGroup } from '../core/types';
 
 export interface InvitationDetail {
   token: string;
@@ -42,6 +43,19 @@ class InvitationApiService extends BaseApiService {
 
   async getPendingInvitations(authToken: string): Promise<PendingInvitation[]> {
     return this.request<PendingInvitation[]>('/registration/invitations/me', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  async getMyGroups(authToken: string): Promise<MyGroup[]> {
+    return this.request<MyGroup[]>('/registration/groups/mine', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  async revokeInvitation(invitationId: string, authToken: string): Promise<any> {
+    return this.request<any>(`/registration/groups/invitations/${invitationId}`, {
+      method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
     });
   }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SignIn, useAuth, useClerk, UserButton } from '@clerk/clerk-react';
+import { SignIn, useAuth, UserButton } from '@clerk/clerk-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAdmin } from '../../hooks';
 import salemCommonSunny from '../../assets/images/salem_common_sunny.png';
@@ -21,7 +21,6 @@ export default function BaseLayout({
   heroBackground = salemCommonSunny
 }: BaseLayoutProps) {
   const { isSignedIn } = useAuth();
-  const { signOut } = useClerk();
   const { isAdmin } = useAdmin();
   const location = useLocation();
 

@@ -10,7 +10,10 @@ This is a full-stack monorepo with the following structure:
 - **Backend**: FastAPI (Python) + SQLAlchemy + PostgreSQL
 - **Authentication**: Clerk (JWT-based)
 - **Database**: PostgreSQL with Alembic migrations
-- **Deployment**: Docker Compose for local development
+- **Deployment (local)**: Docker Compose
+- **Deployment (production target)**: AWS SAM — Lambda + API Gateway + EventBridge Scheduler + RDS (via RDS Proxy)
+
+> The backend is Lambda-ready via [Mangum](https://mangum.io/). `main.py` exports `handler = Mangum(app, lifespan="off")`. Do not introduce in-process background schedulers (e.g. APScheduler) — all deferred work uses EventBridge Scheduler or SQS.
 
 ## Current Functionality
 
@@ -25,194 +28,177 @@ This is a full-stack monorepo with the following structure:
 #### **League Management (Admin)**
 - **League Creation**: Full CRUD operations for leagues
   - Support for multiple tournament formats (Round Robin, Swiss, Playoff Bracket, Compass Draw)
-  - Flexible game formats (7v7, 6v6, 5v5)
-  - Configurable season settings (weeks, game duration, teams per league)
-  - Registration fee management
-  - Registration deadline controls
-- **League Statistics**: Real-time league stats including:
-  - Player and team counts
-  - Registration status tracking
-  - Days until start/deadline calculations
+  - Game formats: `7v7` and `5v5` (6v6 removed)
+  - Configurable season settings (weeks, game duration, max teams ≤ 10)
+  - Registration fee and deadline management
+- **League Statistics**: Real-time player/team counts, registration status, days until start/deadline
 - **League Member Management**: View and manage all registered players in a league
-- **Team Generation**: Automated team creation with group preservation
-  - Respects group registrations (keeps groups together when possible)
-  - Configurable team sizes and counts
-  - Custom team names and colors
-- **Schedule Generation**: Automated schedule creation
-  - Support for multiple tournament formats
-  - Configurable game times and duration
-  - Database persistence of generated schedules
+- **Team Generation**:
+  - Automated team creation with group preservation
+  - Manual trigger: `POST /admin/leagues/{id}/generate-teams`
+  - **Event-driven auto-trigger**: fires automatically when all spots are confirmed and no pending invitations remain
+- **Schedule Generation**: Automated schedule creation with field availability integration
+- **Schedule Editing**: Admins can edit individual games (time, field, teams)
+- **Score Recording**: Stores scores; standings calculated live from results
+- **Field Availability Admin UI**: Expandable per-field panel in the admin dashboard to create, view, and delete recurring or one-time availability slots
 - **Admin Management**: Add/remove admin users with role-based permissions
-- **Test Data Generation**: Add fake players and data for testing purposes
+- **Test Data Generation**: Add fake players and data for testing
 
-#### **Player Registration System**
-- **Individual Registration**: Players can register for leagues
-- **Group Registration (Invitation-based)**:
-  - Organizer registers and is immediately confirmed
-  - Invitees receive email invitations with a 7-day expiring token
-  - Invitees accept/decline via a dedicated `/invite/:token` page (no login required to view, login required to accept)
-  - `GroupInvitation` model tracks status: pending → accepted/declined/expired
-- **Profile Management**: Complete player profiles with:
-  - Personal information (name, email, phone, DOB, gender)
-  - Communication preferences
-  - Registration status tracking
-  - Payment and waiver status
-- **League Browsing**: Public view of available leagues with registration status
+#### **Registration System**
+
+**Registration Cap Model:**
+- Effective occupancy = `confirmed players + pending group invitations`
+- Pending invitations hold reserved spots so a group organizer can guarantee space for their full team before all members respond
+- Solo players see the league as full if `occupied >= player_cap` (`max_teams × players_per_team`)
+- The public `League` response includes `is_registration_open`, `player_cap`, and `spots_remaining` — computed server-side
+
+**Solo Registration:**
+- Player registers directly → status immediately set to `"confirmed"`
+- Cap is checked before confirming; returns 400 if full
+- Auto-triggers team generation check after every confirmation
+
+**Group Registration (Invitation-based):**
+- Organizer registers and is immediately confirmed
+- Exactly `format_size - 1` invitees required (7v7 = 6, 5v5 = 4)
+- Checks that `format_size` spots are available before creating the group
+- Invitees receive email invitations with a 7-day expiring token
+- Invitees accept/decline via `/invite/:token` (no login to view, login required to accept)
+- On acceptance, auto-triggers team generation check — teams generate automatically when every spot is filled with zero pending invitations remaining
+
+**Registration Status Values:** `"confirmed"` | `"pending"` (invite not yet accepted) | `"declined"` | `"expired"`
+
+#### **Group Viewing (Profile Page)**
+- Players can view all groups they belong to from their profile
+- Shows each member's name, email, and status badge (confirmed / pending / declined / expired)
+- Organizers can revoke pending invitations directly from the profile page
 
 #### **Team Management**
 - Team creation and assignment
-- Player-to-team relationships
+- Player-to-team relationships with league scoping
 - Team color customization
-- League-specific team organization
-
-#### **Public Interface**
-- **Homepage**: League overview with standings and schedule display
-- **League Browser**: Public view of all available leagues
-- **Registration Flow**: Streamlined registration process for authenticated users
-- **Responsive Design**: Mobile-friendly interface with Salem-themed styling
 
 #### **Field Management**
-- **Field Management**: Multiple fields with detailed address information
-  - Create, update, and delete fields independently
-  - Associate fields with leagues
-  - Field-specific location data (street address, city, state, ZIP, facility name)
-- **Field Availability**: Flexible availability scheduling
-  - Recurring availability patterns (e.g., every Tuesday 6-9pm)
-  - Custom one-time availability windows for special events
-  - Field-level availability management (not league-specific)
-  - Automatic time slot generation from availability windows
-
-#### **Database Schema**
-- **Leagues**: Comprehensive league configuration and settings
-- **Players**: Complete player profiles and registration data
-- **Teams**: Team management and organization
-- **Groups**: Support for group registrations
-- **Group Invitations**: Token-based invitations with expiry tracking
-- **Admin Config**: Admin user management
-- **League Players**: Many-to-many relationships with status tracking
-- **Games**: Individual game records with scores, results, and round tracking
-- **Fields**: Independent field entities with location information
-- **Field Availability**: Recurring and custom availability windows
-- **League Fields**: Many-to-many association between leagues and fields
-- All primary and foreign keys use **UUIDs** (migrated from integer IDs)
+- Full CRUD for fields with address information
+- Associate fields with leagues
+- **Field Availability**: Recurring (day-of-week + date range) and one-time availability windows
+  - Admin UI to manage slots per field inline in the `/admin` dashboard
+  - Automatic time slot generation from availability windows for schedule generation
 
 #### **Schedule & Standings**
-- **Schedule Generation**: Automated schedule creation with database persistence
-  - Support for field availability integration (recurring and custom dates)
-  - Maximum game duration enforcement (60 minutes)
-  - Automatic field assignment based on availability
-- **Schedule Editing**: Admins can edit individual games (time, field, teams)
-- **Score Recording**: Admins submit scores; results stored on the `Game` model
-- **Real Standings**: Standings calculated live from game results (W/L/T, points, run differential)
-- **Playoff Bracket Generation**: Seeded playoff brackets generated after regular season completion
+- Automated schedule generation with field availability integration
+- Maximum game duration enforcement (60 minutes)
+- Schedule editing for admins
+- Scores stored on `Game` model; standings calculated live (W/L/T, points, run differential)
+- Playoff bracket generation seeded from regular season standings
 
-#### **Team Management**
-- Basic team CRUD operations
-- Team assignment functionality
-- Missing: Team captain roles, team communication features
+#### **Deadline-Triggered Team Generation**
+- When a league's `registration_deadline` is set, `scheduler_service.schedule_deadline_job()` registers an AWS EventBridge Scheduler one-time rule
+- At 23:59 UTC on the deadline date, `handlers/deadline_handler.py` is invoked:
+  1. Expires any still-pending group invitations (freeing reserved spots)
+  2. Calls `trigger_team_generation_if_ready` to generate teams from whoever is confirmed
+- Requires `SCHEDULER_ROLE_ARN` and `DEADLINE_LAMBDA_ARN` env vars (see below); gracefully skips with a log warning if absent (local dev)
+
+#### **Database Schema**
+Key tables: `users`, `leagues`, `players`, `teams`, `groups`, `group_invitations`, `league_players`, `games`, `fields`, `field_availability`, `league_fields`, `admin_config`
+- All primary and foreign keys use **UUIDs**
+
+---
 
 ## Recent Changes
 
-### **Authentication Hardening (Clerk JWT)**
-- **Issuer normalization**: Backend strips trailing slashes from `CLERK_ISSUER` before comparison, so tokens with `iss: "…dev"` and `iss: "…dev/"` both validate correctly — eliminates the common "Invalid issuer" error from slash mismatches
-- **Email fallback via Clerk API**: Clerk JWTs don't include `email` by default. If absent, the backend now calls `GET /v1/users/{user_id}` with the secret key to resolve the primary email — no Clerk dashboard customization required
-- **User ID normalization**: JWT payload is normalized to expose `id` (aliased from `sub`) so all downstream code uses a consistent key regardless of auth path (JWT vs. session)
-- **Diagnostic logging**: Startup logs `CLERK_JWKS_URL` and `CLERK_ISSUER`; per-request logging fires on issuer mismatches with exact values for quick diagnosis
+### **Registration Limits & Cap Enforcement** *(2026-03-14)*
+- Server-computed `is_registration_open`, `player_cap`, `spots_remaining` on all public league responses
+- Reserved-spot model: pending invitations count toward occupancy
+- Solo registration status changed from `"pending"` → `"confirmed"` (no separate approval flow)
+- Group registration enforces exact format size (`format_size - 1` invitees) and checks that `format_size` spots are available
+- `max_teams` capped at 10 via backend validator; `6v6` format removed (valid: `7v7`, `5v5`)
+- Frontend registration modal dynamically adjusts max invitees based on league format; shows "Registration Closed" banner if `is_registration_open` is false
 
-### **Group Registration & Invitations**
-- **Invitation-based group registration**: Organizer registers directly (status: confirmed); invitees receive tokenized email invitations
-- **`GroupInvitation` model**: Tracks email, names, token, status, expiry (7 days), and accepting player
-- **Email delivery**: `email_service.py` sends HTML invitation emails via Resend API (best-effort, non-fatal)
-- **Public invite page** (`/invite/:token`): Shows invitation details without login; requires authentication to accept
-- **Invitation endpoints**: `GET /invite/:token`, `POST /invite/:token/accept`, `POST /invite/:token/decline`, `GET /invitations/me`
+### **Event-Driven Team Generation** *(2026-03-14)*
+- `services/team_generation_service.py`: `trigger_team_generation_if_ready` auto-fires when `confirmed_count == player_cap AND pending_invites == 0`
+- Fixed legacy bug: team generation query was filtering on `status == "registered"` (now `"confirmed"`)
+- Trigger called non-fatally after every solo registration and every invite acceptance
+- "Generate Teams" and "Generate Schedule" buttons added to the league admin page
 
-### **Score Recording & Real Standings**
-- Score submission stored on the `Game` model (home/away scores, winner, status)
-- Standings calculated live from game results: wins, losses, ties, points, run differential
-- Admin interface for entering scores and viewing updated standings
+### **Group Viewing on Profile** *(2026-03-14)*
+- `GET /registration/groups/mine` — returns all groups the caller belongs to with member details
+- `DELETE /registration/groups/invitations/{id}` — organizer revokes a pending invitation
+- Profile page "My Groups" section with status badges and revoke capability
 
-### **Schedule Editing**
-- Admins can edit individual scheduled games: start time, field assignment, team assignments
-- Changes persist immediately and reflect in the public schedule view
+### **Field Availability Admin UI** *(2026-03-14)*
+- Expandable "Availability ▾" panel per field row in the admin dashboard
+- Add recurring slots (day-of-week + date range) or one-time slots; delete slots inline
+- 4 CRUD endpoints: `POST/GET/PUT/DELETE /admin/fields/{field_id}/availability`
 
-### **UUID Migration**
-- All primary keys and foreign keys migrated from integer IDs to UUIDs
-- Alembic migration covers all tables: players, leagues, teams, games, groups, group invitations, fields, league players
+### **Lambda / AWS SAM Migration** *(2026-03-14)*
+- APScheduler removed; deadline scheduling replaced with AWS EventBridge Scheduler (`boto3`)
+- `db/db.py`: detects Lambda via `AWS_LAMBDA_FUNCTION_NAME`; uses `NullPool` on Lambda, `QueuePool` locally
+- `handlers/deadline_handler.py` created as the EventBridge target Lambda
+- `main.py` lifespan cleaned up (scheduler start/stop removed; was dead code under `lifespan="off"`)
+- `boto3` added to `requirements.txt`; `APScheduler` removed
 
-### **Playoff Bracket Generation**
-- Seeded brackets generated from regular season standings
-- Elimination round tracking with playoff-specific game records
+### **Authentication Hardening** *(prior)*
+- Clerk JWT issuer normalization (trailing slash handling)
+- Email resolved via Clerk API when absent from JWT
+- Diagnostic startup logging for Clerk config
 
-### **Backend Modularization**
-- **Refactored Admin API**: Split monolithic `admin.py` into modular components:
-  - `league_management.py`: League CRUD operations and statistics
-  - `team_management.py`: Member management and team generation
-  - `schedule_management.py`: Schedule generation and viewing
-  - `admin_management.py`: Admin user configuration
-- **Centralized Schemas**: Moved all Pydantic models to `app/api/schemas/admin.py`
-- **Shared Dependencies**: Created `app/api/admin/dependencies.py` for common admin authentication
+### **Score Recording & Real Standings** *(prior)*
+- Score submission stored on `Game` model; live standings from results
+- Playoff bracket generation seeded from regular season standings
 
-### **Frontend Modularization**
-- **Refactored API Services**: Split monolithic `api.ts` into modular structure:
-  - `core/`: Base service class and shared types
-  - `admin/`: Admin-specific API services (league, team, admin management)
-  - `public/`: Public API services (user, registration, invitations)
-- **Clean Architecture**: Organized services by domain with index files for clean imports
+### **UUID Migration** *(prior)*
+- All PKs/FKs migrated from integer IDs to UUIDs
 
-### **Player Registration Improvements**
-- **Multiple League Registration**: Players can register for multiple leagues simultaneously
-- **Dedicated Registration Endpoints**: Moved to `registration.py` with individual and group registration support
+### **Backend & Frontend Modularization** *(prior)*
+- Admin API split into `league_management.py`, `team_management.py`, `schedule_management.py`, `admin_management.py`
+- Frontend services split into `core/`, `admin/`, `public/`
+
+---
 
 ## Work to be Done
 
 ### **High Priority**
 
-#### **1. Game & Schedule Management**
-- [x] Create `Game` model for storing individual games
-- [x] Implement automatic schedule generation based on tournament format
-- [x] Add schedule viewing capabilities for admins
-- [x] Create game result tracking system
-- [x] Add schedule editing capabilities for admins
-- [x] Add game result submission interface
+#### **1. AWS SAM Deployment**
+- [ ] Write `template.yaml` (API function, deadline function, scheduler role, RDS Proxy)
+- [ ] `DeadlineFunction` SAM resource pointing at `app.handlers.deadline_handler.handler`
+- [ ] `SchedulerRole` IAM role (trust: `scheduler.amazonaws.com`, permission: `lambda:InvokeFunction`)
+- [ ] RDS Proxy setup for Lambda → RDS connection management
+- [ ] CI/CD pipeline (GitHub Actions → `sam build && sam deploy`)
 
-#### **2. Standings & Results System**
-- [x] Store scores and outcomes on the `Game` model
-- [x] Implement standings calculation logic (W/L/T, points, run differential)
-- [x] Add result submission interface for admins
-- [ ] Create real-time standings updates (websocket/polling)
+#### **2. Standings & Results**
+- [x] Store scores and outcomes on `Game` model
+- [x] Live standings (W/L/T, points, run differential)
+- [x] Admin score submission interface
+- [ ] Real-time standings updates (WebSocket or polling)
 - [ ] Support for different scoring systems
 
 #### **3. Payment Integration**
-- [ ] Integrate payment processor (Stripe/PayPal)
-- [ ] Implement payment status tracking
-- [ ] Add payment receipt generation
-- [ ] Create payment reminder system
+- [ ] Stripe integration
+- [ ] Payment status tracking
+- [ ] Receipt generation
+- [ ] Payment reminder system
 
 #### **4. Waiver Management**
-- [ ] Create digital waiver system
-- [ ] Implement waiver status tracking
-- [ ] Add waiver reminder notifications
-- [ ] Create waiver completion workflow
+- [ ] Digital waiver system
+- [ ] Waiver status tracking and reminders
 
 ### **Medium Priority**
 
 #### **5. Communication System**
-- [ ] Email notification system for:
-  - Registration confirmations
-  - Schedule updates
-  - Payment reminders
-  - Waiver reminders
-- [ ] In-app messaging system
-- [ ] Team captain communication tools
+- [ ] Registration confirmation emails
+- [ ] Schedule update notifications
+- [ ] Payment and waiver reminders
+- [ ] In-app messaging
 
 #### **6. Advanced Tournament Features**
-- [ ] Swiss tournament pairing algorithms
-- [x] Playoff bracket generation (seeded based on regular season standings)
-- [ ] Compass draw tournament support
-- [x] Tournament progression tracking (playoff rounds with elimination)
+- [ ] Swiss pairing algorithms
+- [x] Playoff bracket generation
+- [ ] Compass draw support
+- [x] Tournament progression tracking
 
-#### **7. Player Management Enhancements**
-- [x] Team balancing algorithms (with group preservation)
+#### **7. Player Management**
+- [x] Team balancing with group preservation
 - [ ] Player skill level assessment
 - [ ] Player availability tracking
 - [ ] Substitute player management
@@ -222,54 +208,25 @@ This is a full-stack monorepo with the following structure:
 #### **8. Analytics & Reporting**
 - [ ] League participation analytics
 - [ ] Player performance tracking
-- [ ] Financial reporting for admins
-- [ ] Export functionality for data
+- [ ] Financial reporting
+- [ ] Data export
 
 #### **9. Mobile App**
-- [ ] React Native mobile application
+- [ ] React Native app
 - [ ] Push notifications
-- [ ] Offline capability for schedules
 
 #### **10. Advanced Features**
-- [ ] Weather integration for game cancellations
-- [ ] Photo/video sharing for games
-- [ ] Social features (player profiles, friend connections)
-- [ ] League history and archives
+- [ ] Weather integration for cancellations
+- [ ] Social features
 
-## Technical Debt & Improvements
-
-### **Database & API**
-- [x] Modular API architecture with separate routers for different domains
-- [x] Comprehensive API documentation (OpenAPI/Swagger)
-- [x] Implement proper error handling and validation
-- [x] Schema refactoring for consistent organization
-- [x] Field and field availability management endpoints
-- [ ] Add database indexes for performance
-- [ ] Implement caching for frequently accessed data
-- [ ] Add comprehensive test coverage
-
-### **Frontend**
-- [x] Modular API services architecture
-- [x] Admin dashboard with team and schedule generation
-- [x] Loading states and error handling for admin features
-- [ ] Implement proper form validation
-- [ ] Add accessibility features (ARIA labels, keyboard navigation)
-- [ ] Optimize bundle size and performance
-- [ ] Add comprehensive test coverage
-
-### **Security & DevOps**
-- [ ] Implement rate limiting
-- [ ] Add security headers
-- [ ] Set up CI/CD pipeline
-- [ ] Add monitoring and logging
-- [ ] Implement backup strategies
+---
 
 ## Getting Started
 
 ### **Prerequisites**
 - Docker and Docker Compose
-- Node.js 18+ (for local development)
-- Python 3.10+ (for local development)
+- Node.js 18+ (for local frontend dev)
+- Python 3.10+ (for local backend dev)
 
 ### **Quick Start with Docker**
 
@@ -279,40 +236,47 @@ This is a full-stack monorepo with the following structure:
    cd salem-flag-football
    ```
 
-2. **Build and start all services:**
+2. **Set up environment:**
+   ```bash
+   cp env.example .env
+   # Fill in your Clerk keys and other values
+   ```
+
+3. **Build and start all services:**
    ```bash
    docker-compose up --build
    ```
 
-3. **Access the application:**
-   - **Frontend**: [http://localhost:3000](http://localhost:3000)
-   - **Backend API**: [http://localhost:8000](http://localhost:8000)
-   - **API Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
-   - **API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+4. **Access the application:**
+   - **Frontend**: http://localhost:3000
+   - **Backend API**: http://localhost:8000
+   - **API Docs**: http://localhost:8000/docs
 
-### **Local Development Setup**
+### **Local Development**
 
-#### **Frontend Development:**
+#### Frontend
 ```bash
 cd frontend
 npm install
 npm start
 ```
 
-#### **Backend Development:**
+#### Backend
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-#### **Database Setup:**
+#### Database
 ```bash
 cd backend
 alembic upgrade head
 ```
+
+---
 
 ## Project Structure
 
@@ -320,172 +284,142 @@ alembic upgrade head
 salem-flag-football/
 ├── backend/
 │   ├── app/
-│   │   ├── api/           # API endpoints
-│   │   │   ├── admin/     # Modular admin endpoints
+│   │   ├── api/
+│   │   │   ├── admin/               # Admin-only endpoints
 │   │   │   │   ├── league_management.py
 │   │   │   │   ├── team_management.py
 │   │   │   │   ├── schedule_management.py
 │   │   │   │   └── admin_management.py
-│   │   │   └── schemas/   # Pydantic schemas
-│   │   ├── core/          # Configuration
-│   │   ├── db/           # Database setup
-│   │   ├── models/       # SQLAlchemy models
-│   │   ├── services/     # Business logic
-│   │   └── utils/        # Utilities
-│   ├── alembic/          # Database migrations
+│   │   │   ├── schemas/             # Pydantic models
+│   │   │   ├── registration.py      # Solo + group registration, invite flow, group viewing
+│   │   │   ├── league.py            # Public league endpoints
+│   │   │   ├── user.py
+│   │   │   └── team.py
+│   │   ├── handlers/
+│   │   │   └── deadline_handler.py  # EventBridge-invoked Lambda for deadline team generation
+│   │   ├── models/                  # SQLAlchemy ORM models (UUID PKs)
+│   │   ├── services/
+│   │   │   ├── league_service.py          # get_player_cap, get_occupied_spots
+│   │   │   ├── team_generation_service.py # _run_team_generation, trigger_team_generation_if_ready
+│   │   │   ├── scheduler_service.py       # EventBridge Scheduler integration
+│   │   │   ├── email_service.py           # Resend-based email delivery
+│   │   │   └── admin_service.py
+│   │   ├── utils/                   # Clerk JWT validation
+│   │   ├── core/config.py           # Settings from env vars
+│   │   ├── db/db.py                 # Engine (NullPool on Lambda), SessionLocal
+│   │   └── main.py                  # FastAPI app + Mangum Lambda handler
+│   ├── alembic/                     # DB migrations
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── components/   # React components
-│   │   ├── pages/        # Page components
-│   │   ├── services/     # Modular API services
-│   │   │   ├── core/     # Core types and base service
-│   │   │   ├── admin/    # Admin-specific API services
-│   │   │   └── public/   # Public API services
-│   │   ├── hooks/        # Custom React hooks
-│   │   ├── types/        # TypeScript types
-│   │   └── utils/        # Utilities
+│   │   ├── components/
+│   │   ├── pages/                   # Includes ProfilePage (My Groups), AdminPage, LeagueAdminPage
+│   │   ├── services/
+│   │   │   ├── core/                # Base API client + shared types (incl. FieldAvailability)
+│   │   │   ├── admin/               # Admin API services
+│   │   │   └── public/              # Public API services (incl. invitations.ts)
+│   │   ├── hooks/
+│   │   └── types/
 │   └── Dockerfile
 └── docker-compose.yml
 ```
 
-## API Usage Patterns
+---
 
-### **Frontend Service Imports**
+## API Reference
 
-#### **Backward Compatible (Legacy)**
-```typescript
-import apiService from '../services/api';
-// All methods available: apiService.getStandings(), apiService.createLeague(), etc.
-```
+### Admin Endpoints (`/admin/...`)
 
-#### **Modular Imports (Recommended)**
-```typescript
-// Import specific services
-import { leagueApi, adminApi, userApi } from '../services';
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/leagues` | List all leagues |
+| `POST` | `/admin/leagues` | Create league |
+| `PUT` | `/admin/leagues/{id}` | Update league |
+| `DELETE` | `/admin/leagues/{id}` | Delete league |
+| `GET` | `/admin/leagues/{id}/members` | League members |
+| `POST` | `/admin/leagues/{id}/generate-teams` | Manually generate teams |
+| `POST` | `/admin/leagues/{id}/generate-schedule` | Generate schedule |
+| `GET` | `/admin/leagues/{id}/schedule` | Get schedule |
+| `PUT` | `/admin/games/{id}` | Edit scheduled game |
+| `POST` | `/admin/games/{id}/score` | Record score |
+| `POST` | `/admin/leagues/{id}/generate-playoff-bracket` | Generate playoff bracket |
+| `POST` | `/admin/fields` | Create field |
+| `GET` | `/admin/fields` | List fields |
+| `PUT` | `/admin/fields/{id}` | Update field |
+| `DELETE` | `/admin/fields/{id}` | Delete field |
+| `POST` | `/admin/fields/{field_id}/availability` | Add availability slot |
+| `GET` | `/admin/fields/{field_id}/availability` | List availability slots |
+| `PUT` | `/admin/fields/{field_id}/availability/{avail_id}` | Update slot |
+| `DELETE` | `/admin/fields/{field_id}/availability/{avail_id}` | Delete slot |
+| `POST` | `/admin/leagues/{id}/fields/{field_id}` | Associate field with league |
 
-// Import specific types
-import { League, UserProfile, TeamGenerationResponse } from '../services';
+### Public / Player Endpoints
 
-// Direct imports for specific domains
-import { LeagueApiService } from '../services/admin';
-import { UserApiService } from '../services/public';
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/league/public/leagues` | Browse leagues (includes `is_registration_open`, `spots_remaining`) |
+| `GET` | `/league/standings` | Live standings |
+| `GET` | `/league/schedule` | Schedule |
+| `POST` | `/registration/player` | Solo registration (status → confirmed immediately) |
+| `POST` | `/registration/group` | Group registration + send invitations |
+| `GET` | `/registration/invite/{token}` | View invitation (public) |
+| `POST` | `/registration/invite/{token}/accept` | Accept invitation (authenticated) |
+| `POST` | `/registration/invite/{token}/decline` | Decline invitation |
+| `GET` | `/registration/invitations/me` | My pending invitations |
+| `GET` | `/registration/groups/mine` | My groups with member status |
+| `DELETE` | `/registration/groups/invitations/{id}` | Revoke pending invitation (organizer only) |
 
-#### **Custom Hooks**
-```typescript
-import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
-import { useLeagues } from '../hooks/useLeagues';
-```
-
-### **Backend API Structure**
-
-#### **Admin Endpoints**
-- `GET /admin/leagues` - List all leagues
-- `POST /admin/leagues` - Create new league
-- `PUT /admin/leagues/{id}` - Update league
-- `DELETE /admin/leagues/{id}` - Delete league
-- `GET /admin/leagues/{id}/members` - Get league members
-- `POST /admin/leagues/{id}/generate-teams` - Generate teams
-- `POST /admin/leagues/{id}/generate-schedule` - Generate schedule
-- `PUT /admin/games/{id}` - Edit a scheduled game (time, field, teams)
-- `POST /admin/games/{id}/score` - Record game score
-- `POST /admin/leagues/{id}/generate-playoff-bracket` - Generate playoff bracket
-- `GET /admin/leagues/{id}/schedule` - Get league schedule
-- `POST /admin/fields` - Create field
-- `GET /admin/fields` - List all fields
-- `PUT /admin/fields/{id}` - Update field
-- `DELETE /admin/fields/{id}` - Delete field
-- `POST /admin/leagues/{id}/fields/{field_id}` - Associate field with league
-- `POST /admin/field-availability` - Create field availability
-- `GET /admin/field-availability` - List field availability records
-
-#### **Public Endpoints**
-- `GET /league/public/leagues` - Get public leagues
-- `GET /league/standings` - Get standings
-- `GET /league/schedule` - Get schedule
-- `POST /registration/player` - Register player (solo)
-- `POST /registration/group` - Register group with invitations
-- `GET /registration/invite/{token}` - Get invitation details (public)
-- `POST /registration/invite/{token}/accept` - Accept group invitation (authenticated)
-- `POST /registration/invite/{token}/decline` - Decline group invitation (public)
-- `GET /registration/invitations/me` - Get pending invitations for current user
+---
 
 ## Environment Variables
 
-### Security Setup
+Copy `env.example` to `.env`:
 
-**IMPORTANT**: Never commit secrets to version control. The `.env` file is already in `.gitignore`.
+```env
+# Database
+DATABASE_URL=postgresql://postgres:postgres@db:5432/flagfootball
 
-1. **Copy the example file**:
-   ```bash
-   cp env.example .env
-   ```
+# Clerk Authentication
+CLERK_JWKS_URL=https://your-instance.clerk.accounts.dev/.well-known/jwks.json
+CLERK_ISSUER=https://your-instance.clerk.accounts.dev/
+CLERK_SECRET_KEY=sk_test_...
 
-2. **Update the `.env` file** with your actual values:
-   ```env
-   # Database Configuration
-   DATABASE_URL=postgresql://postgres:postgres@db:5432/flagfootball
+# Email (Resend) — group invitation emails
+RESEND_API_KEY=re_...
+EMAIL_FROM=onboarding@resend.dev
+APP_URL=http://localhost:3000
 
-   # Security
-   SECRET_KEY=your-secret-key-here
+# Admin bootstrap — gets super_admin role on first startup
+ADMIN_EMAIL=your-admin@example.com
 
-   # Clerk Authentication
-   # Trailing slash on CLERK_ISSUER is required — it must match the "iss" claim in Clerk JWTs
-   CLERK_JWKS_URL=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
-   CLERK_ISSUER=https://your-clerk-instance.clerk.accounts.dev/
-   CLERK_SECRET_KEY=sk_test_your-clerk-secret-key-here
+# Frontend
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_CLERK_PUBLISHABLE_KEY=pk_test_...
 
-   # Email (Resend) — used for group invitation emails
-   RESEND_API_KEY=re_your-resend-api-key
-   EMAIL_FROM=onboarding@resend.dev
-   APP_URL=http://localhost:3000
+# AWS (production / Lambda only — omit locally)
+SCHEDULER_ROLE_ARN=arn:aws:iam::...  # IAM role EventBridge Scheduler assumes
+DEADLINE_LAMBDA_ARN=arn:aws:lambda:...  # deadline_handler Lambda ARN
+```
 
-   # Admin bootstrap — this email gets super_admin on first startup
-   ADMIN_EMAIL=your-admin@example.com
+> `AWS_LAMBDA_FUNCTION_NAME` is set automatically by the Lambda runtime and is used by `db/db.py` to switch to `NullPool`. Do not set it manually.
 
-   # Frontend Configuration
-   REACT_APP_API_URL=http://localhost:8000
-   REACT_APP_CLERK_PUBLISHABLE_KEY=pk_test_your-clerk-publishable-key-here
-   ```
+---
 
-### **Getting Clerk Keys**
+## Security
 
-1. **Sign up at [Clerk.com](https://clerk.com)**
-2. **Create a new application**
-3. **Get your keys from the Clerk Dashboard**:
-   - **Publishable Key**: Found in the API Keys section
-   - **Secret Key**: Found in the API Keys section
-   - **JWKS URL**: `https://your-instance.clerk.accounts.dev/.well-known/jwks.json`
-   - **Issuer**: `https://your-instance.clerk.accounts.dev/` (include the trailing slash)
-
-> **Note:** The backend automatically fetches user emails from the Clerk API using the secret key. You do not need to customize the Clerk session token to include the `email` claim.
+- All secrets in `.env` (excluded from version control)
+- For production: AWS Secrets Manager or Parameter Store
+- Clerk JWT validation via JWKS endpoint
+- Admin access controlled via database configuration
+- Rate limiting via `slowapi`
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Commit your changes
+4. Push and open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Security
-
-### **Environment Variables**
-- All sensitive configuration is stored in `.env` files
-- The `.env` file is excluded from version control via `.gitignore`
-- Use `env.example` as a template for required environment variables
-
-### **Secrets Management**
-- **Never commit secrets** to version control
-- Use environment variables for all sensitive data
-- For production, use proper secrets management services (AWS Secrets Manager, Azure Key Vault, etc.)
-
-### **Authentication**
-- Uses Clerk for secure JWT-based authentication
-- JWT tokens are validated using Clerk's JWKS endpoint
-- Admin access is controlled via database configuration
+MIT License — see the LICENSE file for details.

@@ -1,6 +1,6 @@
 // League Types
 export type TournamentFormat = 'round_robin' | 'swiss' | 'playoff_bracket' | 'compass_draw';
-export type GameFormat = '7v7' | '6v6' | '5v5';
+export type GameFormat = '7v7' | '5v5';
 
 export interface Team {
   id: string;
@@ -69,6 +69,9 @@ export interface League {
   updated_at: string;
   registered_players_count: number;
   registered_teams_count: number;
+  is_registration_open?: boolean;
+  player_cap?: number;
+  spots_remaining?: number;
 }
 
 export interface LeagueCreateRequest {
@@ -346,4 +349,51 @@ export interface FieldUpdateRequest {
   facility_name?: string;
   additional_notes?: string;
   is_active?: boolean;
+}
+
+export interface FieldAvailability {
+  id: string;
+  field_id: string;
+  field_name?: string;
+  is_recurring: boolean;
+  day_of_week?: number;
+  recurrence_start_date?: string;
+  recurrence_end_date?: string;
+  custom_date?: string;
+  start_time: string;
+  end_time: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FieldAvailabilityCreateRequest {
+  is_recurring: boolean;
+  day_of_week?: number;
+  recurrence_start_date?: string;
+  recurrence_end_date?: string;
+  custom_date?: string;
+  start_time: string;
+  end_time: string;
+  notes?: string;
+}
+
+export interface GroupMemberDetail {
+  invitation_id?: string;
+  player_id?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  status: string;
+  is_organizer: boolean;
+}
+
+export interface MyGroup {
+  group_id: string;
+  group_name: string;
+  league_id: string;
+  league_name: string;
+  is_organizer: boolean;
+  members: GroupMemberDetail[];
 }

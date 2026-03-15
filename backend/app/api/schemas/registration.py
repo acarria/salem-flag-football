@@ -115,3 +115,24 @@ class PendingInvitationResponse(BaseModel):
     league_name: str
     inviter_name: str
     expires_at: str
+
+
+class GroupMemberDetail(BaseModel):
+    """Details of one member (confirmed or pending invitee) in a group."""
+    invitation_id: Optional[UUID] = None
+    player_id: Optional[UUID] = None
+    first_name: str
+    last_name: str
+    email: str
+    status: str
+    is_organizer: bool = False
+
+
+class MyGroupResponse(BaseModel):
+    """A group the current user is part of (as organizer or confirmed member)."""
+    group_id: UUID
+    group_name: str
+    league_id: UUID
+    league_name: str
+    is_organizer: bool
+    members: List[GroupMemberDetail]

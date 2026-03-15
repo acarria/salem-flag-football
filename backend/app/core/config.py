@@ -15,5 +15,7 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     APP_URL: str = os.getenv("APP_URL", "http://localhost:3000")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "onboarding@resend.dev")
+    RECAPTCHA_SECRET_KEY: str = os.getenv("RECAPTCHA_SECRET_KEY", "")
+    CONTACT_EMAIL: str = os.getenv("CONTACT_EMAIL", os.getenv("ADMIN_EMAIL", ""))
 
 settings = Settings() 

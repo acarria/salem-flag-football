@@ -44,7 +44,9 @@ export const useAuthenticatedApi = () => {
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
             errorData = await response.json();
-            if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map((e: any) => e.msg).join('; ');
+            } else if (errorData.detail) {
               errorMessage = errorData.detail;
             } else if (errorData.message) {
               errorMessage = errorData.message;
