@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 from app.db.db import get_db
 from app.models.league import League
@@ -15,18 +15,10 @@ from app.api.admin.dependencies import get_admin_user
 
 router = APIRouter()
 
-def calculate_end_date(start_date: date, num_weeks: int, tournament_format: str, 
+def calculate_end_date(start_date: date, num_weeks: int, tournament_format: str,
                       regular_season_weeks: int = None) -> date:
-    """Calculate the end date based on tournament format and number of weeks"""
-    if tournament_format == 'playoff_bracket' and regular_season_weeks:
-        # For playoff bracket, use regular season weeks + playoff weeks
-        total_weeks = regular_season_weeks + (num_weeks - regular_season_weeks)
-    else:
-        total_weeks = num_weeks
-    
-    # Calculate end date (assuming games are weekly)
-    from datetime import timedelta
-    end_date = start_date + timedelta(weeks=total_weeks - 1)
+    """Calculate the end date based on number of weeks"""
+    end_date = start_date + timedelta(weeks=num_weeks - 1)
     return end_date
 
 @router.post("/leagues", response_model=LeagueResponse, summary="Create a new league")
@@ -161,15 +153,15 @@ async def get_league_details(
     # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
     player_count = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league.id,
-        LeaguePlayer.registration_status == 'registered',
+        LeaguePlayer.registration_status == 'confirmed',
         LeaguePlayer.is_active == True
     ).count()
-    
+
     team_count = db.query(Team).filter(
         Team.league_id == league.id,
         Team.is_active == True
     ).count()
-    
+
     return LeagueResponse(
         **league.__dict__,
         registered_players_count=player_count,
@@ -270,7 +262,7 @@ async def get_league_stats(
     # Count players and teams (using LeaguePlayer for many-to-many relationship)
     total_players = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league.id,
-        LeaguePlayer.registration_status == 'registered',
+        LeaguePlayer.registration_status == 'confirmed',
         LeaguePlayer.is_active == True
     ).count()
     

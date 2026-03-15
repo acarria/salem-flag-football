@@ -67,7 +67,6 @@ def schedule_deadline_job(league_id: UUID, deadline_date) -> None:
         logger.info("Scheduled EventBridge deadline job %s for %s", schedule_name, run_at.isoformat())
     except Exception as exc:
         # Try update if schedule already exists (EventBridge returns ResourceConflictException)
-        error_code = getattr(getattr(exc, "response", {}).get("Error", {}), "get", lambda k, d=None: d)("Code")
         if "Conflict" in str(exc) or "AlreadyExists" in str(exc):
             try:
                 import boto3

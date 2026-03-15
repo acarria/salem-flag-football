@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
 import ProfileCompletionModal from './components/modals/ProfileCompletionModal';
 import HomePage from './pages/HomePage';
@@ -11,7 +11,6 @@ import InvitePage from './pages/InvitePage';
 import RulesPage from './pages/RulesPage';
 import InfoPage from './pages/InfoPage';
 import ContactPage from './pages/ContactPage';
-import TestPage from './components/TestPage';
 import { apiService, UserProfile } from './services';
 import { AuthProvider } from './contexts/AuthContext';
 import { invitationService, PendingInvitation } from './services/public/invitations';
@@ -83,9 +82,7 @@ function App() {
         setShowProfileModal(false);
       } catch (err) {
         console.error('Failed to save profile:', err);
-        // Still close modal but show error
-        setIsProfileComplete(true);
-        setShowProfileModal(false);
+        // Do NOT mark profile complete or close modal — let user retry
       }
     }
   };
@@ -131,14 +128,13 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/leagues/:leagueId" element={<LeagueAdminPage />} />
+            <Route path="/admin" element={isSignedIn ? <AdminPage /> : <Navigate to="/" replace />} />
+            <Route path="/admin/leagues/:leagueId" element={isSignedIn ? <LeagueAdminPage /> : <Navigate to="/" replace />} />
             <Route path="/leagues" element={<LeaguesPage />} />
             <Route path="/invite/:token" element={<InvitePage />} />
             <Route path="/rules" element={<RulesPage />} />
             <Route path="/info" element={<InfoPage />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/test" element={<TestPage />} />
           </Routes>
 
           {/* Show profile completion modal for authenticated users without complete profiles */}

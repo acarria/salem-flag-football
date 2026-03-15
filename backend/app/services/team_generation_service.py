@@ -4,9 +4,12 @@ Team Generation Service
 Extracts core team assignment logic so it can be triggered both manually
 (admin "Generate Teams" button) and automatically when registration is complete.
 """
+import logging
 from typing import Optional, Dict, List
 from uuid import UUID
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 def _run_team_generation(league, db: Session, teams_count: Optional[int] = None) -> dict:
@@ -99,6 +102,11 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
                         lp.team_id = best_team.id
                         team_assignments[best_team.id].append(lp)
                         players_assigned += 1
+                    else:
+                        logger.warning("Team generation overflow: assigning player %s to over-full team %s", lp.player_id, best_team.id)
+                        lp.team_id = best_team.id
+                        team_assignments[best_team.id].append(lp)
+                        players_assigned += 1
                 groups_split += 1
         else:
             for lp in group_players:
@@ -107,11 +115,21 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
                     lp.team_id = best_team.id
                     team_assignments[best_team.id].append(lp)
                     players_assigned += 1
+                else:
+                    logger.warning("Team generation overflow: assigning player %s to over-full team %s", lp.player_id, best_team.id)
+                    lp.team_id = best_team.id
+                    team_assignments[best_team.id].append(lp)
+                    players_assigned += 1
             groups_split += 1
 
     for lp in ungrouped_players:
         best_team = min(teams, key=lambda t: len(team_assignments[t.id]))
         if len(team_assignments[best_team.id]) < players_per_team:
+            lp.team_id = best_team.id
+            team_assignments[best_team.id].append(lp)
+            players_assigned += 1
+        else:
+            logger.warning("Team generation overflow: assigning player %s to over-full team %s", lp.player_id, best_team.id)
             lp.team_id = best_team.id
             team_assignments[best_team.id].append(lp)
             players_assigned += 1

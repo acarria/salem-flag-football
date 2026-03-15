@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -5,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.db.db import get_db
 from app.models.group import Group
 from app.models.group_invitation import GroupInvitation
@@ -45,11 +48,12 @@ async def register_player(
         raise HTTPException(status_code=404, detail="League not found")
     if not league.is_active:
         raise HTTPException(status_code=400, detail="League is not currently active")
-    if league.registration_deadline and league.registration_deadline < datetime.now().date():
+    if league.registration_deadline and league.registration_deadline < datetime.now(timezone.utc).date():
         raise HTTPException(status_code=400, detail="Registration deadline has passed")
 
-    # Cap enforcement
+    # Cap enforcement — lock the league row to prevent concurrent over-registration
     from app.services.league_service import get_player_cap, get_occupied_spots
+    league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     player_cap = get_player_cap(league.format, league.max_teams)
     if player_cap is not None:
         occupied = get_occupied_spots(league.id, db)
@@ -73,7 +77,7 @@ async def register_player(
         player.date_of_birth = date_of_birth
         player.gender = registration_data.gender if registration_data.gender else None
         player.communications_accepted = registration_data.communicationsAccepted
-        player.updated_at = datetime.now()
+        player.updated_at = datetime.now(timezone.utc)
     else:
         player = Player(
             clerk_user_id=clerk_user_id,
@@ -159,7 +163,8 @@ async def register_player(
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to register: {str(e)}")
+        logger.exception("Solo registration failed: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +192,7 @@ async def register_group(
         raise HTTPException(status_code=404, detail="League not found")
     if not league.is_active:
         raise HTTPException(status_code=400, detail="League is not currently active")
-    if league.registration_deadline and league.registration_deadline < datetime.now().date():
+    if league.registration_deadline and league.registration_deadline < datetime.now(timezone.utc).date():
         raise HTTPException(status_code=400, detail="Registration deadline has passed")
 
     # Determine group size from format (organizer + invitees = format_size)
@@ -201,7 +206,8 @@ async def register_group(
             detail=f"A {league.format} group can have at most {max_invitees} invitees (plus you as organizer)",
         )
 
-    # Cap enforcement: need spots for organizer + all invitees
+    # Cap enforcement — lock the league row to prevent concurrent over-registration
+    league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     total_needed = 1 + len(registration_data.players)
     player_cap = get_player_cap(league.format, league.max_teams)
     if player_cap is not None:
@@ -273,7 +279,8 @@ async def register_group(
         db.refresh(group)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to register group: {str(e)}")
+        logger.exception("Group registration failed: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     # Send invitation emails (best-effort — don't roll back if email fails)
     if settings.RESEND_API_KEY:
@@ -396,7 +403,8 @@ async def accept_invitation(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to accept invitation: {str(e)}")
+        logger.exception("Accept invitation failed: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     # Attempt to auto-generate teams if league is now full / deadline passed
     try:
@@ -577,12 +585,13 @@ async def revoke_invitation(
     if inv.invited_by != player.id:
         raise HTTPException(status_code=403, detail="Only the group organizer can revoke invitations")
 
-    inv.status = "declined"
+    inv.status = "revoked"
     try:
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to revoke invitation: {str(e)}")
+        logger.exception("Revoke invitation failed: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     return {"success": True, "message": "Invitation revoked."}
 
@@ -624,7 +633,8 @@ async def unregister_from_league(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to unregister: {str(e)}")
+        logger.exception("Unregister failed: %s", e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     return {"success": True, "message": "You have been unregistered from the league."}
 
@@ -636,8 +646,11 @@ async def unregister_from_league(
 @router.get("/player/{user_id}/leagues", response_model=list[LeagueRegistrationResponse], summary="Get all league registrations for a player")
 async def get_player_registrations(
     user_id: str,
+    user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[LeagueRegistrationResponse]:
+    if user.get("id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     player = db.query(Player).filter(Player.clerk_user_id == user_id).first()
     if not player:
         return []

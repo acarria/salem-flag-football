@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ def get_player_cap(format: str, max_teams: Optional[int]) -> Optional[int]:
 
 
 def get_occupied_spots(league_id: UUID, db: Session) -> int:
-    """Return confirmed players + pending invitations for a league."""
+    """Return confirmed players + non-expired pending invitations for a league."""
     from app.models.league_player import LeaguePlayer
     from app.models.group_invitation import GroupInvitation
 
@@ -23,5 +24,6 @@ def get_occupied_spots(league_id: UUID, db: Session) -> int:
     pending_invites = db.query(GroupInvitation).filter(
         GroupInvitation.league_id == league_id,
         GroupInvitation.status == "pending",
+        GroupInvitation.expires_at > datetime.now(timezone.utc),
     ).count()
     return confirmed + pending_invites

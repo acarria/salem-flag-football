@@ -25,7 +25,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const getAuthToken = async (): Promise<string | null> => {
     try {
       const token = await getToken();
-      console.log('AuthContext: Token retrieved successfully', token ? 'Token exists' : 'No token');
       return token;
     } catch (error) {
       console.error('AuthContext: Failed to get auth token:', error);
