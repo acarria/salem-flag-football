@@ -26,7 +26,7 @@ export const useLeagues = () => {
     }
   };
 
-  const loadLeagueStats = async (leagueId: number) => {
+  const loadLeagueStats = async (leagueId: string) => {
     try {
       const stats = await leagueApi.getLeagueStats(leagueId);
       setLeagueStats(stats);
@@ -47,7 +47,7 @@ export const useLeagues = () => {
     }
   };
 
-  const updateLeague = async (leagueId: number, leagueData: LeagueUpdateRequest) => {
+  const updateLeague = async (leagueId: string, leagueData: LeagueUpdateRequest) => {
     try {
       await leagueApi.updateLeague(leagueId, leagueData);
       setSuccess('League updated successfully!');
@@ -59,7 +59,7 @@ export const useLeagues = () => {
     }
   };
 
-  const deleteLeague = async (leagueId: number) => {
+  const deleteLeague = async (leagueId: string) => {
     if (!window.confirm('Are you sure you want to delete this league? This action cannot be undone.')) {
       return;
     }

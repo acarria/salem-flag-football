@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -6,6 +6,12 @@ from app.db.db import Base
 
 class LeaguePlayer(Base):
     __tablename__ = "league_players"
+    __table_args__ = (
+        Index("ix_league_players_league_id", "league_id"),
+        Index("ix_league_players_player_id", "player_id"),
+        Index("ix_league_players_group_id", "group_id"),
+        Index("ix_league_players_league_player", "league_id", "player_id", unique=True),
+    )
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     league_id = Column(UUID(as_uuid=True), ForeignKey("leagues.id"), nullable=False)
     player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)

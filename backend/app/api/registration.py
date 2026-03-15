@@ -2,7 +2,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -25,6 +25,7 @@ from app.api.schemas.registration import (
     MyGroupResponse,
 )
 from app.utils.clerk_jwt import get_current_user
+from app.core.limiter import limiter
 
 router = APIRouter()
 
@@ -34,7 +35,9 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 @router.post("/player", response_model=RegistrationResponse, summary="Register a player for a league (solo)")
+@limiter.limit("10/minute")
 async def register_player(
+    request: Request,
     registration_data: SoloRegistrationRequest,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -88,7 +91,6 @@ async def register_player(
             date_of_birth=date_of_birth,
             gender=registration_data.gender if registration_data.gender else None,
             communications_accepted=registration_data.communicationsAccepted,
-            registration_status="pending",
             payment_status="pending",
             waiver_status="pending",
             created_by=clerk_user_id,
@@ -172,7 +174,9 @@ async def register_player(
 # ---------------------------------------------------------------------------
 
 @router.post("/group", response_model=RegistrationResponse, summary="Register a group — organizer confirmed, invitees emailed")
+@limiter.limit("5/minute")
 async def register_group(
+    request: Request,
     registration_data: GroupRegistrationRequest,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -257,7 +261,7 @@ async def register_group(
     db.add(organizer_lp)
 
     # Create invitations for each invitee (no LeaguePlayer yet)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.INVITATION_EXPIRY_DAYS)
     invitations_created = 0
     for invitee in registration_data.players:
         invitation = GroupInvitation(
@@ -417,21 +421,32 @@ async def accept_invitation(
 
 
 @router.post("/invite/{token}/decline", summary="Decline a group invitation")
-async def decline_invitation(token: str, db: Session = Depends(get_db)):
+async def decline_invitation(
+    token: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     inv = db.query(GroupInvitation).filter(GroupInvitation.token == token).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invitation not found")
     if inv.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Invitation is already {inv.status}")
+        raise HTTPException(status_code=400, detail="Invitation is no longer active")
+
+    # Verify the requesting user is the intended invitee
+    player = db.query(Player).filter(
+        Player.clerk_user_id == user.get("id")
+    ).first()
+    if not player or player.email.lower() != inv.email.lower():
+        raise HTTPException(status_code=403, detail="Not authorized to decline this invitation")
 
     inv.status = "declined"
     try:
         db.commit()
+        return {"success": True, "message": "Invitation declined."}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to decline invitation: {str(e)}")
-
-    return {"success": True, "message": "Invitation declined."}
+        logger.exception("Failed to decline invitation for token %s: %s", token, e)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 
 @router.get("/invitations/me", response_model=list[PendingInvitationResponse], summary="Get pending invitations for the current user")

@@ -11,9 +11,6 @@ class UserProfile(BaseModel):
     dateOfBirth: str
     gender: str
     communicationsAccepted: bool
-    registrationStatus: str
-    teamId: Optional[str] = None  # UUID
-    groupName: Optional[str] = None
     registrationDate: Optional[str] = None
     paymentStatus: Optional[str] = None
     waiverStatus: Optional[str] = None

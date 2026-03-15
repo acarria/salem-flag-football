@@ -122,7 +122,6 @@ async def get_all_users(
                 phone=player.phone,
                 date_of_birth=player.date_of_birth,
                 gender=player.gender,
-                registration_status=player.registration_status,
                 created_at=player.created_at,
                 leagues_count=leagues_count
             ))

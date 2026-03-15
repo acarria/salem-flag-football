@@ -17,7 +17,7 @@ async def get_jwks():
     now = int(time.time())
     if JWKS_CACHE["keys"] and now - JWKS_CACHE["fetched_at"] < JWKS_CACHE_TTL:
         return JWKS_CACHE["keys"]
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(settings.CLERK_JWKS_URL)
         resp.raise_for_status()
         JWKS_CACHE["keys"] = resp.json()
@@ -28,10 +28,17 @@ async def _fetch_clerk_email(user_id: str) -> str:
     """Fetch primary email for a Clerk user via the backend API."""
     url = f"https://api.clerk.com/v1/users/{user_id}"
     headers = {"Authorization": f"Bearer {settings.CLERK_SECRET_KEY}"}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.TimeoutException:
+        logger.error("Clerk API timed out fetching email for user %s", user_id)
+        raise HTTPException(status_code=503, detail="Authentication service unavailable. Please retry.")
+    except httpx.HTTPStatusError as e:
+        logger.error("Clerk API error fetching email for user %s: %s", user_id, e.response.status_code)
+        raise HTTPException(status_code=401, detail="Unable to verify user identity.")
     addresses = data.get("email_addresses", [])
     primary_id = data.get("primary_email_address_id")
     for addr in addresses:

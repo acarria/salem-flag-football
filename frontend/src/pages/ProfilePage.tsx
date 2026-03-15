@@ -51,7 +51,6 @@ export default function ProfilePage() {
               dateOfBirth: '',
               gender: '',
               communicationsAccepted: false,
-              registrationStatus: 'not_registered'
             };
             setProfile(defaultProfile);
             setOriginalProfile(defaultProfile);
@@ -69,7 +68,6 @@ export default function ProfilePage() {
             dateOfBirth: '',
             gender: '',
             communicationsAccepted: false,
-            registrationStatus: 'not_registered'
           };
           setProfile(defaultProfile);
           setOriginalProfile(defaultProfile);
@@ -269,16 +267,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Registration status row */}
-        <div className="border-t border-white/5 py-4 flex items-center justify-between mb-6">
-          <span className="text-xs font-medium text-[#A0A0A0]">Registration Status</span>
-          <span className="flex items-center gap-2 text-sm">
-            <span className={`status-dot ${profile.registrationStatus === 'registered' ? 'bg-green-400' : 'bg-[#6B6B6B]'}`}></span>
-            <span className="text-white">
-              {profile.registrationStatus === 'registered' ? 'Registered' : 'Not Registered'}
-            </span>
-          </span>
-        </div>
+        {/* Registration status is now sourced per-league; see the Leagues page */}
 
         {/* Profile form */}
         <form className="space-y-5">
@@ -388,18 +377,14 @@ export default function ProfilePage() {
         </form>
 
         {/* League Information */}
-        {profile.registrationStatus === 'registered' && (
+        {profile.registrationDate && (
           <div className="border-t border-white/5 mt-10 pt-8">
             <div className="section-label mb-4">LEAGUE INFORMATION</div>
             <div className="space-y-0">
               <div className="border-b border-white/5 py-3 flex justify-between items-center">
-                <span className="text-xs text-[#A0A0A0]">Team</span>
-                <span className="text-sm text-white">{profile.teamId || 'Not assigned'}</span>
-              </div>
-              <div className="border-b border-white/5 py-3 flex justify-between items-center">
                 <span className="text-xs text-[#A0A0A0]">Registration Date</span>
                 <span className="text-sm text-white">
-                  {profile.registrationDate ? new Date(profile.registrationDate).toLocaleDateString() : 'N/A'}
+                  {new Date(profile.registrationDate).toLocaleDateString()}
                 </span>
               </div>
               <div className="border-b border-white/5 py-3 flex justify-between items-center">

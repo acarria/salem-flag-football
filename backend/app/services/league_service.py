@@ -12,9 +12,21 @@ def get_player_cap(format: str, max_teams: Optional[int]) -> Optional[int]:
 
 
 def get_occupied_spots(league_id: UUID, db: Session) -> int:
-    """Return confirmed players + non-expired pending invitations for a league."""
+    """Return confirmed players + non-expired pending invitations for a league.
+
+    Also expires stale pending invitations in-place (within the caller's transaction).
+    """
     from app.models.league_player import LeaguePlayer
     from app.models.group_invitation import GroupInvitation
+    now = datetime.now(timezone.utc)
+
+    # Expire any stale pending invitations in-place
+    db.query(GroupInvitation).filter(
+        GroupInvitation.league_id == league_id,
+        GroupInvitation.status == "pending",
+        GroupInvitation.expires_at <= now,
+    ).update({"status": "expired"}, synchronize_session=False)
+    db.flush()
 
     confirmed = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league_id,
@@ -24,6 +36,5 @@ def get_occupied_spots(league_id: UUID, db: Session) -> int:
     pending_invites = db.query(GroupInvitation).filter(
         GroupInvitation.league_id == league_id,
         GroupInvitation.status == "pending",
-        GroupInvitation.expires_at > datetime.now(timezone.utc),
     ).count()
     return confirmed + pending_invites

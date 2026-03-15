@@ -15,9 +15,6 @@ class Player(Base):
     date_of_birth = Column(Date, nullable=True)
     gender = Column(String, nullable=True)
     communications_accepted = Column(Boolean, default=False)
-    registration_status = Column(String, default="pending")  # pending, registered, active, inactive
-    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)  # Which team they're on
-    group_name = Column(String, nullable=True)
     registration_date = Column(DateTime(timezone=True), nullable=True)
     payment_status = Column(String, default="pending")  # pending, paid, failed
     waiver_status = Column(String, default="pending")  # pending, signed, expired

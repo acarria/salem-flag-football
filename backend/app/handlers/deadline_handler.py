@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 def handler(event, context):
-    league_id = UUID(event["league_id"])
+    try:
+        league_id = UUID(event["league_id"])
+    except (KeyError, ValueError) as e:
+        logger.error("Deadline handler received malformed event %s: %s", event, e)
+        return {"statusCode": 400, "error": "Invalid event payload"}
+
     logger.info("Deadline handler fired for league %s", league_id)
 
     from app.db.db import SessionLocal

@@ -234,7 +234,6 @@ class UserResponse(BaseModel):
     phone: Optional[str]
     date_of_birth: Optional[date]
     gender: Optional[str]
-    registration_status: str
     created_at: datetime
     leagues_count: int  # Number of leagues the user is registered for
 

@@ -1,3 +1,5 @@
+import { ZodSchema } from 'zod';
+
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Base API service class
@@ -65,5 +67,19 @@ export class BaseApiService {
       console.error('API request error:', error);
       throw error;
     }
+  }
+
+  protected async requestValidated<T>(
+    endpoint: string,
+    schema: ZodSchema<T>,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const data = await this.request<unknown>(endpoint, options);
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      console.error('API response validation failed:', result.error.flatten());
+      throw new Error('Unexpected API response format');
+    }
+    return result.data;
   }
 }

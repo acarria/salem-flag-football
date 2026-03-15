@@ -8,6 +8,7 @@ import logging
 from typing import Optional, Dict, List
 from uuid import UUID
 from sqlalchemy.orm import Session
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,20 +34,12 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
     total_players = len(registered_players)
 
     if teams_count is None:
-        teams_count = max(4, total_players // 8)
+        teams_count = max(settings.TEAM_GENERATION_MIN_TEAMS, total_players // settings.TEAM_GENERATION_DIVISOR)
 
     players_per_team = total_players // teams_count
 
-    team_names = [
-        "Red Dragons", "Blue Lightning", "Green Giants", "Yellow Thunder",
-        "Purple Power", "Orange Crush", "Black Knights", "White Warriors",
-        "Silver Wolves", "Gold Eagles",
-    ]
-    team_colors = [
-        "#FF4444", "#4444FF", "#44FF44", "#FFFF44",
-        "#FF44FF", "#FF8844", "#444444", "#FFFFFF",
-        "#C0C0C0", "#FFD700",
-    ]
+    team_names = settings.TEAM_NAMES
+    team_colors = settings.TEAM_COLORS
 
     # Clear existing teams
     existing_teams = db.query(Team).filter(Team.league_id == league.id).all()

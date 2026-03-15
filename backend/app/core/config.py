@@ -27,6 +27,17 @@ class Settings:
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "onboarding@resend.dev")
     RECAPTCHA_SECRET_KEY: str = os.getenv("RECAPTCHA_SECRET_KEY", "")
     CONTACT_EMAIL: str = os.getenv("CONTACT_EMAIL", os.getenv("ADMIN_EMAIL", ""))
+    INVITATION_EXPIRY_DAYS: int = int(os.getenv("INVITATION_EXPIRY_DAYS", "7"))
+    TEAM_GENERATION_MIN_TEAMS: int = int(os.getenv("TEAM_GENERATION_MIN_TEAMS", "4"))
+    TEAM_GENERATION_DIVISOR: int = int(os.getenv("TEAM_GENERATION_DIVISOR", "8"))
+    TEAM_NAMES: list = os.getenv(
+        "TEAM_NAMES",
+        "Red Dragons,Blue Lightning,Green Giants,Yellow Thunder,Purple Power,Orange Crush,Black Knights,White Warriors,Silver Wolves,Gold Eagles"
+    ).split(",")
+    TEAM_COLORS: list = os.getenv(
+        "TEAM_COLORS",
+        "#FF4444,#4444FF,#44FF44,#FFFF44,#FF44FF,#FF8844,#444444,#FFFFFF,#C0C0C0,#FFD700"
+    ).split(",")
 
 
 settings = Settings()

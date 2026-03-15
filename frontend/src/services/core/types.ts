@@ -157,7 +157,6 @@ export interface User {
   phone?: string;
   date_of_birth?: string;
   gender?: string;
-  registration_status: string;
   created_at: string;
   leagues_count: number;
 }
@@ -278,9 +277,6 @@ export interface UserProfile {
   dateOfBirth: string;
   gender: string;
   communicationsAccepted: boolean;
-  registrationStatus: 'registered' | 'pending' | 'not_registered';
-  teamId?: string;
-  groupName?: string;
   registrationDate?: string;
   paymentStatus?: 'pending' | 'paid' | 'failed';
   waiverStatus?: 'pending' | 'signed' | 'expired';

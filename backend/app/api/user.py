@@ -50,9 +50,6 @@ async def get_user_profile(user_id: str, db: Session = Depends(get_db)):
         "dateOfBirth": player.date_of_birth.isoformat() if player.date_of_birth else "",
         "gender": player.gender or "",
         "communicationsAccepted": player.communications_accepted,
-        "registrationStatus": player.registration_status,
-        "teamId": player.team_id,
-        "groupName": player.group_name,
         "registrationDate": player.registration_date.isoformat() if player.registration_date else None,
         "paymentStatus": player.payment_status,
         "waiverStatus": player.waiver_status
@@ -128,13 +125,8 @@ async def update_user_profile(user_id: str, profile: UserProfile, db: Session = 
             player.date_of_birth = None
         player.gender = profile.gender if profile.gender else None
         player.communications_accepted = profile.communicationsAccepted
-        player.registration_status = profile.registrationStatus if profile.registrationStatus else "pending"
-        player.team_id = profile.teamId
-        player.group_name = profile.groupName
-        player.registration_date = datetime.now() if profile.registrationStatus == "registered" else player.registration_date
         player.payment_status = profile.paymentStatus if profile.paymentStatus else "pending"
         player.waiver_status = profile.waiverStatus if profile.waiverStatus else "pending"
-        # Note: league_id is no longer updated here - use registration endpoints
         player.updated_at = datetime.now()
     else:
         # Create new player (profile only, no league registration)
@@ -158,13 +150,8 @@ async def update_user_profile(user_id: str, profile: UserProfile, db: Session = 
             date_of_birth=date_of_birth,
             gender=profile.gender if profile.gender else None,
             communications_accepted=profile.communicationsAccepted,
-            registration_status=profile.registrationStatus if profile.registrationStatus else "pending",
-            team_id=profile.teamId,
-            group_name=profile.groupName,
-            registration_date=datetime.now() if profile.registrationStatus == "registered" else None,
             payment_status=profile.paymentStatus if profile.paymentStatus else "pending",
             waiver_status=profile.waiverStatus if profile.waiverStatus else "pending",
-            # Note: league_id is not set - use registration endpoints to register for leagues
             created_by=user_id
         )
         db.add(player)
@@ -173,7 +160,6 @@ async def update_user_profile(user_id: str, profile: UserProfile, db: Session = 
         db.commit()
         db.refresh(player)
         
-        # Return the updated profile (without leagueId)
         return {
             "firstName": player.first_name,
             "lastName": player.last_name,
@@ -182,9 +168,6 @@ async def update_user_profile(user_id: str, profile: UserProfile, db: Session = 
             "dateOfBirth": player.date_of_birth.isoformat() if player.date_of_birth else "",
             "gender": player.gender or "",
             "communicationsAccepted": player.communications_accepted,
-            "registrationStatus": player.registration_status,
-            "teamId": player.team_id,
-            "groupName": player.group_name,
             "registrationDate": player.registration_date.isoformat() if player.registration_date else None,
             "paymentStatus": player.payment_status,
             "waiverStatus": player.waiver_status

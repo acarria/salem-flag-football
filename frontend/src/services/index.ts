@@ -19,14 +19,10 @@ export const fieldApi = new FieldApiService();
 // Legacy compatibility - create a combined service for backward compatibility
 class CombinedApiService {
   // League methods
-  getStandings = leagueApi.getStandings.bind(leagueApi);
-  getSchedule = leagueApi.getSchedule.bind(leagueApi);
   getLeagueStandings = leagueApi.getLeagueStandings.bind(leagueApi);
   getLeaguePublicSchedule = leagueApi.getLeaguePublicSchedule.bind(leagueApi);
   getActiveLeagues = leagueApi.getActiveLeagues.bind(leagueApi);
   getPublicLeagues = leagueApi.getPublicLeagues.bind(leagueApi);
-  getLeagueInfo = leagueApi.getLeagueInfo.bind(leagueApi);
-  getLeagueRules = leagueApi.getLeagueRules.bind(leagueApi);
   createLeague = leagueApi.createLeague.bind(leagueApi);
   getAllLeagues = leagueApi.getAllLeagues.bind(leagueApi);
   getLeagueDetails = leagueApi.getLeagueDetails.bind(leagueApi);

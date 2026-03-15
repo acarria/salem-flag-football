@@ -69,12 +69,6 @@ function App() {
           dateOfBirth: profileData.dateOfBirth,
           gender: profileData.gender,
           communicationsAccepted: profileData.communicationsAccepted,
-          registrationStatus: 'not_registered', // Just created account, not registered for league yet
-          teamId: undefined,
-          groupName: undefined,
-          registrationDate: undefined,
-          paymentStatus: undefined,
-          waiverStatus: undefined
         };
         
         await apiService.updateUserProfile(userId, userProfile);

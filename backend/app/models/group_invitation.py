@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -7,6 +7,10 @@ from app.db.db import Base
 
 class GroupInvitation(Base):
     __tablename__ = "group_invitations"
+    __table_args__ = (
+        Index("ix_group_invitations_league_id", "league_id"),
+        Index("ix_group_invitations_group_id", "group_id"),
+    )
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=False)
     league_id = Column(UUID(as_uuid=True), ForeignKey("leagues.id"), nullable=False)

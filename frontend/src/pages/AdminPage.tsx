@@ -874,12 +874,6 @@ export default function AdminPage() {
                           <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{u.email}</td>
                           <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{u.phone || '—'}</td>
                           <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{u.gender || '—'}</td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-2">
-                              <span className={`status-dot ${u.registration_status === 'registered' || u.registration_status === 'active' ? 'bg-accent' : 'bg-[#6B6B6B]'}`} />
-                              <span className="text-xs text-[#A0A0A0]">{u.registration_status}</span>
-                            </div>
-                          </td>
                           <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">{u.leagues_count}</td>
                           <td className="py-2.5 px-3 text-sm text-[#A0A0A0]">
                             {new Date(u.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
