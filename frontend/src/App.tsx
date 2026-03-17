@@ -1,5 +1,5 @@
-import React, { useState, useEffect, Component, ReactNode, ErrorInfo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, Component, ReactNode, ErrorInfo } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
 import ProfileCompletionModal from './components/modals/ProfileCompletionModal';
 import HomePage from './pages/HomePage';
@@ -7,6 +7,8 @@ import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
 import LeagueAdminPage from './pages/admin/LeagueAdminPage';
 import LeaguesPage from './pages/LeaguesPage';
+import LeagueDetailPage from './pages/LeagueDetailPage';
+import TeamPage from './pages/TeamPage';
 import InvitePage from './pages/InvitePage';
 import RulesPage from './pages/RulesPage';
 import InfoPage from './pages/InfoPage';
@@ -26,6 +28,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // TODO: wire up your error tracking service here (e.g. Sentry.captureException(error, { extra: info }))
     console.error('Unhandled render error:', error, info);
   }
 
@@ -59,12 +62,21 @@ function App() {
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
 
+  // Keep refs in sync so the effect below can call the latest versions
+  // without adding them to its dependency array
+  const requestRef = useRef(request);
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    requestRef.current = request;
+    getTokenRef.current = getToken;
+  });
+
   // Check if user has completed their profile and load pending invitations
   useEffect(() => {
     const checkProfile = async () => {
       if (isSignedIn && isLoaded && userId) {
         try {
-          const profile = await request<UserProfile>('/user/me');
+          const profile = await requestRef.current<UserProfile>('/user/me');
           if (profile) {
             setIsProfileComplete(true);
           } else {
@@ -81,7 +93,7 @@ function App() {
 
         // Load pending invitations
         try {
-          const authToken = await getToken();
+          const authToken = await getTokenRef.current();
           if (authToken) {
             const invites = await invitationService.getPendingInvitations(authToken);
             setPendingInvitations(invites);
@@ -94,7 +106,6 @@ function App() {
     };
 
     checkProfile();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, isLoaded, userId]);
 
   const handleProfileComplete = async (profileData: any) => {
@@ -150,9 +161,9 @@ function App() {
               <div className="bg-green-700 text-white text-center py-2 px-4 text-sm">
                 You have {pendingInvitations.length} pending group invitation
                 {pendingInvitations.length > 1 ? 's' : ''}.{' '}
-                <a href={`/invite/${pendingInvitations[0].token}`} className="underline font-semibold">
+                <Link to={`/invite/${pendingInvitations[0].token}`} className="underline font-semibold">
                   View invitation
-                </a>
+                </Link>
               </div>
             )}
 
@@ -162,7 +173,9 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/admin" element={isSignedIn ? <AdminPage /> : <Navigate to="/" replace />} />
               <Route path="/admin/leagues/:leagueId" element={isSignedIn ? <LeagueAdminPage /> : <Navigate to="/" replace />} />
+              <Route path="/leagues/:leagueId" element={<LeagueDetailPage />} />
               <Route path="/leagues" element={<LeaguesPage />} />
+              <Route path="/teams/:teamId" element={<TeamPage />} />
               <Route path="/invite/:token" element={<InvitePage />} />
               <Route path="/rules" element={<RulesPage />} />
               <Route path="/info" element={<InfoPage />} />

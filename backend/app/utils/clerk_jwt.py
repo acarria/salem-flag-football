@@ -54,6 +54,31 @@ async def _fetch_clerk_email(user_id: str) -> str:
         return addresses[0]["email_address"]
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No email found for user")
 
+async def get_optional_user(request: Request):
+    """Like get_current_user but returns None instead of raising for missing/invalid tokens.
+    Safe to use on public endpoints that optionally personalise their response.
+    Does NOT call _fetch_clerk_email — user_id only."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1]
+    try:
+        jwks = await get_jwks()
+        payload = jwt.decode(
+            token,
+            jwks,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+            issuer=_CLERK_ISSUER_NORMALIZED,
+        )
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        return {"id": user_id}
+    except Exception:
+        return None
+
+
 async def get_current_user(request: Request):
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):

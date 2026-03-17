@@ -25,17 +25,23 @@ class Settings:
     INVITATION_EXPIRY_DAYS: int = int(os.getenv("INVITATION_EXPIRY_DAYS", "7"))
     TEAM_GENERATION_MIN_TEAMS: int = int(os.getenv("TEAM_GENERATION_MIN_TEAMS", "4"))
     TEAM_GENERATION_DIVISOR: int = int(os.getenv("TEAM_GENERATION_DIVISOR", "8"))
-    TEAM_NAMES: list[str] = os.getenv(
+    TEAM_NAMES: list[str] = [n.strip() for n in os.getenv(
         "TEAM_NAMES",
-        "Red Dragons,Blue Lightning,Green Giants,Yellow Thunder,Purple Power,Orange Crush,Black Knights,White Warriors,Silver Wolves,Gold Eagles"
-    ).split(",")
-    TEAM_COLORS: list[str] = os.getenv(
+        "Team Red,Team Blue,Team Green,Team Yellow,Team Purple,Team Orange,Team Black,Team White,Team Silver,Team Gold"
+    ).split(",")]
+    TEAM_COLORS: list[str] = [c.strip() for c in os.getenv(
         "TEAM_COLORS",
         "#FF4444,#4444FF,#44FF44,#FFFF44,#FF44FF,#FF8844,#444444,#FFFFFF,#C0C0C0,#FFD700"
-    ).split(",")
+    ).split(",")]
 
 
 settings = Settings()
 
 if not settings.TEAM_NAMES or not settings.TEAM_COLORS:
     raise RuntimeError("TEAM_NAMES and TEAM_COLORS must not be empty")
+
+if settings.TEAM_GENERATION_DIVISOR <= 0:
+    raise RuntimeError("TEAM_GENERATION_DIVISOR must be a positive integer")
+
+if settings.INVITATION_EXPIRY_DAYS <= 0:
+    raise RuntimeError("INVITATION_EXPIRY_DAYS must be a positive integer")

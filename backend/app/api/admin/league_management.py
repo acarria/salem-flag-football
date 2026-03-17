@@ -1,10 +1,12 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
 from datetime import date, timedelta
+from typing import List
 from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 from app.db.db import get_db
@@ -117,32 +119,44 @@ async def create_league(
 
 @router.get("/leagues", response_model=List[LeagueResponse], summary="Get all leagues (admin view)")
 async def get_all_leagues(
+    skip: int = 0,
+    limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
     """Get all leagues with registration statistics"""
-    leagues = db.query(League).order_by(League.created_at.desc()).all()
-    
-    result = []
-    for league in leagues:
-        # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
-        player_count = db.query(LeaguePlayer).filter(
-            LeaguePlayer.league_id == league.id,
-            LeaguePlayer.is_active == True
-        ).count()
-        
-        team_count = db.query(Team).filter(
-            Team.league_id == league.id,
-            Team.is_active == True
-        ).count()
-        
-        result.append(LeagueResponse(
+    limit = min(limit, 100)
+    leagues = db.query(League).order_by(League.created_at.desc()).offset(skip).limit(limit).all()
+    if not leagues:
+        return []
+
+    league_ids = [le.id for le in leagues]
+
+    player_counts = dict(
+        db.query(LeaguePlayer.league_id, func.count(LeaguePlayer.id))
+        .filter(
+            LeaguePlayer.league_id.in_(league_ids),
+            LeaguePlayer.registration_status == 'confirmed',
+            LeaguePlayer.is_active == True,
+        )
+        .group_by(LeaguePlayer.league_id)
+        .all()
+    )
+    team_counts = dict(
+        db.query(Team.league_id, func.count(Team.id))
+        .filter(Team.league_id.in_(league_ids), Team.is_active == True)
+        .group_by(Team.league_id)
+        .all()
+    )
+
+    return [
+        LeagueResponse(
             **league.__dict__,
-            registered_players_count=player_count,
-            registered_teams_count=team_count
-        ))
-    
-    return result
+            registered_players_count=player_counts.get(league.id, 0),
+            registered_teams_count=team_counts.get(league.id, 0),
+        )
+        for league in leagues
+    ]
 
 @router.get("/leagues/{league_id}", response_model=LeagueResponse, summary="Get league details")
 async def get_league_details(

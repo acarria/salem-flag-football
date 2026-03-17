@@ -1,77 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
+import { useAuth, useClerk } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
 import BaseLayout from '../components/layout/BaseLayout';
 import RegistrationModal from '../components/modals/RegistrationModal';
-import { apiService, League } from '../services';
+import { League } from '../services';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 export default function LeaguesPage() {
   const { isSignedIn } = useAuth();
-  const { user } = useUser();
   const { openSignIn } = useClerk();
+  const navigate = useNavigate();
   const { request: authenticatedRequest } = useAuthenticatedApi();
 
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
-  const [registeredLeagues, setRegisteredLeagues] = useState<Set<string>>(new Set());
-  const [unregisterConfirm, setUnregisterConfirm] = useState<string | null>(null);
-  const [isUnregistering, setIsUnregistering] = useState(false);
 
   useEffect(() => {
     loadLeagues();
-  }, []);
-
-  useEffect(() => {
-    if (isSignedIn && user && leagues.length > 0) {
-      checkRegistrationStatus();
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn, user, leagues]);
+  }, []);
 
   const loadLeagues = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const leaguesData = await apiService.getPublicLeagues();
-      setLeagues(leaguesData);
-    } catch (err) {
-      console.error('Failed to load leagues:', err);
+      // Uses auth token when available so is_registered is populated in one request
+      const data = await authenticatedRequest<League[]>('/league/public/leagues');
+      setLeagues(data);
+    } catch {
       setError('Failed to load leagues. Please try again later.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const checkRegistrationStatus = async () => {
-    if (!user || !isSignedIn) return;
-
-    try {
-      // Fetch all registrations in a single request instead of one per league
-      const registrations = await authenticatedRequest<{ league_id: string; is_active?: boolean }[]>(
-        `/registration/player/${user.id}/leagues`
-      );
-      const registeredSet = new Set<string>(registrations.map(r => r.league_id));
-      setRegisteredLeagues(registeredSet);
-    } catch (err) {
-      console.error('Failed to check registration status:', err);
-    }
-  };
-
-  const handleLeagueSelect = (league: League) => {
-    setSelectedLeague(prev => prev?.id === league.id ? null : league);
-  };
-
-  const handleRegisterForLeague = () => {
+  const handleRegisterClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!isSignedIn) {
       openSignIn();
-      return;
-    }
-    if (!selectedLeague) {
-      setError('Please select a league to register for');
       return;
     }
     setShowRegistrationModal(true);
@@ -81,49 +50,90 @@ export default function LeaguesPage() {
     setSuccess('Registration submitted successfully!');
     setShowRegistrationModal(false);
     await loadLeagues();
-    await checkRegistrationStatus();
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric'
-    });
-  };
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  const formatCurrency = (dollars: number | null | undefined) => {
-    if (!dollars) return 'Free';
-    return `$${dollars.toFixed(2)}`;
-  };
+  const activeLeagues = leagues.filter(l => l.is_active);
+  const pastLeagues = leagues.filter(l => !l.is_active);
 
-  const getRegistrationStatus = (league: League) => {
-    if (!league.is_active) return { text: 'Inactive', dotColor: 'bg-red-400' };
-    if (!league.is_registration_open) return { text: 'Registration Closed', dotColor: 'bg-red-400' };
-    if (isSignedIn && registeredLeagues.has(league.id)) return { text: 'Registered', dotColor: 'bg-blue-400' };
-    return { text: 'Open', dotColor: 'bg-green-400' };
-  };
+  const renderLeagueCard = (league: League) => {
+    const occupied = league.player_cap != null && league.spots_remaining != null
+      ? league.player_cap - league.spots_remaining
+      : null;
+    const fillPct = league.player_cap && occupied != null
+      ? Math.min(100, Math.round((occupied / league.player_cap) * 100))
+      : 0;
+    const isRegistered = league.is_registered === true;
+    // null/undefined means unauthenticated — show register button; false means signed in but not registered
+    const registrationStatusKnown = league.is_registered !== undefined;
 
-  const isLeagueRegistered = (league: League) => isSignedIn && registeredLeagues.has(league.id);
+    return (
+      <div
+        key={league.id}
+        className="border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all cursor-pointer group"
+        onClick={() => navigate(`/leagues/${league.id}`)}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="text-sm font-medium text-white group-hover:text-accent transition-colors truncate">
+                {league.name}
+              </span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-[#A0A0A0] flex-shrink-0">
+                {league.format}
+              </span>
+            </div>
+            <div className="text-xs text-[#6B6B6B]">
+              Starts {formatDate(league.start_date)} · {league.num_weeks} weeks
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {league.is_active && league.is_registration_open && registrationStatusKnown && !isRegistered && (
+              <button
+                onClick={handleRegisterClick}
+                className="bg-accent text-white text-xs font-medium py-1.5 px-3 rounded-md hover:bg-accent-dark transition-colors"
+              >
+                Register
+              </button>
+            )}
+            {registrationStatusKnown && isRegistered && (
+              <span className="flex items-center gap-1.5 text-xs text-blue-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                Registered
+              </span>
+            )}
+            <span className={`flex items-center gap-1.5 text-xs ${
+              !league.is_active ? 'text-[#6B6B6B]' :
+              league.is_registration_open ? 'text-green-400' : 'text-[#A0A0A0]'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                !league.is_active ? 'bg-[#6B6B6B]' :
+                league.is_registration_open ? 'bg-green-400' : 'bg-[#A0A0A0]'
+              }`} />
+              {!league.is_active ? 'Completed' : league.is_registration_open ? 'Open' : 'Closed'}
+            </span>
+          </div>
+        </div>
 
-  const handleUnregister = async (leagueId: string) => {
-    setIsUnregistering(true);
-    setError(null);
-    try {
-      await authenticatedRequest(`/registration/leagues/${leagueId}`, { method: 'DELETE' });
-      setRegisteredLeagues(prev => {
-        const next = new Set(prev);
-        next.delete(leagueId);
-        return next;
-      });
-      setUnregisterConfirm(null);
-      setSuccess('You have been unregistered from the league.');
-      await loadLeagues();
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to unregister. Please try again.';
-      setError(msg);
-      setUnregisterConfirm(null);
-    } finally {
-      setIsUnregistering(false);
-    }
+        {/* Spots progress — active leagues only */}
+        {league.is_active && league.player_cap != null && occupied != null && (
+          <div className="mt-2">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-[#6B6B6B]">Spots</span>
+              <span className="text-xs text-[#A0A0A0]">{occupied} / {league.player_cap}</span>
+            </div>
+            <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent rounded-full transition-all"
+                style={{ width: `${fillPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -134,7 +144,7 @@ export default function LeaguesPage() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="section-label mb-1">LEAGUES</div>
-            <h1 className="text-xl font-semibold text-white">Available Leagues</h1>
+            <h1 className="text-xl font-semibold text-white">Leagues</h1>
           </div>
           <button
             onClick={loadLeagues}
@@ -159,11 +169,10 @@ export default function LeaguesPage() {
           </div>
         )}
 
-        {/* League list */}
         {isLoading ? (
           <div className="py-16 flex items-center justify-center">
             <div className="inline-flex items-center gap-2 text-[#6B6B6B] text-sm">
-              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
               Loading leagues...
             </div>
           </div>
@@ -173,151 +182,31 @@ export default function LeaguesPage() {
             <div className="text-xs text-[#6B6B6B]">Check back later for upcoming leagues.</div>
           </div>
         ) : (
-          <div className="border-t border-white/5">
-            {leagues.map((league) => {
-              const status = getRegistrationStatus(league);
-              const isSelected = selectedLeague?.id === league.id;
-
-              return (
-                <div key={league.id}>
-                  {/* League row */}
-                  <button
-                    onClick={() => handleLeagueSelect(league)}
-                    className="w-full border-b border-white/5 py-4 flex items-center justify-between text-left hover:bg-white/[0.025] transition-colors px-1"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">{league.name}</div>
-                        <div className="text-xs text-[#6B6B6B] mt-0.5">
-                          {league.format} · {league.num_weeks} weeks · starts {formatDate(league.start_date)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 flex-shrink-0">
-                      <span className="flex items-center gap-1.5 text-xs text-[#A0A0A0]">
-                        <span className={`status-dot ${status.dotColor}`}></span>
-                        {status.text}
-                      </span>
-                      <span className="text-[#6B6B6B] text-xs">{isSelected ? '▲' : '▼'}</span>
-                    </div>
-                  </button>
-
-                  {/* Expanded details */}
-                  {isSelected && (
-                    <div className="border-b border-white/5 bg-white/[0.02] px-1 py-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0 mb-5">
-                        {/* Left column */}
-                        <div>
-                          <div className="section-label mb-3">DETAILS</div>
-                          {league.description && (
-                            <div className="border-b border-white/5 py-2.5 flex justify-between items-start gap-4">
-                              <span className="text-xs text-[#A0A0A0]">Description</span>
-                              <span className="text-xs text-white text-right max-w-[60%]">{league.description}</span>
-                            </div>
-                          )}
-                          <div className="border-b border-white/5 py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Game Format</span>
-                            <span className="text-xs text-white">{league.format}</span>
-                          </div>
-                          <div className="border-b border-white/5 py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Tournament</span>
-                            <span className="text-xs text-white capitalize">{league.tournament_format.replace(/_/g, ' ')}</span>
-                          </div>
-                          <div className="border-b border-white/5 py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Game Duration</span>
-                            <span className="text-xs text-white">{league.game_duration} min</span>
-                          </div>
-                          <div className="py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Games / Week</span>
-                            <span className="text-xs text-white">{league.games_per_week}</span>
-                          </div>
-                        </div>
-
-                        {/* Right column */}
-                        <div>
-                          <div className="section-label mb-3">REGISTRATION</div>
-                          <div className="border-b border-white/5 py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Fee</span>
-                            <span className="text-xs text-white">{formatCurrency(league.registration_fee)}</span>
-                          </div>
-                          <div className="border-b border-white/5 py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Teams</span>
-                            <span className="text-xs text-white">
-                              {league.registered_teams_count} / {league.max_teams || '∞'}
-                            </span>
-                          </div>
-                          <div className="border-b border-white/5 py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Players</span>
-                            <span className="text-xs text-white">{league.registered_players_count}</span>
-                          </div>
-                          {league.registration_deadline && (
-                            <div className="border-b border-white/5 py-2.5 flex justify-between">
-                              <span className="text-xs text-[#A0A0A0]">Deadline</span>
-                              <span className="text-xs text-white">{formatDate(league.registration_deadline)}</span>
-                            </div>
-                          )}
-                          <div className="py-2.5 flex justify-between">
-                            <span className="text-xs text-[#A0A0A0]">Min Teams</span>
-                            <span className="text-xs text-white">{league.min_teams}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Register action */}
-                      <div className="flex items-center gap-4">
-                        {isLeagueRegistered(league) ? (
-                          unregisterConfirm === league.id ? (
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs text-[#A0A0A0]">Are you sure? This cannot be undone.</span>
-                              <button
-                                onClick={() => handleUnregister(league.id)}
-                                disabled={isUnregistering}
-                                className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-40"
-                              >
-                                {isUnregistering ? 'Removing…' : 'Confirm'}
-                              </button>
-                              <button
-                                onClick={() => setUnregisterConfirm(null)}
-                                disabled={isUnregistering}
-                                className="text-xs text-[#6B6B6B] hover:text-white transition-colors disabled:opacity-40"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
-                                <span className="status-dot bg-blue-400"></span>
-                                You are registered for this league
-                              </div>
-                              <button
-                                onClick={() => setUnregisterConfirm(league.id)}
-                                className="text-xs text-[#6B6B6B] hover:text-red-400 transition-colors"
-                              >
-                                Unregister
-                              </button>
-                            </div>
-                          )
-                        ) : (
-                          <button
-                            onClick={handleRegisterForLeague}
-                            className="bg-accent text-white text-sm font-medium py-2 px-5 rounded-md hover:bg-accent-dark transition-colors"
-                          >
-                            {isSignedIn ? 'Register for This League' : 'Sign In to Register'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+          <>
+            {/* Active Leagues */}
+            {activeLeagues.length > 0 && (
+              <section className="mb-10">
+                <div className="section-label mb-4">ACTIVE LEAGUES</div>
+                <div className="flex flex-col gap-3">
+                  {activeLeagues.map(renderLeagueCard)}
                 </div>
-              );
-            })}
-          </div>
+              </section>
+            )}
+
+            {/* Past Leagues */}
+            {pastLeagues.length > 0 && (
+              <section>
+                <div className="section-label mb-4 text-[#6B6B6B]">PAST LEAGUES</div>
+                <div className="flex flex-col gap-3 opacity-70">
+                  {pastLeagues.map(renderLeagueCard)}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
 
-      {/* Registration Modal */}
-      {showRegistrationModal && selectedLeague && (
+      {showRegistrationModal && (
         <RegistrationModal
           isOpen={showRegistrationModal}
           onClose={() => setShowRegistrationModal(false)}

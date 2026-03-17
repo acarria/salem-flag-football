@@ -14,8 +14,7 @@ export const API_ROUTES = {
   // League routes
   LEAGUE_STANDINGS: '/league/standings',
   LEAGUE_SCHEDULE: '/league/schedule',
-  LEAGUE_ACTIVE: '/league/active',
-  LEAGUE_INFO: '/league/info',
+LEAGUE_INFO: '/league/info',
   LEAGUE_RULES: '/league/rules',
   
   // Admin routes

@@ -2,7 +2,6 @@ import { BaseApiService } from '../core/base';
 import { MyGroup } from '../core/types';
 
 export interface InvitationDetail {
-  token: string;
   group_id: string;
   group_name: string;
   league_id: string;

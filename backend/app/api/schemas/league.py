@@ -24,6 +24,7 @@ class PublicLeagueResponse(BaseModel):
     is_registration_open: bool
     player_cap: Optional[int] = None
     spots_remaining: Optional[int] = None
+    is_registered: bool | None = None
 
     class Config:
         from_attributes = True

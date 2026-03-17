@@ -5,10 +5,16 @@ Extracts core team assignment logic so it can be triggered both manually
 (admin "Generate Teams" button) and automatically when registration is complete.
 """
 import logging
+from datetime import date
 from typing import Optional, Dict, List
 from uuid import UUID
 from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.models.league import League
+from app.models.league_player import LeaguePlayer
+from app.models.player import Player
+from app.models.team import Team
+from app.services.league_service import get_player_cap, get_occupied_spots
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +24,6 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
     Core team generation logic. Creates teams and assigns confirmed players.
     Returns a summary dict.
     """
-    from app.models.league_player import LeaguePlayer
-    from app.models.player import Player
-    from app.models.team import Team
-
     registered_players = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league.id,
         LeaguePlayer.registration_status == 'confirmed',
@@ -41,6 +43,12 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
     team_names = settings.TEAM_NAMES
     team_colors = settings.TEAM_COLORS
 
+    if teams_count > len(team_names):
+        logger.warning(
+            "teams_count (%d) exceeds TEAM_NAMES list length (%d); names will be suffixed",
+            teams_count, len(team_names),
+        )
+
     # Clear existing teams
     existing_teams = db.query(Team).filter(Team.league_id == league.id).all()
     for team in existing_teams:
@@ -49,9 +57,11 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
     # Create new teams
     teams = []
     for i in range(teams_count):
+        base_name = team_names[i % len(team_names)]
+        name = base_name if i < len(team_names) else f"{base_name} {i // len(team_names) + 1}"
         team = Team(
             league_id=league.id,
-            name=team_names[i % len(team_names)],
+            name=name,
             color=team_colors[i % len(team_colors)],
             created_by="system",
         )
@@ -161,12 +171,6 @@ def trigger_team_generation_if_ready(league_id: UUID, db: Session) -> bool:
     If registration is closed (deadline passed or league full), trigger team generation.
     Returns True if generation was triggered.
     """
-    from app.models.league import League
-    from app.models.league_player import LeaguePlayer
-    from app.models.team import Team
-    from app.services.league_service import get_player_cap, get_occupied_spots
-    from datetime import date
-
     league = db.query(League).filter(League.id == league_id, League.is_active == True).first()
     if not league:
         return False

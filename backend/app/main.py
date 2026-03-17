@@ -2,15 +2,17 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
 from app.api import user, registration, team, league, contact
 from app.api.admin.main import router as admin_router
-from app.db.db import SessionLocal, Base, engine
+from app.db.db import SessionLocal, Base, engine, get_db
 from app.services.admin_service import AdminService
 
 # Import all models so Base.metadata is fully populated before create_all
@@ -99,7 +101,11 @@ app.include_router(admin_router)
 app.include_router(contact.router, prefix="/contact")
 
 @app.get("/health")
-def health_check():
+def health_check(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     return {"status": "ok"}
 
 

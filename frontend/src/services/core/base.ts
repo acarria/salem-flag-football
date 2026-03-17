@@ -2,7 +2,13 @@ import { ZodSchema } from 'zod';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 if (process.env.NODE_ENV === 'production' && !API_BASE_URL.startsWith('https://')) {
-  console.error('REACT_APP_API_URL must use HTTPS in production. Current value:', API_BASE_URL);
+  throw new Error('REACT_APP_API_URL must use HTTPS in production. Current value: ' + API_BASE_URL);
+}
+
+interface ApiErrorData {
+  detail?: string;
+  message?: string;
+  [key: string]: unknown;
 }
 
 // Base API service class
@@ -33,7 +39,7 @@ export class BaseApiService {
       if (!response.ok) {
         // Try to extract error details from response body
         let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
-        let errorData: any = { detail: errorMessage };
+        let errorData: ApiErrorData = { detail: errorMessage };
         
         try {
           const contentType = response.headers.get('content-type');
@@ -56,7 +62,9 @@ export class BaseApiService {
           console.error('Failed to parse error response:', e);
         }
         
-        const error: any = new Error(errorMessage);
+        const error = new Error(errorMessage) as Error & {
+          response?: { status: number; statusText: string; data: ApiErrorData };
+        };
         error.response = {
           status: response.status,
           statusText: response.statusText,

@@ -10,12 +10,12 @@ import {
 
 export class LeagueApiService extends BaseApiService {
   // Public league endpoints
-  async getActiveLeagues(): Promise<League[]> {
-    return this.request<League[]>('/league/active');
-  }
-
   async getPublicLeagues(): Promise<League[]> {
     return this.request<League[]>('/league/public/leagues');
+  }
+
+  async getLeagueById(leagueId: string): Promise<League> {
+    return this.request<League>(`/league/${leagueId}`);
   }
 
   async getLeagueStandings(leagueId: string): Promise<PublicStanding[]> {
@@ -36,10 +36,6 @@ export class LeagueApiService extends BaseApiService {
 
   async getAllLeagues(): Promise<League[]> {
     return this.request<League[]>('/admin/leagues');
-  }
-
-  async getLeagueDetails(leagueId: string): Promise<League> {
-    return this.request<League>(`/admin/leagues/${leagueId}`);
   }
 
   async updateLeague(leagueId: string, leagueData: LeagueUpdateRequest): Promise<League> {

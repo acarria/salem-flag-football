@@ -63,7 +63,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
       const loadData = async () => {
         setIsLoading(true);
         try {
-          const leaguesData = await apiService.getActiveLeagues();
+          const leaguesData = await apiService.getPublicLeagues();
           setLeagues(leaguesData);
           if (leaguesData.length > 0) {
             setSelectedLeague(leaguesData[0].id);

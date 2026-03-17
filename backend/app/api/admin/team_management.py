@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
@@ -18,6 +18,8 @@ router = APIRouter()
 @router.get("/leagues/{league_id}/members", response_model=List[LeagueMemberResponse], summary="Get all league members")
 async def get_league_members(
     league_id: UUID,
+    skip: int = 0,
+    limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -26,31 +28,30 @@ async def get_league_members(
     league = db.query(League).filter(League.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
-    
+
+    limit = min(limit, 500)
     # Get all league players with their details
     league_players = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league_id,
         LeaguePlayer.is_active == True
-    ).all()
-    
+    ).offset(skip).limit(limit).all()
+
+    player_ids = [lp.player_id for lp in league_players]
+    group_ids  = [lp.group_id for lp in league_players if lp.group_id]
+    team_ids   = [lp.team_id for lp in league_players if lp.team_id]
+
+    players_by_id = {p.id: p for p in db.query(Player).filter(Player.id.in_(player_ids)).all()}
+    groups_by_id  = {g.id: g for g in db.query(Group).filter(Group.id.in_(group_ids)).all()} if group_ids else {}
+    teams_by_id   = {t.id: t for t in db.query(Team).filter(Team.id.in_(team_ids)).all()} if team_ids else {}
+
     result = []
     for lp in league_players:
-        player = db.query(Player).filter(Player.id == lp.player_id).first()
+        player = players_by_id.get(lp.player_id)
         if not player:
             continue
-            
-        # Get group info
-        group_name = None
-        if lp.group_id:
-            group = db.query(Group).filter(Group.id == lp.group_id).first()
-            group_name = group.name if group else None
-        
-        # Get team info
-        team_name = None
-        if lp.team_id:
-            team = db.query(Team).filter(Team.id == lp.team_id).first()
-            team_name = team.name if team else None
-        
+        group = groups_by_id.get(lp.group_id) if lp.group_id else None
+        team  = teams_by_id.get(lp.team_id) if lp.team_id else None
+
         result.append(LeagueMemberResponse(
             id=lp.id,
             player_id=player.id,
@@ -58,15 +59,15 @@ async def get_league_members(
             last_name=player.last_name,
             email=player.email,
             group_id=lp.group_id,
-            group_name=group_name,
+            group_name=group.name if group else None,
             team_id=lp.team_id,
-            team_name=team_name,
+            team_name=team.name if team else None,
             registration_status=lp.registration_status,
             payment_status=lp.payment_status,
             waiver_status=lp.waiver_status,
             created_at=lp.created_at
         ))
-    
+
     return result
 
 @router.get("/leagues/{league_id}/teams", response_model=List[TeamResponse], summary="Get all teams for a league")

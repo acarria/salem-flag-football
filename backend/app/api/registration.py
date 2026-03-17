@@ -2,32 +2,48 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
 from app.db.db import get_db
 from app.models.group import Group
 from app.models.group_invitation import GroupInvitation
 from app.models.league import League
 from app.models.league_player import LeaguePlayer
 from app.models.player import Player
+from app.models.team import Team
 from app.api.schemas.registration import (
-    SoloRegistrationRequest,
-    GroupRegistrationRequest,
-    RegistrationResponse,
-    LeagueRegistrationResponse,
-    InvitationDetailResponse,
-    PendingInvitationResponse,
     GroupMemberDetail,
+    GroupRegistrationRequest,
+    InvitationDetailResponse,
+    LeagueRegistrationResponse,
     MyGroupResponse,
+    MyTeamResponse,
+    PendingInvitationResponse,
+    RegistrationResponse,
+    SoloRegistrationRequest,
+    SuccessResponse,
+    TeamMemberPublic,
 )
 from app.utils.clerk_jwt import get_current_user
 from app.core.limiter import limiter
+from app.services.league_service import get_player_cap, get_occupied_spots
+from app.services.team_generation_service import trigger_team_generation_if_ready
+from app.services.email_service import send_group_invitation
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _get_clerk_id(user: dict) -> str:
+    cid = user.get("id") or user.get("user_id")
+    if not cid:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+    return cid
 
 
 # ---------------------------------------------------------------------------
@@ -42,12 +58,9 @@ async def register_player(
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> RegistrationResponse:
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+    clerk_user_id = _get_clerk_id(user)
 
     # Single locked read for all checks + cap enforcement (eliminates TOCTOU window)
-    from app.services.league_service import get_player_cap, get_occupied_spots
     league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
@@ -66,7 +79,7 @@ async def register_player(
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid date format for dateOfBirth: {registration_data.dateOfBirth}. Expected format: YYYY-MM-DD",
+            detail="Invalid date format for dateOfBirth. Expected format: YYYY-MM-DD",
         )
 
     player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
@@ -138,7 +151,6 @@ async def register_player(
         db.refresh(league_player)
         # Attempt to auto-generate teams if league is now full / deadline passed
         try:
-            from app.services.team_generation_service import trigger_team_generation_if_ready
             trigger_team_generation_if_ready(registration_data.league_id, db)
         except Exception as e:
             logger.exception("Team generation trigger failed after solo registration: %s", e)
@@ -185,12 +197,9 @@ async def register_group(
     invitation email.  No LeaguePlayer rows are created for invitees until
     they explicitly accept via /registration/invite/{token}/accept.
     """
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+    clerk_user_id = _get_clerk_id(user)
 
     # Single locked read for all checks + cap enforcement (eliminates TOCTOU window)
-    from app.services.league_service import get_player_cap, get_occupied_spots
     league = db.query(League).filter(League.id == registration_data.league_id).with_for_update().first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
@@ -285,7 +294,6 @@ async def register_group(
 
     # Send invitation emails (best-effort — don't roll back if email fails)
     if settings.RESEND_API_KEY:
-        from app.services.email_service import send_group_invitation
         invitations = db.query(GroupInvitation).filter(
             GroupInvitation.group_id == group.id,
             GroupInvitation.status == "pending",
@@ -339,7 +347,6 @@ async def get_invitation(request: Request, token: str, db: Session = Depends(get
     inviter = db.query(Player).filter(Player.id == inv.invited_by).first()
 
     return InvitationDetailResponse(
-        token=inv.token,
         group_id=inv.group_id,
         group_name=group.name if group else "",
         league_id=inv.league_id,
@@ -353,7 +360,7 @@ async def get_invitation(request: Request, token: str, db: Session = Depends(get
     )
 
 
-@router.post("/invite/{token}/accept", summary="Accept a group invitation (authenticated)")
+@router.post("/invite/{token}/accept", response_model=SuccessResponse, summary="Accept a group invitation (authenticated)")
 @limiter.limit("10/minute")
 async def accept_invitation(
     request: Request,
@@ -361,11 +368,11 @@ async def accept_invitation(
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    clerk_user_id = _get_clerk_id(user)
 
-    inv = db.query(GroupInvitation).filter(GroupInvitation.token == token).first()
+    inv = db.query(GroupInvitation).filter(
+        GroupInvitation.token == token
+    ).with_for_update().first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invitation not found")
     if inv.status != "pending":
@@ -424,15 +431,14 @@ async def accept_invitation(
 
     # Attempt to auto-generate teams if league is now full / deadline passed
     try:
-        from app.services.team_generation_service import trigger_team_generation_if_ready
         trigger_team_generation_if_ready(inv.league_id, db)
     except Exception as e:
         logger.exception("Team generation trigger failed after invitation acceptance: %s", e)
 
-    return {"success": True, "message": "Invitation accepted. You are now registered for the league."}
+    return SuccessResponse(success=True, message="Invitation accepted. You are now registered for the league.")
 
 
-@router.post("/invite/{token}/decline", summary="Decline a group invitation")
+@router.post("/invite/{token}/decline", response_model=SuccessResponse, summary="Decline a group invitation")
 @limiter.limit("5/minute")
 async def decline_invitation(
     request: Request,
@@ -451,9 +457,10 @@ async def decline_invitation(
         raise HTTPException(status_code=403, detail="This invitation was not sent to your email address.")
 
     inv.status = "declined"
+    inv.token = None
     try:
         db.commit()
-        return {"success": True, "message": "Invitation declined."}
+        return SuccessResponse(success=True, message="Invitation declined.")
     except Exception as e:
         db.rollback()
         logger.exception("Failed to decline invitation (id=%s): %s", inv.id, e)
@@ -465,9 +472,7 @@ async def get_my_invitations(
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[PendingInvitationResponse]:
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    clerk_user_id = _get_clerk_id(user)
 
     # Get the user's email from their player record
     player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
@@ -481,11 +486,23 @@ async def get_my_invitations(
         GroupInvitation.expires_at > now,
     ).all()
 
+    if not invitations:
+        return []
+
+    # Bulk-fetch related records to avoid N+1 queries
+    grp_ids     = [inv.group_id for inv in invitations]
+    lea_ids     = [inv.league_id for inv in invitations]
+    inviter_ids = [inv.invited_by for inv in invitations if inv.invited_by]
+
+    groups_by_id   = {g.id: g for g in db.query(Group).filter(Group.id.in_(grp_ids)).all()}
+    leagues_by_id  = {le.id: le for le in db.query(League).filter(League.id.in_(lea_ids)).all()}
+    inviters_by_id = {p.id: p for p in db.query(Player).filter(Player.id.in_(inviter_ids)).all()} if inviter_ids else {}
+
     result = []
     for inv in invitations:
-        group = db.query(Group).filter(Group.id == inv.group_id).first()
-        league = db.query(League).filter(League.id == inv.league_id).first()
-        inviter = db.query(Player).filter(Player.id == inv.invited_by).first()
+        group   = groups_by_id.get(inv.group_id)
+        league  = leagues_by_id.get(inv.league_id)
+        inviter = inviters_by_id.get(inv.invited_by)
         result.append(PendingInvitationResponse(
             token=inv.token,
             group_name=group.name if group else "",
@@ -507,9 +524,7 @@ async def get_my_groups(
     db: Session = Depends(get_db),
 ) -> list[MyGroupResponse]:
     """Return all groups the authenticated user belongs to (as organizer or confirmed member)."""
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    clerk_user_id = _get_clerk_id(user)
 
     player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
     if not player:
@@ -522,8 +537,36 @@ async def get_my_groups(
         LeaguePlayer.is_active == True,
     ).all()
 
+    if not league_players:
+        return []
+
+    group_ids  = list({lp.group_id for lp in league_players if lp.group_id})
+    league_ids = list({lp.league_id for lp in league_players})
+
+    # Bulk-fetch everything needed for assembly — O(7) queries total
+    groups_by_id  = {g.id: g for g in db.query(Group).filter(Group.id.in_(group_ids)).all()}
+    leagues_by_id = {le.id: le for le in db.query(League).filter(League.id.in_(league_ids)).all()}
+    group_lps     = db.query(LeaguePlayer).filter(
+        LeaguePlayer.group_id.in_(group_ids),
+        LeaguePlayer.is_active == True,
+    ).all()
+    member_ids      = list({glp.player_id for glp in group_lps})
+    players_by_id   = {p.id: p for p in db.query(Player).filter(Player.id.in_(member_ids)).all()}
+    pending_invites = db.query(GroupInvitation).filter(
+        GroupInvitation.group_id.in_(group_ids),
+        GroupInvitation.status == "pending",
+    ).all()
+
+    # Index by group_id for O(1) lookup in the assembly loop
+    group_lps_by_group: dict = {}
+    for glp in group_lps:
+        group_lps_by_group.setdefault(glp.group_id, []).append(glp)
+    pending_by_group: dict = {}
+    for inv in pending_invites:
+        pending_by_group.setdefault(inv.group_id, []).append(inv)
+
     result = []
-    seen_group_ids = set()
+    seen_group_ids: set = set()
 
     for lp in league_players:
         group_id = lp.group_id
@@ -531,45 +574,34 @@ async def get_my_groups(
             continue
         seen_group_ids.add(group_id)
 
-        group = db.query(Group).filter(Group.id == group_id).first()
+        group = groups_by_id.get(group_id)
         if not group:
             continue
-        league = db.query(League).filter(League.id == lp.league_id).first()
+        league = leagues_by_id.get(lp.league_id)
 
         is_organizer = (group.created_by == player.id)
 
-        # Build member list: all confirmed league_players in this group
-        group_lps = db.query(LeaguePlayer).filter(
-            LeaguePlayer.group_id == group_id,
-            LeaguePlayer.is_active == True,
-        ).all()
-
         members: list[GroupMemberDetail] = []
-        for glp in group_lps:
-            p = db.query(Player).filter(Player.id == glp.player_id).first()
+        for glp in group_lps_by_group.get(group_id, []):
+            p = players_by_id.get(glp.player_id)
             if p:
                 members.append(GroupMemberDetail(
                     invitation_id=None,
                     player_id=p.id,
                     first_name=p.first_name,
                     last_name=p.last_name,
-                    email=p.email,
+                    email=p.email if (is_organizer or p.id == player.id) else None,
                     status=glp.registration_status,
                     is_organizer=(group.created_by == p.id),
                 ))
 
-        # Add pending invitees
-        pending_invites = db.query(GroupInvitation).filter(
-            GroupInvitation.group_id == group_id,
-            GroupInvitation.status == "pending",
-        ).all()
-        for inv in pending_invites:
+        for inv in pending_by_group.get(group_id, []):
             members.append(GroupMemberDetail(
                 invitation_id=inv.id,
                 player_id=inv.player_id,
                 first_name=inv.first_name,
                 last_name=inv.last_name,
-                email=inv.email,
+                email=inv.email if is_organizer else None,
                 status="pending_invite",
                 is_organizer=False,
             ))
@@ -586,16 +618,14 @@ async def get_my_groups(
     return result
 
 
-@router.delete("/groups/invitations/{invitation_id}", summary="Revoke a pending group invitation (organizer only)")
+@router.delete("/groups/invitations/{invitation_id}", response_model=SuccessResponse, summary="Revoke a pending group invitation (organizer only)")
 async def revoke_invitation(
-    invitation_id: str,
+    invitation_id: UUID,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Allow the group organizer to cancel a pending invitation."""
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    clerk_user_id = _get_clerk_id(user)
 
     player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
     if not player:
@@ -619,22 +649,20 @@ async def revoke_invitation(
         logger.exception("Revoke invitation failed: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
-    return {"success": True, "message": "Invitation revoked."}
+    return SuccessResponse(success=True, message="Invitation revoked.")
 
 
 # ---------------------------------------------------------------------------
 # Unregister from a league
 # ---------------------------------------------------------------------------
 
-@router.delete("/leagues/{league_id}", summary="Unregister the current player from a league")
+@router.delete("/leagues/{league_id}", response_model=SuccessResponse, summary="Unregister the current player from a league")
 async def unregister_from_league(
-    league_id: str,
+    league_id: UUID,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    clerk_user_id = user.get("id") or user.get("user_id")
-    if not clerk_user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    clerk_user_id = _get_clerk_id(user)
 
     player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
     if not player:
@@ -662,7 +690,71 @@ async def unregister_from_league(
         logger.exception("Unregister failed: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
-    return {"success": True, "message": "You have been unregistered from the league."}
+    return SuccessResponse(success=True, message="You have been unregistered from the league.")
+
+
+# ---------------------------------------------------------------------------
+# My team roster (auth-gated, name-only)
+# ---------------------------------------------------------------------------
+
+@router.get("/leagues/{league_id}/my-team", response_model=MyTeamResponse, summary="Get the caller's team roster for a league")
+@limiter.limit("30/minute")
+async def get_my_team(
+    request: Request,
+    league_id: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MyTeamResponse:
+    """Returns the calling user's team roster for a league.
+    Exposes only first_name, last_name, is_you — no PII.
+    Returns 404 if not registered or no team assigned yet.
+    """
+    clerk_user_id = _get_clerk_id(user)
+
+    player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Not registered for this league")
+
+    league_player = db.query(LeaguePlayer).filter(
+        LeaguePlayer.league_id == league_id,
+        LeaguePlayer.player_id == player.id,
+        LeaguePlayer.is_active == True,
+    ).first()
+    if not league_player:
+        raise HTTPException(status_code=404, detail="Not registered for this league")
+
+    if not league_player.team_id:
+        raise HTTPException(status_code=404, detail="No team assigned yet")
+
+    team = db.query(Team).filter(Team.id == league_player.team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Get all active league players on this team
+    team_members_lp = db.query(LeaguePlayer).filter(
+        LeaguePlayer.team_id == league_player.team_id,
+        LeaguePlayer.is_active == True,
+    ).all()
+
+    player_ids = [lp.player_id for lp in team_members_lp]
+    players_by_id = {p.id: p for p in db.query(Player).filter(Player.id.in_(player_ids)).all()}
+
+    members = []
+    for lp in team_members_lp:
+        p = players_by_id.get(lp.player_id)
+        if p:
+            members.append(TeamMemberPublic(
+                first_name=p.first_name,
+                last_name=p.last_name,
+                is_you=(p.id == player.id),
+            ))
+
+    return MyTeamResponse(
+        team_id=str(team.id),
+        team_name=team.name,
+        team_color=team.color,
+        members=members,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -672,6 +764,8 @@ async def unregister_from_league(
 @router.get("/player/{user_id}/leagues", response_model=list[LeagueRegistrationResponse], summary="Get all league registrations for a player")
 async def get_player_registrations(
     user_id: str,
+    skip: int = 0,
+    limit: int = 50,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[LeagueRegistrationResponse]:
@@ -681,18 +775,26 @@ async def get_player_registrations(
     if not player:
         return []
 
+    limit = min(limit, 200)
     registrations = db.query(LeaguePlayer).filter(
         LeaguePlayer.player_id == player.id,
         LeaguePlayer.is_active == True,
-    ).all()
+    ).offset(skip).limit(limit).all()
+
+    if not registrations:
+        return []
+
+    # Bulk-fetch leagues and groups to avoid N+1 queries
+    league_ids = list({reg.league_id for reg in registrations})
+    group_ids  = list({reg.group_id for reg in registrations if reg.group_id})
+
+    leagues_by_id = {le.id: le for le in db.query(League).filter(League.id.in_(league_ids)).all()}
+    groups_by_id  = {g.id: g for g in db.query(Group).filter(Group.id.in_(group_ids)).all()} if group_ids else {}
 
     result = []
     for reg in registrations:
-        league = db.query(League).filter(League.id == reg.league_id).first()
-        group_name = None
-        if reg.group_id:
-            group = db.query(Group).filter(Group.id == reg.group_id).first()
-            group_name = group.name if group else None
+        league     = leagues_by_id.get(reg.league_id)
+        group_name = groups_by_id[reg.group_id].name if reg.group_id in groups_by_id else None
         result.append(LeagueRegistrationResponse(
             id=reg.id,
             league_id=reg.league_id,

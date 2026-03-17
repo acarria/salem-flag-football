@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SignIn, useAuth, UserButton } from '@clerk/clerk-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAdmin } from '../../hooks';
+import { useMyTeam } from '../../hooks/useMyTeam';
 import salemCommonSunny from '../../assets/images/salem_common_sunny.png';
 import salemFlagFootballLogo from '../../assets/images/new_logo.png';
 
@@ -22,6 +23,7 @@ export default function BaseLayout({
 }: BaseLayoutProps) {
   const { isSignedIn } = useAuth();
   const { isAdmin } = useAdmin();
+  const { teamId } = useMyTeam();
   const location = useLocation();
 
   const [showSignInModal, setShowSignInModal] = useState(false);
@@ -105,6 +107,18 @@ export default function BaseLayout({
 
                 {isSignedIn && (
                   <>
+                    {teamId && (
+                      <Link
+                        to={`/teams/${teamId}`}
+                        className={`px-3 py-1.5 text-sm transition-colors rounded-md hidden sm:block ${
+                          location.pathname.startsWith('/teams/')
+                            ? 'text-white'
+                            : 'text-[#A0A0A0] hover:text-white'
+                        }`}
+                      >
+                        My Team
+                      </Link>
+                    )}
                     <Link
                       to="/profile"
                       className="px-3 py-1.5 text-sm text-[#A0A0A0] hover:text-white transition-colors hidden sm:block"

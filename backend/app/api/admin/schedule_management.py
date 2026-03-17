@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import datetime, date, timedelta, time as dt_time
@@ -1565,31 +1565,36 @@ async def create_field_availability(
 async def get_all_field_availability(
     field_id: Optional[UUID] = None,
     is_active: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ) -> List[FieldAvailabilityResponse]:
     """
     Retrieve all field availability records.
-    
+
     Args:
         field_id: Optional filter by specific field ID.
         is_active: Optional filter to show only active/inactive records (default: all).
+        skip: Number of records to skip (pagination offset).
+        limit: Maximum number of records to return (pagination limit, max 500).
         db: SQLAlchemy database session (dependency injection).
         admin_user: Authenticated admin user (dependency injection).
-    
+
     Returns:
         List[FieldAvailabilityResponse]: A list of field availability records.
     """
+    limit = min(limit, 500)
     # Query field availability records
     query = db.query(FieldAvailability)
-    
+
     if field_id is not None:
         query = query.filter(FieldAvailability.field_id == field_id)
-    
+
     if is_active is not None:
         query = query.filter(FieldAvailability.is_active == is_active)
-    
-    availabilities = query.order_by(FieldAvailability.created_at.desc()).all()
+
+    availabilities = query.order_by(FieldAvailability.created_at.desc()).offset(skip).limit(limit).all()
     
     # Populate field_name for each response
     result = []

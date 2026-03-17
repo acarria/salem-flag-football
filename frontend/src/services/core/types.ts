@@ -72,6 +72,7 @@ export interface League {
   is_registration_open?: boolean;
   player_cap?: number;
   spots_remaining?: number;
+  is_registered?: boolean | null;
 }
 
 export interface LeagueCreateRequest {
@@ -380,7 +381,7 @@ export interface GroupMemberDetail {
   player_id?: string;
   first_name: string;
   last_name: string;
-  email: string;
+  email?: string | null;
   status: string;
   is_organizer: boolean;
 }
@@ -392,4 +393,17 @@ export interface MyGroup {
   league_name: string;
   is_organizer: boolean;
   members: GroupMemberDetail[];
+}
+
+export interface TeamMemberPublic {
+  first_name: string;
+  last_name: string;
+  is_you: boolean;
+}
+
+export interface MyTeamResponse {
+  team_id: string;
+  team_name: string;
+  team_color: string | null;
+  members: TeamMemberPublic[];
 }

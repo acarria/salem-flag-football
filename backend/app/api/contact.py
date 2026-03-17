@@ -1,21 +1,17 @@
+import asyncio
+import functools
 import html
 import logging
 import httpx
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.services.email_service import send_contact_message
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-limiter = Limiter(
-    key_func=lambda r: r.headers.get("X-Forwarded-For", r.client.host or "unknown").split(",")[0].strip()
-)
 
 
 class ContactRequest(BaseModel):
@@ -89,12 +85,17 @@ async def contact(request: Request, body: ContactRequest):
     if not settings.CONTACT_EMAIL:
         raise HTTPException(status_code=500, detail="Contact email not configured")
 
+    loop = asyncio.get_running_loop()
     try:
-        send_contact_message(
-            sender_name=body.name,
-            sender_email=body.email,
-            subject=body.subject,
-            message=body.message,
+        await loop.run_in_executor(
+            None,
+            functools.partial(
+                send_contact_message,
+                sender_name=body.name,
+                sender_email=body.email,
+                subject=body.subject,
+                message=body.message,
+            ),
         )
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")
