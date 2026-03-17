@@ -266,12 +266,12 @@ export default function LeagueDetailPage() {
             ) : hasTeam ? (
               <div className="flex items-center gap-2 text-sm text-white">
                 <span className="status-dot bg-blue-400" />
-                Registered · Team: <span className="font-medium">{myTeam?.team_name ?? myRegistration.team_id}</span>
+                Registered · Team: <span className="font-medium">{myTeam?.team_name ?? myRegistration?.team_id}</span>
               </div>
-            ) : myRegistration.group_id ? (
+            ) : myRegistration?.group_id ? (
               <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
                 <span className="status-dot bg-green-400" />
-                Registered · Group: {myRegistration.group_name ?? 'your group'} · Team assignment pending
+                Registered · Group: {myRegistration?.group_name ?? 'your group'} · Team assignment pending
               </div>
             ) : (
               <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, ReactNode } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 
 interface AuthContextType {
@@ -22,7 +22,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { getToken } = useAuth();
 
-  const getAuthToken = async (): Promise<string | null> => {
+  const getAuthToken = useCallback(async (): Promise<string | null> => {
     try {
       const token = await getToken();
       return token;
@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('AuthContext: Failed to get auth token:', error);
       return null;
     }
-  };
+  }, [getToken]);
 
   const value: AuthContextType = {
     getAuthToken,

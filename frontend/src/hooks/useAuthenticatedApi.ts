@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -5,7 +6,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 export const useAuthenticatedApi = () => {
   const { getAuthToken } = useAuthContext();
 
-  const request = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+  const request = useCallback(async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
     const url = `${API_BASE_URL}${endpoint}`;
     
     // Get authentication token
@@ -77,7 +78,7 @@ export const useAuthenticatedApi = () => {
       console.error('API request error:', error);
       throw error;
     }
-  };
+  }, [getAuthToken]);
 
   return { request };
 };
