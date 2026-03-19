@@ -1,6 +1,7 @@
 import asyncio
 import httpx
 import logging
+import os
 from jose import jwt, JWTError
 from fastapi import HTTPException, status, Request
 from app.core.config import settings
@@ -54,10 +55,31 @@ async def _fetch_clerk_email(user_id: str) -> str:
         return addresses[0]["email_address"]
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No email found for user")
 
+_TESTING = os.getenv("TESTING") == "true"
+_TEST_BYPASS_TOKEN = os.getenv("TEST_BYPASS_TOKEN", "")
+
+
+def _get_test_bypass_user(request: Request) -> dict | None:
+    """Return a hardcoded user dict if TEST_BYPASS_TOKEN is present and TESTING=true.
+    Only active when TESTING=true env var is set. Never active in production."""
+    if not _TESTING or not _TEST_BYPASS_TOKEN:
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header == f"Bearer {_TEST_BYPASS_TOKEN}":
+        return {
+            "id": "test_user_id",
+            "email": "testuser@example.com",
+            "sub": "test_user_id",
+        }
+    return None
+
+
 async def get_optional_user(request: Request):
     """Like get_current_user but returns None instead of raising for missing/invalid tokens.
     Safe to use on public endpoints that optionally personalise their response.
     Does NOT call _fetch_clerk_email — user_id only."""
+    if bypass := _get_test_bypass_user(request):
+        return bypass
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return None
@@ -80,6 +102,8 @@ async def get_optional_user(request: Request):
 
 
 async def get_current_user(request: Request):
+    if bypass := _get_test_bypass_user(request):
+        return bypass
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")

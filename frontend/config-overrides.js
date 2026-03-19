@@ -3,4 +3,5 @@ module.exports = function override(config, env) {
   // The webpack deprecation warnings are from webpack-dev-server internals
   // and are not critical - they don't affect functionality
   return config;
-}; 
+};
+

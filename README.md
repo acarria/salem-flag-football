@@ -235,6 +235,71 @@ DEADLINE_LAMBDA_ARN=arn:aws:lambda:...
 - **Deadline Lambda**: `DeadlineFunction` has no API Gateway source; only `SchedulerExecutionRole` (least-privilege IAM) can invoke it. Handler validates `event["source"] == "aws.scheduler"`.
 - **Frontend base client**: Non-HTTPS `REACT_APP_API_URL` in production now throws at startup rather than logging a warning.
 
+## Testing
+
+### Architecture
+
+| Layer | Framework | Location |
+|-------|-----------|----------|
+| Backend unit | pytest | `backend/tests/unit/` |
+| Backend integration | pytest + FastAPI TestClient | `backend/tests/integration/` |
+| Frontend unit/component | Jest + React Testing Library + MSW | `frontend/src/**/__tests__/` |
+| E2E | Playwright | `tests/specs/` |
+
+### Quick start
+
+```bash
+# Start the ephemeral test database (port 5433, separate from dev DB on 5432)
+make test-db-up
+
+# Run all backend tests
+make test
+
+# Run unit tests only
+make test-unit
+
+# Run with coverage report
+make test-cov
+
+# Frontend tests
+make frontend-test
+
+# Stop the test database
+make test-db-down
+```
+
+Backend tests require the test database running. The test DB uses `docker-compose.test.yml` on port 5433 with `tmpfs` (data is discarded when the container stops):
+
+```bash
+docker-compose -f docker-compose.test.yml up -d
+```
+
+Frontend tests run entirely in Jest/jsdom — no database or backend needed.
+
+### Test isolation
+
+Each backend test runs in a transaction that is never committed. The `db` fixture wraps the session in an outer transaction and uses SQLAlchemy savepoints (`join_transaction_mode="create_savepoint"`). Any `session.commit()` inside the application code only releases a savepoint; `outer_tx.rollback()` in the fixture teardown undoes all changes, leaving the database clean for the next test.
+
+### Auth in tests
+
+**Backend**: `app.dependency_overrides[get_current_user]` is set to a no-op async function returning a dict. The `make_user_override(data)` helper in `conftest.py` creates these overrides.
+
+**Frontend**: `@clerk/clerk-react` is mocked via `frontend/src/__mocks__/@clerk/clerk-react.ts`. API calls are intercepted by MSW v1 handlers in `frontend/src/__mocks__/handlers.ts`.
+
+**E2E**: The backend checks `TESTING=true` and compares the `Authorization` header against `TEST_BYPASS_TOKEN`. Matching requests skip JWKS validation and receive a hardcoded user dict. The token is stored in a CI secret (`TEST_BYPASS_TOKEN`) and never in source code.
+
+### CI
+
+Three GitHub Actions workflows run on push/PR to `main`:
+
+| Workflow | File | Trigger filter |
+|----------|------|----------------|
+| Backend Tests | `.github/workflows/backend-tests.yml` | `backend/**` changes |
+| Frontend Tests | `.github/workflows/frontend-tests.yml` | `frontend/**` changes |
+| E2E (Playwright) | `.github/workflows/playwright.yml` | All pushes to `main` |
+
+Both backend and frontend workflows upload coverage to Codecov.
+
 ## Deployment
 
 See `infrastructure/README.md`. The SAM template is in `infrastructure/sam/template.yaml`.

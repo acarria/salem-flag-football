@@ -54,6 +54,18 @@
     ]
   },
   "devDependencies": {
-    "react-app-rewired": "^2.2.1"
+    "msw": "^1.3.5",
+    "react-app-rewired": "^2.2.1",
+    "web-streams-polyfill": "^4.2.0"
+  },
+  "jest": {
+    "setupFiles": [
+      "<rootDir>/src/__mocks__/polyfills.ts"
+    ],
+    "moduleNameMapper": {
+      "^react-router-dom$": "<rootDir>/node_modules/react-router-dom/dist/index.js",
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js",
+      "^react-router$": "<rootDir>/node_modules/react-router/dist/development/index.js"
+    }
   }
 }
