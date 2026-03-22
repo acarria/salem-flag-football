@@ -1,0 +1,9 @@
+{
+  "name": "@salem/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uvicorn app.main:app --reload --port 8000",
+    "test": "pytest tests/ -v"
+  }
+}

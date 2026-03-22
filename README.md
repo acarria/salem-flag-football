@@ -6,7 +6,7 @@ Flag football league management platform — player registration, team generatio
 
 | Layer | Technology |
 |---|---|
-| Frontend | React + TypeScript + Tailwind CSS |
+| Frontend | Next.js (App Router) + TypeScript + Tailwind CSS |
 | Backend | FastAPI (Python) + SQLAlchemy |
 | Database | PostgreSQL + Alembic migrations |
 | Auth | Clerk (JWT) |
@@ -29,62 +29,66 @@ To run without Docker:
 
 ```bash
 # Backend
-cd backend && pip install -r requirements.txt
+cd apps/api && pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload
 
 # Frontend
-cd frontend && npm install && npm start
+cd apps/web && npm install && npm run dev
 ```
 
 ## Project Structure
 
 ```
 salem-flag-football/
-├── backend/app/
-│   ├── api/
-│   │   ├── admin/               # Admin-only endpoints (league, team, schedule, fields)
-│   │   │   └── dependencies.py  # Admin role verification
-│   │   ├── schemas/             # Pydantic request/response models
-│   │   ├── registration.py      # Solo + group registration, invite flow, group management
-│   │   ├── league.py            # Public league endpoints (list, detail, standings, schedule)
-│   │   ├── user.py
-│   │   └── contact.py
-│   ├── handlers/
-│   │   └── deadline_handler.py  # EventBridge Scheduler target — expires invites, triggers team gen
-│   ├── models/                  # SQLAlchemy ORM models (all PKs are UUIDs)
-│   ├── services/
-│   │   ├── league_service.py          # get_player_cap, get_occupied_spots
-│   │   ├── team_generation_service.py # trigger_team_generation_if_ready
-│   │   ├── scheduler_service.py       # EventBridge Scheduler integration
-│   │   └── email_service.py           # Resend email delivery
-│   ├── utils/clerk_jwt.py       # JWT validation via JWKS; get_optional_user for public endpoints
-│   ├── core/config.py           # Settings from env vars (startup validation included)
-│   ├── db/db.py                 # NullPool on Lambda, QueuePool locally
-│   └── main.py                  # FastAPI app, middleware, routers, Mangum handler; /health probes DB
-├── frontend/src/
-│   ├── pages/
-│   │   ├── LeaguesPage.tsx      # League list — cards link to LeagueDetailPage
-│   │   ├── LeagueDetailPage.tsx # Per-league page: info, standings, schedule, register/unregister
-│   │   ├── TeamPage.tsx         # Stub team page (placeholder)
-│   │   ├── AdminPage.tsx
-│   │   ├── admin/LeagueAdminPage.tsx
-│   │   ├── ProfilePage.tsx
-│   │   └── InvitePage.tsx
-│   ├── components/modals/       # RegistrationModal, ProfileCompletionModal
-│   ├── services/
-│   │   ├── core/                # Base API client (Clerk token injection), shared types
-│   │   ├── admin/league.ts      # Admin + public league API calls
-│   │   └── public/invitations.ts # Invitation + group API calls
-│   ├── hooks/
-│   │   ├── useAdmin.ts
-│   │   ├── useAuthenticatedApi.ts
-│   │   └── useMyTeam.ts         # Returns teamId if user has a team assigned
-│   └── contexts/AuthContext.tsx
-├── infrastructure/sam/
-│   └── template.yaml            # SAM template: API Gateway, FlagFootballFunction, DeadlineFunction
-├── backend/alembic/             # DB migrations
-└── docker-compose.yml
+├── apps/
+│   ├── api/app/                  # FastAPI backend
+│   │   ├── api/
+│   │   │   ├── admin/               # Admin-only endpoints (league, team, schedule, fields)
+│   │   │   │   └── dependencies.py  # Admin role verification
+│   │   │   ├── schemas/             # Pydantic request/response models
+│   │   │   ├── registration.py      # Solo + group registration, invite flow, group management
+│   │   │   ├── league.py            # Public league endpoints (list, detail, standings, schedule)
+│   │   │   ├── user.py
+│   │   │   └── contact.py
+│   │   ├── handlers/
+│   │   │   └── deadline_handler.py  # EventBridge Scheduler target — expires invites, triggers team gen
+│   │   ├── models/                  # SQLAlchemy ORM models (all PKs are UUIDs)
+│   │   ├── services/
+│   │   │   ├── league_service.py          # get_player_cap, get_occupied_spots
+│   │   │   ├── team_generation_service.py # trigger_team_generation_if_ready
+│   │   │   ├── scheduler_service.py       # EventBridge Scheduler integration
+│   │   │   └── email_service.py           # Resend email delivery
+│   │   ├── utils/clerk_jwt.py       # JWT validation via JWKS; get_optional_user for public endpoints
+│   │   ├── core/config.py           # Settings from env vars (startup validation included)
+│   │   ├── db/db.py                 # NullPool on Lambda, QueuePool locally
+│   │   └── main.py                  # FastAPI app, middleware, routers, Mangum handler; /health probes DB
+│   ├── web/                         # Next.js App Router frontend
+│   │   ├── app/                     # File-based routes (page.tsx = route, layout.tsx = wrapper)
+│   │   │   ├── layout.tsx           # Root layout: ClerkProvider, GoogleReCaptchaProvider, AppShell
+│   │   │   ├── page.tsx             # / (HomePage)
+│   │   │   ├── leagues/page.tsx     # /leagues
+│   │   │   ├── leagues/[leagueId]/page.tsx
+│   │   │   ├── admin/layout.tsx     # Admin auth guard
+│   │   │   ├── admin/page.tsx
+│   │   │   ├── profile/page.tsx
+│   │   │   ├── teams/[teamId]/page.tsx
+│   │   │   └── invite/[token]/page.tsx
+│   │   ├── components/              # Shared UI (layout/, modals/, common/)
+│   │   ├── hooks/                   # useAuthenticatedApi, useAdmin, useMyTeam, etc.
+│   │   ├── services/                # API service layer (NEXT_PUBLIC_API_URL)
+│   │   └── middleware.ts            # Clerk route protection for /admin(.*)
+│   └── infra/                       # AWS SAM infrastructure
+│       └── sam/
+│           └── template.yaml        # SAM template: API Gateway, FlagFootballFunction, DeadlineFunction
+├── packages/
+│   └── types/src/index.ts           # Shared TypeScript types (@salem/types workspace package)
+├── turbo.json                       # Turborepo pipeline (build, dev, test, lint)
+├── pnpm-workspace.yaml              # pnpm workspaces: apps/*, packages/*
+├── docker-compose.yml
+├── docker-compose.test.yml          # Ephemeral test DB (port 5433, tmpfs)
+├── Makefile                         # Test orchestration entry point
+└── tests/specs/                     # Playwright E2E specs
 ```
 
 ## Key Concepts
@@ -203,12 +207,12 @@ APP_URL=http://localhost:3000
 ADMIN_EMAIL=your-admin@example.com
 
 # Frontend
-REACT_APP_API_URL=http://localhost:8000
-REACT_APP_CLERK_PUBLISHABLE_KEY=pk_test_...
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 
 # reCAPTCHA (contact form — omit locally to disable)
 RECAPTCHA_SECRET_KEY=...
-REACT_APP_RECAPTCHA_SITE_KEY=...
+NEXT_PUBLIC_RECAPTCHA_SITE_KEY=...
 
 # AWS (production / Lambda only — omit locally to skip deadline scheduling)
 SCHEDULER_ROLE_ARN=arn:aws:iam::...
@@ -233,7 +237,7 @@ DEADLINE_LAMBDA_ARN=arn:aws:lambda:...
 - **Secrets**: `.env` locally; SSM Parameter Store in production (`{{resolve:ssm:...}}` in SAM template).
 - **CORS**: `allow_credentials=True` — set `CORS_ORIGINS` to exact frontend origin in production. SAM `AllowedOrigin` must be overridden at deploy time.
 - **Deadline Lambda**: `DeadlineFunction` has no API Gateway source; only `SchedulerExecutionRole` (least-privilege IAM) can invoke it. Handler validates `event["source"] == "aws.scheduler"`.
-- **Frontend base client**: Non-HTTPS `REACT_APP_API_URL` in production now throws at startup rather than logging a warning.
+- **Frontend base client**: Non-HTTPS `NEXT_PUBLIC_API_URL` in production now throws at startup rather than logging a warning.
 
 ## Testing
 
@@ -241,9 +245,9 @@ DEADLINE_LAMBDA_ARN=arn:aws:lambda:...
 
 | Layer | Framework | Location |
 |-------|-----------|----------|
-| Backend unit | pytest | `backend/tests/unit/` |
-| Backend integration | pytest + FastAPI TestClient | `backend/tests/integration/` |
-| Frontend unit/component | Jest + React Testing Library + MSW | `frontend/src/**/__tests__/` |
+| Backend unit | pytest | `apps/api/tests/unit/` |
+| Backend integration | pytest + FastAPI TestClient | `apps/api/tests/integration/` |
+| Frontend unit/component | Jest + React Testing Library + MSW | `apps/web/**/__tests__/` |
 | E2E | Playwright | `tests/specs/` |
 
 ### Quick start
@@ -284,7 +288,7 @@ Each backend test runs in a transaction that is never committed. The `db` fixtur
 
 **Backend**: `app.dependency_overrides[get_current_user]` is set to a no-op async function returning a dict. The `make_user_override(data)` helper in `conftest.py` creates these overrides.
 
-**Frontend**: `@clerk/clerk-react` is mocked via `frontend/src/__mocks__/@clerk/clerk-react.ts`. API calls are intercepted by MSW v1 handlers in `frontend/src/__mocks__/handlers.ts`.
+**Frontend**: `@clerk/nextjs` is mocked via `apps/web/__mocks__/@clerk/nextjs.ts`. API calls are intercepted by MSW v1 handlers in `apps/web/__mocks__/handlers.ts`.
 
 **E2E**: The backend checks `TESTING=true` and compares the `Authorization` header against `TEST_BYPASS_TOKEN`. Matching requests skip JWKS validation and receive a hardcoded user dict. The token is stored in a CI secret (`TEST_BYPASS_TOKEN`) and never in source code.
 
@@ -294,18 +298,18 @@ Three GitHub Actions workflows run on push/PR to `main`:
 
 | Workflow | File | Trigger filter |
 |----------|------|----------------|
-| Backend Tests | `.github/workflows/backend-tests.yml` | `backend/**` changes |
-| Frontend Tests | `.github/workflows/frontend-tests.yml` | `frontend/**` changes |
+| Backend Tests | `.github/workflows/backend-tests.yml` | `apps/api/**` changes |
+| Frontend Tests | `.github/workflows/frontend-tests.yml` | `apps/web/**` changes |
 | E2E (Playwright) | `.github/workflows/playwright.yml` | All pushes to `main` |
 
 Both backend and frontend workflows upload coverage to Codecov.
 
 ## Deployment
 
-See `infrastructure/README.md`. The SAM template is in `infrastructure/sam/template.yaml`.
+See `apps/infra/README.md`. The SAM template is in `apps/infra/sam/template.yaml`.
 
 ```bash
-cd infrastructure/sam
+cd apps/infra/sam
 sam build
 sam deploy --guided  # first time
 sam deploy --parameter-overrides AllowedOrigin=https://your-app.com  # subsequent

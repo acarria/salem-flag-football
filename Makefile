@@ -41,19 +41,19 @@ test-db-down:
 
 # Unit tests have no DB dependency — run immediately without spinning up Docker.
 test-unit:
-	cd backend && pytest tests/unit/ -v
+	cd apps/api && pytest tests/unit/ -v
 
 # Integration + full suite need the test DB.
 test-integration: test-db-up
-	cd backend && pytest tests/integration/ -v; \
+	cd apps/api && pytest tests/integration/ -v; \
 	EXIT=$$?; $(MAKE) test-db-down; exit $$EXIT
 
 test: test-db-up
-	cd backend && pytest tests/ -v; \
+	cd apps/api && pytest tests/ -v; \
 	EXIT=$$?; $(MAKE) test-db-down; exit $$EXIT
 
 test-cov: test-db-up
-	cd backend && pytest tests/ -v \
+	cd apps/api && pytest tests/ -v \
 	  --cov=app \
 	  --cov-report=term-missing \
 	  --cov-report=xml:coverage.xml; \
@@ -61,7 +61,7 @@ test-cov: test-db-up
 
 # ── Frontend tests ────────────────────────────────────────────────────────────
 frontend-test:
-	cd frontend && CI=true npm test
+	cd apps/web && CI=true pnpm test
 
 frontend-test-cov:
-	cd frontend && CI=true npm test -- --coverage
+	cd apps/web && CI=true pnpm test -- --coverage

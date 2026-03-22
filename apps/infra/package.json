@@ -1,0 +1,10 @@
+{
+  "name": "@salem/infra",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd sam && sam build",
+    "deploy": "cd sam && sam deploy",
+    "deploy:guided": "cd sam && sam deploy --guided"
+  }
+}

@@ -13,10 +13,10 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./apps/api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./backend:/app
+      - ./apps/api:/app
     env_file:
       - .env
     ports:
@@ -26,11 +26,15 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-    command: npm start
+      context: .
+      dockerfile: apps/web/Dockerfile
+    command: pnpm next dev --hostname 0.0.0.0
+    working_dir: /workspace/apps/web
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./apps/web:/workspace/apps/web
+      - ./packages/types:/workspace/packages/types
+      - /workspace/apps/web/node_modules
+      - /workspace/apps/web/.next
     ports:
       - "3000:3000"
     env_file:
