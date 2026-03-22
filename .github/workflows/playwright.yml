@@ -81,7 +81,7 @@ jobs:
       - name: Run Playwright tests
         env:
           TEST_BYPASS_TOKEN: ${{ secrets.TEST_BYPASS_TOKEN }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsudGVzdC5pbnZhbGlkJA
           CLERK_SECRET_KEY: sk_test_placeholder
           NEXT_PUBLIC_API_URL: http://localhost:8000
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flagfootball
