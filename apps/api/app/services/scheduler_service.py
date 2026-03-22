@@ -72,8 +72,6 @@ def schedule_deadline_job(league_id: UUID, deadline_date) -> None:
             "ConflictException", "ResourceConflictException"
         ):
             try:
-                import boto3
-                client = boto3.client("scheduler")
                 client.update_schedule(
                     Name=f"deadline-{league_id}",
                     ScheduleExpression=f"at({run_at.strftime('%Y-%m-%dT%H:%M:%S')})",

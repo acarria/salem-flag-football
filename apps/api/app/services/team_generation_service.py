@@ -83,8 +83,20 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
     players_assigned = 0
     team_assignments: Dict[UUID, List] = {team.id: [] for team in teams}
 
+    def _assign_to_smallest(lp):
+        """Assign a single league_player to the team with the fewest members."""
+        best = min(teams, key=lambda t: len(team_assignments[t.id]))
+        if len(team_assignments[best.id]) >= players_per_team:
+            logger.warning(
+                "Team generation overflow: assigning player %s to over-full team %s",
+                lp.player_id, best.id,
+            )
+        lp.team_id = best.id
+        team_assignments[best.id].append(lp)
+
     for group_id, group_players in players_by_group.items():
         if len(group_players) <= players_per_team:
+            # Try to keep group together on one team
             best_team = None
             min_count = float('inf')
             for team in teams:
@@ -100,42 +112,19 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
                 groups_kept_together += 1
             else:
                 for lp in group_players:
-                    best_team = min(teams, key=lambda t: len(team_assignments[t.id]))
-                    if len(team_assignments[best_team.id]) < players_per_team:
-                        lp.team_id = best_team.id
-                        team_assignments[best_team.id].append(lp)
-                        players_assigned += 1
-                    else:
-                        logger.warning("Team generation overflow: assigning player %s to over-full team %s", lp.player_id, best_team.id)
-                        lp.team_id = best_team.id
-                        team_assignments[best_team.id].append(lp)
-                        players_assigned += 1
+                    _assign_to_smallest(lp)
+                    players_assigned += 1
                 groups_split += 1
         else:
+            # Group too large for one team — split
             for lp in group_players:
-                best_team = min(teams, key=lambda t: len(team_assignments[t.id]))
-                if len(team_assignments[best_team.id]) < players_per_team:
-                    lp.team_id = best_team.id
-                    team_assignments[best_team.id].append(lp)
-                    players_assigned += 1
-                else:
-                    logger.warning("Team generation overflow: assigning player %s to over-full team %s", lp.player_id, best_team.id)
-                    lp.team_id = best_team.id
-                    team_assignments[best_team.id].append(lp)
-                    players_assigned += 1
+                _assign_to_smallest(lp)
+                players_assigned += 1
             groups_split += 1
 
     for lp in ungrouped_players:
-        best_team = min(teams, key=lambda t: len(team_assignments[t.id]))
-        if len(team_assignments[best_team.id]) < players_per_team:
-            lp.team_id = best_team.id
-            team_assignments[best_team.id].append(lp)
-            players_assigned += 1
-        else:
-            logger.warning("Team generation overflow: assigning player %s to over-full team %s", lp.player_id, best_team.id)
-            lp.team_id = best_team.id
-            team_assignments[best_team.id].append(lp)
-            players_assigned += 1
+        _assign_to_smallest(lp)
+        players_assigned += 1
 
     db.commit()
 
@@ -180,7 +169,7 @@ def trigger_team_generation_if_ready(league_id: UUID, db: Session) -> bool:
     If registration is closed (deadline passed or league full), trigger team generation.
     Returns True if generation was triggered.
     """
-    league = db.query(League).filter(League.id == league_id, League.is_active == True).first()
+    league = db.query(League).filter(League.id == league_id, League.is_active == True).with_for_update().first()
     if not league:
         return False
 

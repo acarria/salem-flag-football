@@ -17,7 +17,13 @@ import {
 import { UserProfile } from '@/services';
 import { invitationService } from '@/services/public/invitations';
 import { MyGroup } from '@salem/types';
+import { inputCls, labelCls } from '@/utils/formStyles';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
+
+// Pre-sorted by dial code length (descending) to avoid false matches (e.g. +44 vs +4)
+const COUNTRIES_BY_DIAL_LENGTH = [...COUNTRIES].sort(
+  (a, b) => b.dialCode.length - a.dialCode.length
+);
 
 /**
  * Parses an international phone string (e.g. "+1 234-567-8910") into
@@ -26,14 +32,12 @@ import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 function parseInternationalPhone(phone: string): { countryIso: string; localDigits: string } {
   if (!phone) return { countryIso: 'US', localDigits: '' };
   const digits = phone.replace(/\D/g, '');
-  // Try longest dial codes first to avoid false matches (e.g. +44 vs +4)
-  const sorted = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
-  for (const c of sorted) {
+  for (const c of COUNTRIES_BY_DIAL_LENGTH) {
     if (digits.startsWith(c.dialCode) && digits.length === c.dialCode.length + c.digitCount) {
       return { countryIso: c.iso, localDigits: digits.slice(c.dialCode.length) };
     }
   }
-  return { countryIso: 'US', localDigits: digits.slice(0, 10) };
+  return { countryIso: 'US', localDigits: digits };
 }
 
 export default function ProfilePage() {
@@ -246,9 +250,7 @@ export default function ProfilePage() {
     }
   };
 
-  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
   const inputDisabledCls = 'w-full px-3 py-2 bg-[#1A1A1A] border border-white/5 text-[#A0A0A0] text-sm rounded-md outline-none cursor-default';
-  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
 
   if (isLoading) {
     return (

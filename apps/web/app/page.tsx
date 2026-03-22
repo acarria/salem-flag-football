@@ -28,7 +28,7 @@ export default function HomePage() {
   };
 
   const handleRegistrationComplete = () => {
-    console.log('Registration completed successfully');
+    // Callback for post-registration actions (e.g., refresh league data)
   };
 
   useEffect(() => {

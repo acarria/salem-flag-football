@@ -8,6 +8,7 @@ import {
   getFullPhoneDisplay,
   COUNTRIES,
 } from '@/utils/validation';
+import { inputCls, inputErrCls, labelCls } from '@/utils/formStyles';
 
 type EmailErrorType = string | { message: string; suggestion: string };
 
@@ -61,10 +62,6 @@ export default function SoloRegistrationForm({
   onCountryChange,
   onSoloChange,
 }: SoloRegistrationFormProps) {
-  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const inputErrCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-red-500/60 focus:border-red-500/80 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
-
   const getVisibleError = (field: string): string | EmailErrorType | undefined => {
     if (!submitAttempted && !touched[field]) return undefined;
     return fieldErrors[field];
@@ -76,8 +73,9 @@ export default function SoloRegistrationForm({
     <>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={labelCls}>First Name</label>
+          <label htmlFor="solo-firstName" className={labelCls}>First Name</label>
           <input
+            id="solo-firstName"
             className={getVisibleError('firstName') ? inputErrCls : inputCls}
             name="firstName"
             placeholder="First"
@@ -92,8 +90,9 @@ export default function SoloRegistrationForm({
           )}
         </div>
         <div>
-          <label className={labelCls}>Last Name</label>
+          <label htmlFor="solo-lastName" className={labelCls}>Last Name</label>
           <input
+            id="solo-lastName"
             className={getVisibleError('lastName') ? inputErrCls : inputCls}
             name="lastName"
             placeholder="Last"
@@ -110,8 +109,9 @@ export default function SoloRegistrationForm({
       </div>
 
       <div>
-        <label className={labelCls}>Email</label>
+        <label htmlFor="solo-email" className={labelCls}>Email</label>
         <input
+          id="solo-email"
           className={getVisibleError('email') ? inputErrCls : inputCls}
           name="email"
           placeholder="you@example.com"
@@ -144,7 +144,7 @@ export default function SoloRegistrationForm({
       </div>
 
       <div>
-        <label className={labelCls}>Phone</label>
+        <label htmlFor="solo-phone" className={labelCls}>Phone</label>
         <div className="flex gap-2">
           <select
             value={countryIso}
@@ -160,6 +160,7 @@ export default function SoloRegistrationForm({
             ))}
           </select>
           <input
+            id="solo-phone"
             className={`flex-1 ${getVisibleError('phone') ? inputErrCls : inputCls}`}
             name="phone"
             placeholder={selectedCountry.format.replace(/X/g, '0')}
@@ -182,8 +183,9 @@ export default function SoloRegistrationForm({
       </div>
 
       <div>
-        <label className={labelCls}>Date of Birth</label>
+        <label htmlFor="solo-dateOfBirth" className={labelCls}>Date of Birth</label>
         <input
+          id="solo-dateOfBirth"
           className={getVisibleError('dateOfBirth') ? inputErrCls : inputCls}
           name="dateOfBirth"
           value={solo.dateOfBirth}
@@ -198,8 +200,9 @@ export default function SoloRegistrationForm({
       </div>
 
       <div>
-        <label className={labelCls}>Gender</label>
+        <label htmlFor="solo-gender" className={labelCls}>Gender</label>
         <select
+          id="solo-gender"
           className={getVisibleError('gender') ? inputErrCls : inputCls}
           name="gender"
           value={solo.gender}

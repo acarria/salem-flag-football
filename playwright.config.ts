@@ -70,7 +70,9 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Run your local dev server before starting the tests.
+   * In CI the backend is started by the workflow with proper env vars,
+   * so we only launch the frontend here. Locally both are started. */
   webServer: [
     {
       command: 'cd apps/web && npm run dev',
@@ -78,11 +80,15 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
-    {
-      command: 'cd apps/api && uvicorn app.main:app --port 8000',
-      url: 'http://localhost:8000/health',
-      reuseExistingServer: !process.env.CI,
-      timeout: 30_000,
-    },
+    ...(process.env.CI
+      ? []
+      : [
+          {
+            command: 'cd apps/api && uvicorn app.main:app --port 8000',
+            url: 'http://localhost:8000/health',
+            reuseExistingServer: true,
+            timeout: 30_000,
+          },
+        ]),
   ],
 });

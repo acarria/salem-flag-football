@@ -7,6 +7,7 @@ import BaseLayout from '@/components/layout/BaseLayout';
 import RegistrationModal from '@/components/modals/RegistrationModal';
 import { League } from '@/services';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
+import { formatDate } from '@/utils/format';
 
 export default function LeaguesPage() {
   const { isSignedIn } = useAuth();
@@ -52,9 +53,6 @@ export default function LeaguesPage() {
     setShowRegistrationModal(false);
     await loadLeagues();
   };
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const activeLeagues = leagues.filter(l => l.is_active);
   const pastLeagues = leagues.filter(l => !l.is_active);

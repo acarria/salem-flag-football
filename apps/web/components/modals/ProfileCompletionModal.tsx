@@ -10,6 +10,7 @@ import {
   COUNTRIES,
   isValidEmail,
 } from '@/utils/validation';
+import { inputCls, inputErrCls, labelCls } from '@/utils/formStyles';
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
@@ -160,10 +161,6 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
            profileData.termsAccepted;
   };
 
-  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const inputErrCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-red-500/60 focus:border-red-500/80 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="bg-[#111111] border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -180,8 +177,9 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>First Name</label>
+              <label htmlFor="profile-firstName" className={labelCls}>First Name</label>
               <input
+                id="profile-firstName"
                 className={fieldErrors.firstName ? inputErrCls : inputCls}
                 name="firstName"
                 placeholder="First"
@@ -192,8 +190,9 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
               {fieldErrors.firstName && <div className="text-red-400 text-xs mt-1">{fieldErrors.firstName}</div>}
             </div>
             <div>
-              <label className={labelCls}>Last Name</label>
+              <label htmlFor="profile-lastName" className={labelCls}>Last Name</label>
               <input
+                id="profile-lastName"
                 className={fieldErrors.lastName ? inputErrCls : inputCls}
                 name="lastName"
                 placeholder="Last"
@@ -206,8 +205,9 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           </div>
 
           <div>
-            <label className={labelCls}>Email</label>
+            <label htmlFor="profile-email" className={labelCls}>Email</label>
             <input
+              id="profile-email"
               className={fieldErrors.email ? inputErrCls : inputCls}
               name="email"
               placeholder="you@example.com"
@@ -220,7 +220,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           </div>
 
           <div>
-            <label className={labelCls}>Phone</label>
+            <label htmlFor="profile-phone" className={labelCls}>Phone</label>
             <div className="flex gap-2">
               <select
                 value={countryIso}
@@ -236,6 +236,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
                 ))}
               </select>
               <input
+                id="profile-phone"
                 className={`flex-1 ${fieldErrors.phone ? inputErrCls : inputCls}`}
                 name="phone"
                 placeholder={selectedCountry.format.replace(/X/g, '0')}
@@ -255,8 +256,9 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           </div>
 
           <div>
-            <label className={labelCls}>Date of Birth</label>
+            <label htmlFor="profile-dateOfBirth" className={labelCls}>Date of Birth</label>
             <input
+              id="profile-dateOfBirth"
               className={fieldErrors.dateOfBirth ? inputErrCls : inputCls}
               name="dateOfBirth"
               value={profileData.dateOfBirth}
@@ -268,8 +270,9 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           </div>
 
           <div>
-            <label className={labelCls}>Gender</label>
+            <label htmlFor="profile-gender" className={labelCls}>Gender</label>
             <select
+              id="profile-gender"
               className={fieldErrors.gender ? inputErrCls : inputCls}
               name="gender"
               value={profileData.gender}

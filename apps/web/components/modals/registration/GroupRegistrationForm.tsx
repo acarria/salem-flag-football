@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { inputCls, inputErrCls, labelCls } from '@/utils/formStyles';
 
 type EmailErrorType = string | { message: string; suggestion: string };
 
@@ -37,10 +38,6 @@ export default function GroupRegistrationForm({
   onRemovePlayer,
   onGroupChange,
 }: GroupRegistrationFormProps) {
-  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const inputErrCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-red-500/60 focus:border-red-500/80 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
-
   const getVisibleError = (field: string): string | EmailErrorType | undefined => {
     if (!submitAttempted && !touched[field]) return undefined;
     return fieldErrors[field];
@@ -49,8 +46,9 @@ export default function GroupRegistrationForm({
   return (
     <>
       <div>
-        <label className={labelCls}>Group Name</label>
+        <label htmlFor="groupName" className={labelCls}>Group Name</label>
         <input
+          id="groupName"
           className={getVisibleError('groupName') ? inputErrCls : inputCls}
           name="groupName"
           placeholder="e.g. The Friends, Work Buddies"
@@ -65,12 +63,13 @@ export default function GroupRegistrationForm({
       </div>
 
       {group.map((player, idx) => (
-        <div key={idx} className="border-t border-white/5 pt-4 space-y-3">
+        <div key={`invitee-${idx}-${player.email || idx}`} className="border-t border-white/5 pt-4 space-y-3">
           <div className="section-label">Invitee {idx + 1}</div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>First Name</label>
+              <label htmlFor={`invitee-${idx}-firstName`} className={labelCls}>First Name</label>
               <input
+                id={`invitee-${idx}-firstName`}
                 className={getVisibleError(`player${idx}_firstName`) ? inputErrCls : inputCls}
                 name="firstName"
                 placeholder="First"
@@ -84,8 +83,9 @@ export default function GroupRegistrationForm({
               )}
             </div>
             <div>
-              <label className={labelCls}>Last Name</label>
+              <label htmlFor={`invitee-${idx}-lastName`} className={labelCls}>Last Name</label>
               <input
+                id={`invitee-${idx}-lastName`}
                 className={getVisibleError(`player${idx}_lastName`) ? inputErrCls : inputCls}
                 name="lastName"
                 placeholder="Last"
@@ -100,8 +100,9 @@ export default function GroupRegistrationForm({
             </div>
           </div>
           <div>
-            <label className={labelCls}>Email</label>
+            <label htmlFor={`invitee-${idx}-email`} className={labelCls}>Email</label>
             <input
+              id={`invitee-${idx}-email`}
               className={getVisibleError(`player${idx}_email`) ? inputErrCls : inputCls}
               name="email"
               placeholder="invitee@example.com"

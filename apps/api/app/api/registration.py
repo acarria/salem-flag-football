@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.db.db import get_db
@@ -40,7 +40,7 @@ router = APIRouter()
 
 
 def _get_clerk_id(user: dict) -> str:
-    cid = user.get("id") or user.get("user_id")
+    cid = user.get("id")
     if not cid:
         raise HTTPException(status_code=401, detail="User ID not found in authentication token")
     return cid
@@ -208,10 +208,13 @@ async def register_group(
     if league.registration_deadline and league.registration_deadline < datetime.now(timezone.utc).date():
         raise HTTPException(status_code=400, detail="Registration deadline has passed")
 
-    # Determine group size from format (organizer + invitees = format_size)
-    format_size = 7 if league.format == '7v7' else 5
-    # Max invitees = format_size - 1 (organizer takes one spot)
-    max_invitees = format_size - 1
+    # Determine group size from format (organizer + invitees = players_per_team)
+    from app.services.league_service import _PLAYERS_PER_TEAM
+    players_per_team = _PLAYERS_PER_TEAM.get(league.format)
+    if players_per_team is None:
+        raise HTTPException(status_code=400, detail=f"Unsupported league format")
+    # Max invitees = players_per_team - 1 (organizer takes one spot)
+    max_invitees = players_per_team - 1
     if len(registration_data.players) > max_invitees:
         raise HTTPException(
             status_code=400,
@@ -333,7 +336,11 @@ async def register_group(
 @router.get("/invite/{token}", response_model=InvitationDetailResponse, summary="Get invitation details (public)")
 @limiter.limit("10/minute")
 async def get_invitation(request: Request, token: str, db: Session = Depends(get_db)) -> InvitationDetailResponse:
-    inv = db.query(GroupInvitation).filter(GroupInvitation.token == token).first()
+    inv = db.query(GroupInvitation).options(
+        joinedload(GroupInvitation.group),
+        joinedload(GroupInvitation.league),
+        joinedload(GroupInvitation.inviter),
+    ).filter(GroupInvitation.token == token).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
@@ -342,16 +349,12 @@ async def get_invitation(request: Request, token: str, db: Session = Depends(get
     if inv.status == "pending" and inv.expires_at < datetime.now(timezone.utc):
         effective_status = "expired"
 
-    group = db.query(Group).filter(Group.id == inv.group_id).first()
-    league = db.query(League).filter(League.id == inv.league_id).first()
-    inviter = db.query(Player).filter(Player.id == inv.invited_by).first()
-
     return InvitationDetailResponse(
         group_id=inv.group_id,
-        group_name=group.name if group else "",
+        group_name=inv.group.name if inv.group else "",
         league_id=inv.league_id,
-        league_name=league.name if league else "",
-        inviter_name=f"{inviter.first_name} {inviter.last_name}" if inviter else "",
+        league_name=inv.league.name if inv.league else "",
+        inviter_name=f"{inv.inviter.first_name} {inv.inviter.last_name}" if inv.inviter else "",
         invitee_first_name=inv.first_name,
         invitee_last_name=inv.last_name,
         status=effective_status,
@@ -568,17 +571,19 @@ async def get_my_groups(
     for inv in pending_invites:
         pending_by_group.setdefault(inv.group_id, []).append(inv)
 
-    result = []
-    seen_group_ids: set = set()
-
+    # Build a lookup from group_id to the first matching league_player (for league_id)
+    lp_by_group = {}
     for lp in league_players:
-        group_id = lp.group_id
-        if group_id in seen_group_ids:
-            continue
-        seen_group_ids.add(group_id)
+        if lp.group_id and lp.group_id not in lp_by_group:
+            lp_by_group[lp.group_id] = lp
 
+    result = []
+    for group_id in group_ids:
         group = groups_by_id.get(group_id)
         if not group:
+            continue
+        lp = lp_by_group.get(group_id)
+        if not lp:
             continue
         league = leagues_by_id.get(lp.league_id)
 
@@ -622,7 +627,9 @@ async def get_my_groups(
 
 
 @router.delete("/groups/invitations/{invitation_id}", response_model=SuccessResponse, summary="Revoke a pending group invitation (organizer only)")
+@limiter.limit("10/minute")
 async def revoke_invitation(
+    request: Request,
     invitation_id: UUID,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),

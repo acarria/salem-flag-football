@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from uuid import UUID
 
@@ -26,6 +26,5 @@ class PublicLeagueResponse(BaseModel):
     spots_remaining: Optional[int] = None
     is_registered: bool | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 

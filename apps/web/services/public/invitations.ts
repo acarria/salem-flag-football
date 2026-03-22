@@ -21,41 +21,50 @@ export interface PendingInvitation {
   expires_at: string;
 }
 
+export interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
 class InvitationApiService extends BaseApiService {
+  private authHeaders(authToken: string): HeadersInit {
+    return { Authorization: `Bearer ${authToken}` };
+  }
+
   async getInvitation(token: string): Promise<InvitationDetail> {
     return this.request<InvitationDetail>(`/registration/invite/${token}`);
   }
 
-  async acceptInvitation(token: string, authToken: string): Promise<any> {
-    return this.request<any>(`/registration/invite/${token}/accept`, {
+  async acceptInvitation(token: string, authToken: string): Promise<SuccessResponse> {
+    return this.request<SuccessResponse>(`/registration/invite/${token}/accept`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: this.authHeaders(authToken),
     });
   }
 
-  async declineInvitation(token: string, authToken: string): Promise<any> {
-    return this.request<any>(`/registration/invite/${token}/decline`, {
+  async declineInvitation(token: string, authToken: string): Promise<SuccessResponse> {
+    return this.request<SuccessResponse>(`/registration/invite/${token}/decline`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: this.authHeaders(authToken),
     });
   }
 
   async getPendingInvitations(authToken: string): Promise<PendingInvitation[]> {
     return this.request<PendingInvitation[]>('/registration/invitations/me', {
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: this.authHeaders(authToken),
     });
   }
 
   async getMyGroups(authToken: string): Promise<MyGroup[]> {
     return this.request<MyGroup[]>('/registration/groups/mine', {
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: this.authHeaders(authToken),
     });
   }
 
-  async revokeInvitation(invitationId: string, authToken: string): Promise<any> {
-    return this.request<any>(`/registration/groups/invitations/${invitationId}`, {
+  async revokeInvitation(invitationId: string, authToken: string): Promise<SuccessResponse> {
+    return this.request<SuccessResponse>(`/registration/groups/invitations/${invitationId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: this.authHeaders(authToken),
     });
   }
 }

@@ -21,6 +21,15 @@ from app.api.admin.dependencies import get_admin_user
 
 router = APIRouter()
 
+
+def _league_response(league, player_count: int, team_count: int) -> LeagueResponse:
+    """Build LeagueResponse from an ORM object + computed counts."""
+    data = {c.name: getattr(league, c.name) for c in league.__table__.columns}
+    data["registered_players_count"] = player_count
+    data["registered_teams_count"] = team_count
+    return LeagueResponse(**data)
+
+
 def calculate_end_date(start_date: date, num_weeks: int) -> date:
     """Calculate the end date based on number of weeks"""
     end_date = start_date + timedelta(weeks=num_weeks - 1)
@@ -80,11 +89,7 @@ async def create_league(
             logger.warning("Failed to schedule deadline job for league %s: %s", league.id, e)
 
         # Return with player/team counts
-        return LeagueResponse(
-            **league.__dict__,
-            registered_players_count=0,
-            registered_teams_count=0
-        )
+        return _league_response(league, 0, 0)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create league: %s", e)
@@ -123,11 +128,7 @@ async def get_all_leagues(
     )
 
     return [
-        LeagueResponse(
-            **league.__dict__,
-            registered_players_count=player_counts.get(league.id, 0),
-            registered_teams_count=team_counts.get(league.id, 0),
-        )
+        _league_response(league, player_counts.get(league.id, 0), team_counts.get(league.id, 0))
         for league in leagues
     ]
 
@@ -154,11 +155,7 @@ async def get_league_details(
         Team.is_active == True
     ).count()
 
-    return LeagueResponse(
-        **league.__dict__,
-        registered_players_count=player_count,
-        registered_teams_count=team_count
-    )
+    return _league_response(league, player_count, team_count)
 
 @router.put("/leagues/{league_id}", response_model=LeagueResponse, summary="Update league")
 async def update_league(
@@ -173,7 +170,7 @@ async def update_league(
         raise HTTPException(status_code=404, detail="League not found")
     
     # Update fields
-    update_data = league_data.dict(exclude_unset=True)
+    update_data = league_data.model_dump(exclude_unset=True)
     
     # Recalculate end date if start_date or num_weeks changed
     if 'start_date' in update_data or 'num_weeks' in update_data:
@@ -206,11 +203,7 @@ async def update_league(
             Team.is_active == True
         ).count()
 
-        return LeagueResponse(
-            **league.__dict__,
-            registered_players_count=player_count,
-            registered_teams_count=team_count
-        )
+        return _league_response(league, player_count, team_count)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update league: %s", e)

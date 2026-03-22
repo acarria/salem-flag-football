@@ -88,6 +88,11 @@ Resources:
                 Action: lambda:InvokeFunction
                 Resource: !GetAtt DeadlineFunction.Arn
 
+  DeadlineDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 days
+
   DeadlineFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -96,6 +101,9 @@ Resources:
         Command: ['app.handlers.deadline_handler.handler']
       Architectures:
         - x86_64
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt DeadlineDLQ.Arn
       # No API Gateway event — invoked exclusively by EventBridge Scheduler via SchedulerExecutionRole.
       # The resource policy is automatically scoped to that role; no other principal can invoke this function.
     Metadata:

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { logger } from '@/utils/logger';
+import { parseApiErrorResponse, throwApiError } from '@/utils/errors';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -37,38 +38,8 @@ export const useAuthenticatedApi = () => {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
-        let errorData: any = { detail: errorMessage };
-
-        try {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            errorData = await response.json();
-            if (Array.isArray(errorData.detail)) {
-              errorMessage = errorData.detail.map((e: any) => e.msg).join('; ');
-            } else if (errorData.detail) {
-              errorMessage = errorData.detail;
-            } else if (errorData.message) {
-              errorMessage = errorData.message;
-            }
-          } else {
-            const text = await response.text();
-            if (text) {
-              errorMessage = text;
-              errorData = { detail: text };
-            }
-          }
-        } catch (e) {
-          logger.error('Failed to parse error response:', e);
-        }
-
-        const error: any = new Error(errorMessage);
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-          data: errorData,
-        };
-        throw error;
+        const { errorMessage, errorData } = await parseApiErrorResponse(response);
+        throwApiError(errorMessage, response.status, response.statusText, errorData);
       }
 
       return await response.json();

@@ -82,6 +82,12 @@ jobs:
         env:
           TEST_BYPASS_TOKEN: ${{ secrets.TEST_BYPASS_TOKEN }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+          CLERK_SECRET_KEY: sk_test_placeholder
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flagfootball
+          CLERK_JWKS_URL: https://test.clerk.dev/.well-known/jwks.json
+          CLERK_ISSUER: https://test.clerk.dev/
+          TESTING: "true"
         run: pnpm exec playwright test --project=chromium
 
       - name: Upload Playwright report

@@ -30,7 +30,8 @@ export function useMyTeam(): { teamId: string | null } {
         if (cancelled) return;
         const withTeam = registrations.find(r => r.team_id != null);
         setTeamId(withTeam?.team_id ?? null);
-      } catch {
+      } catch (err) {
+        console.error('Failed to fetch team:', err);
         if (!cancelled) setTeamId(null);
       }
     };

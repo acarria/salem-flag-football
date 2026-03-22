@@ -26,7 +26,7 @@ export default function AdminsSection({ authenticatedRequest, currentUserEmail, 
     try {
       const data = await authenticatedRequest<AdminConfig[]>('/admin/admins');
       setAdmins(data);
-    } catch { /* silent */ }
+    } catch (err) { console.error('Failed to load admins:', err); }
   };
 
   const handleAddAdmin = async () => {
@@ -36,7 +36,7 @@ export default function AdminsSection({ authenticatedRequest, currentUserEmail, 
       setSuccess('Admin added!');
       setAdminFormData({ email: '', role: 'admin' });
       loadAdmins();
-    } catch { setError('Failed to add admin.'); }
+    } catch (err) { console.error('Failed to add admin:', err); setError('Failed to add admin.'); }
   };
 
   const handleRemoveAdmin = async (email: string) => {
@@ -44,7 +44,7 @@ export default function AdminsSection({ authenticatedRequest, currentUserEmail, 
       await authenticatedRequest(`/admin/admins/${email}`, { method: 'DELETE' });
       setSuccess('Admin removed!');
       loadAdmins();
-    } catch { setError('Failed to remove admin.'); }
+    } catch (err) { console.error('Failed to remove admin:', err); setError('Failed to remove admin.'); }
     setConfirmRemoveAdmin(null);
   };
 

@@ -34,7 +34,7 @@ async def get_admin_configs(
 ):
     """Get all admin email configurations"""
     admins = AdminService.get_all_admins(db)
-    return [AdminConfigResponse.from_orm(admin) for admin in admins]
+    return [AdminConfigResponse.model_validate(admin) for admin in admins]
 
 @router.post("/admins", response_model=AdminConfigResponse, summary="Add admin email")
 async def add_admin_email(
@@ -45,7 +45,7 @@ async def add_admin_email(
     """Add a new admin email address"""
     try:
         admin_config = AdminService.add_admin_email(db, admin_data.email, admin_data.role)
-        return AdminConfigResponse.from_orm(admin_config)
+        return AdminConfigResponse.model_validate(admin_config)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to add admin: %s", e)
@@ -71,7 +71,7 @@ async def update_admin_config(
         if not admin_config:
             raise HTTPException(status_code=404, detail="Admin not found")
         
-        return AdminConfigResponse.from_orm(admin_config)
+        return AdminConfigResponse.model_validate(admin_config)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update admin: %s", e)

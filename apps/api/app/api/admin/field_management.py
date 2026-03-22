@@ -972,7 +972,7 @@ async def update_field_availability_scoped(
     if not availability:
         raise HTTPException(status_code=404, detail="Availability window not found")
 
-    update_data = avail_data.dict(exclude_unset=True)
+    update_data = avail_data.model_dump(exclude_unset=True)
     for field_name, value in update_data.items():
         setattr(availability, field_name, value)
 

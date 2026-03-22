@@ -1,15 +1,10 @@
 import { ZodSchema } from 'zod';
 import { logger } from '@/utils/logger';
+import { parseApiErrorResponse, throwApiError } from '@/utils/errors';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 if (process.env.NODE_ENV === 'production' && !API_BASE_URL.startsWith('https://')) {
   throw new Error('NEXT_PUBLIC_API_URL must use HTTPS in production. Current value: ' + API_BASE_URL);
-}
-
-interface ApiErrorData {
-  detail?: string;
-  message?: string;
-  [key: string]: unknown;
 }
 
 export class BaseApiService {
@@ -37,38 +32,8 @@ export class BaseApiService {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
-        let errorData: ApiErrorData = { detail: errorMessage };
-
-        try {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            errorData = await response.json();
-            if (errorData.detail) {
-              errorMessage = errorData.detail;
-            } else if (errorData.message) {
-              errorMessage = errorData.message;
-            }
-          } else {
-            const text = await response.text();
-            if (text) {
-              errorMessage = text;
-              errorData = { detail: text };
-            }
-          }
-        } catch (e) {
-          logger.error('Failed to parse error response:', e);
-        }
-
-        const error = new Error(errorMessage) as Error & {
-          response?: { status: number; statusText: string; data: ApiErrorData };
-        };
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-          data: errorData,
-        };
-        throw error;
+        const { errorMessage, errorData } = await parseApiErrorResponse(response);
+        throwApiError(errorMessage, response.status, response.statusText, errorData);
       }
 
       return await response.json();

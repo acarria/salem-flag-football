@@ -129,33 +129,32 @@ async def get_current_user(request: Request):
     token = auth_header.split(" ", 1)[1]
 
     try:
-        # Log issuer for diagnostics before full validation
-        unverified = pyjwt.decode(
-            token,
-            options={
-                "verify_signature": False,
-                "verify_exp": False,
-                "verify_iss": False,
-                "verify_aud": False,
-            },
-        )
-        token_iss = str(unverified.get("iss", ""))[:200]
-        if token_iss.rstrip("/") != _CLERK_ISSUER_NORMALIZED:
-            logger.error(
-                "Issuer mismatch — token iss=%r, configured CLERK_ISSUER=%r",
-                token_iss,
-                settings.CLERK_ISSUER,
-            )
-
         jwks = await get_jwks()
         key = _get_signing_key(jwks, token)
-        payload = pyjwt.decode(
-            token,
-            key,
-            algorithms=["RS256"],
-            options={"verify_aud": False},
-            issuer=_CLERK_ISSUER_NORMALIZED,
-        )
+        try:
+            payload = pyjwt.decode(
+                token,
+                key,
+                algorithms=["RS256"],
+                options={"verify_aud": False},
+                issuer=_CLERK_ISSUER_NORMALIZED,
+            )
+        except pyjwt.exceptions.InvalidIssuerError:
+            # Diagnostic: decode without verification to log the mismatched issuer
+            try:
+                unverified = pyjwt.decode(
+                    token,
+                    options={"verify_signature": False, "verify_exp": False, "verify_iss": False, "verify_aud": False},
+                )
+                token_iss = str(unverified.get("iss", ""))[:200]
+                logger.error(
+                    "Issuer mismatch — token iss=%r, configured CLERK_ISSUER=%r",
+                    token_iss,
+                    settings.CLERK_ISSUER,
+                )
+            except Exception:
+                pass
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
         user_id = payload.get("sub")
         if not user_id:

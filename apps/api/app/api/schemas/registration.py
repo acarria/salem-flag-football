@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, field_validator, EmailStr, Field
 from typing import List, Optional
 from datetime import date, datetime
 from uuid import UUID
@@ -17,14 +17,16 @@ class SoloRegistrationRequest(BaseModel):
     communicationsAccepted: bool
     groupName: Optional[str] = Field(None, max_length=100)
 
-    @validator('termsAccepted')
+    @field_validator('termsAccepted')
+    @classmethod
     def validate_terms_accepted(cls, v):
         """Validate that terms are accepted."""
         if not v:
             raise ValueError('Terms must be accepted to register')
         return v
 
-    @validator('dateOfBirth')
+    @field_validator('dateOfBirth')
+    @classmethod
     def validate_date_of_birth(cls, v):
         """Validate date of birth format."""
         if not v or len(v.strip()) == 0:
@@ -53,18 +55,20 @@ class GroupRegistrationRequest(BaseModel):
     termsAccepted: bool
     communicationsAccepted: bool
 
-    @validator('termsAccepted')
+    @field_validator('termsAccepted')
+    @classmethod
     def validate_terms_accepted(cls, v):
         if not v:
             raise ValueError('Terms must be accepted to register')
         return v
 
-    @validator('players')
+    @field_validator('players')
+    @classmethod
     def validate_players(cls, v):
         if not v or len(v) == 0:
             raise ValueError('At least one invitee is required for group registration')
-        if len(v) > 9:
-            raise ValueError('Group cannot exceed 9 invitees')
+        if len(v) > 6:
+            raise ValueError('Group cannot exceed 6 invitees (max team size is 7)')
         return v
 
 # Registration Response Schemas
@@ -83,8 +87,7 @@ class LeagueRegistrationResponse(BaseModel):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class RegistrationResponse(BaseModel):
     """Response schema for registration operations."""

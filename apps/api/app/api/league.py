@@ -224,34 +224,26 @@ async def get_league_by_id(
         raise HTTPException(status_code=404, detail="League not found")
 
     now = datetime.now(timezone.utc)
-    league_ids = [league.id]
 
-    confirmed_counts = dict(
-        db.query(LeaguePlayer.league_id, func.count(LeaguePlayer.id))
-        .filter(
-            LeaguePlayer.league_id.in_(league_ids),
-            LeaguePlayer.registration_status == 'confirmed',
-            LeaguePlayer.is_active == True,
-        )
-        .group_by(LeaguePlayer.league_id)
-        .all()
-    )
-    team_counts = dict(
-        db.query(Team.league_id, func.count(Team.id))
-        .filter(Team.league_id.in_(league_ids), Team.is_active == True)
-        .group_by(Team.league_id)
-        .all()
-    )
-    pending_invite_counts = dict(
-        db.query(GroupInvitation.league_id, func.count(GroupInvitation.id))
-        .filter(
-            GroupInvitation.league_id.in_(league_ids),
-            GroupInvitation.status == 'pending',
-            GroupInvitation.expires_at > now,
-        )
-        .group_by(GroupInvitation.league_id)
-        .all()
-    )
+    confirmed_count = db.query(func.count(LeaguePlayer.id)).filter(
+        LeaguePlayer.league_id == league_id,
+        LeaguePlayer.registration_status == 'confirmed',
+        LeaguePlayer.is_active == True,
+    ).scalar() or 0
+
+    team_count = db.query(func.count(Team.id)).filter(
+        Team.league_id == league_id, Team.is_active == True,
+    ).scalar() or 0
+
+    pending_invite_count = db.query(func.count(GroupInvitation.id)).filter(
+        GroupInvitation.league_id == league_id,
+        GroupInvitation.status == 'pending',
+        GroupInvitation.expires_at > now,
+    ).scalar() or 0
+
+    confirmed_counts = {league_id: confirmed_count}
+    team_counts = {league_id: team_count}
+    pending_invite_counts = {league_id: pending_invite_count}
 
     registered_league_ids: set | None = None
     if user:

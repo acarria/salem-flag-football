@@ -31,6 +31,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Type check
+        working-directory: apps/web
+        run: pnpm tsc --noEmit
+
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+
       - name: Run tests
         working-directory: apps/web
         run: CI=true pnpm test -- --coverage --watchAll=false

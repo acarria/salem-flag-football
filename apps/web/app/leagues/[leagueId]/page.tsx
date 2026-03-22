@@ -8,6 +8,7 @@ import BaseLayout from '@/components/layout/BaseLayout';
 import RegistrationModal from '@/components/modals/RegistrationModal';
 import { leagueApi, League, PublicStanding, LeagueSchedule, MyTeamResponse } from '@/services';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
+import { formatDate, formatTime, formatCurrency } from '@/utils/format';
 
 interface RegistrationInfo {
   id: string;
@@ -126,22 +127,6 @@ export default function LeagueDetailPage() {
       else next.add(week);
       return next;
     });
-  };
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-  const formatTime = (timeString: string) => {
-    if (!timeString) return '';
-    const [h, m] = timeString.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hour = h % 12 || 12;
-    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
-  };
-
-  const formatCurrency = (dollars: number | null | undefined) => {
-    if (!dollars) return 'Free';
-    return `$${dollars.toFixed(2)}`;
   };
 
   if (isLoading) {
@@ -500,8 +485,8 @@ export default function LeagueDetailPage() {
               <span className="text-base font-semibold text-white">{myTeam.team_name}</span>
             </div>
             <div className="flex flex-col gap-2">
-              {myTeam.members.map((member, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
+              {myTeam.members.map((member) => (
+                <div key={`${member.first_name}-${member.last_name}`} className="flex items-center gap-2 text-sm">
                   <span className={member.is_you ? 'text-white font-medium' : 'text-[#A0A0A0]'}>
                     {member.first_name} {member.last_name}
                   </span>

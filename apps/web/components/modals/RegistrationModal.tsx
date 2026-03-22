@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { isHttpStatus, getApiErrorMessage } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { inputCls, inputErrCls, labelCls } from '@/utils/formStyles';
 import {
   getEmailError,
   getPhoneErrorForCountry,
@@ -43,6 +44,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const maxInvitees = selectedLeagueObj?.format === '7v7' ? 6 : 4;
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [countryIso, setCountryIso] = useState('US');
   const [solo, setSolo] = useState({
     firstName: '',
@@ -248,14 +250,14 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
       gender: 'Gender',
       termsAccepted: 'Terms of service acceptance',
     };
-    const errors = validateSolo();
-    return Object.keys(errors)
+    return Object.keys(fieldErrors)
       .filter(k => labels[k])
       .map(k => labels[k]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError('');
     setSuccess('');
     setSubmitAttempted(true);
@@ -273,6 +275,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
         return;
       }
 
+      setIsSubmitting(true);
       try {
         await authenticatedRequest('/registration/player', {
           method: 'POST',
@@ -302,6 +305,8 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
         } else {
           setError(msg);
         }
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
       const errors = validateGroup();
@@ -310,6 +315,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
         setError('Please fix the errors highlighted above before submitting.');
         return;
       }
+      setIsSubmitting(true);
       try {
         await authenticatedRequest('/registration/group', {
           method: 'POST',
@@ -327,6 +333,8 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
       } catch (err: unknown) {
         logger.error('Failed to register group:', err);
         setError(getApiErrorMessage(err));
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
@@ -337,9 +345,6 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const phoneDisplayValue = formatPhoneLocal(solo.phone, countryIso);
   const phonePreview = getFullPhoneDisplay(solo.phone, countryIso);
 
-  const inputCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const inputErrCls = 'w-full px-3 py-2 bg-[#1E1E1E] border border-red-500/60 focus:border-red-500/80 text-white text-sm rounded-md outline-none transition-colors placeholder:text-[#6B6B6B]';
-  const labelCls = 'block text-xs font-medium text-[#A0A0A0] mb-1';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -468,9 +473,11 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           <button
             type="submit"
             className="w-full bg-accent text-white text-sm font-medium py-2 px-5 rounded-md hover:bg-accent-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-            disabled={isLeagueRegistered || (selectedLeagueObj ? !selectedLeagueObj.is_registration_open : false)}
+            disabled={isSubmitting || isLeagueRegistered || (selectedLeagueObj ? !selectedLeagueObj.is_registration_open : false)}
           >
-            {isLeagueRegistered
+            {isSubmitting
+              ? 'Submitting...'
+              : isLeagueRegistered
               ? 'Already Registered'
               : selectedLeagueObj && !selectedLeagueObj.is_registration_open
               ? 'Registration Closed'

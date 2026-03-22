@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationInfo, field_validator
 from typing import List, Optional
 from datetime import datetime, date, time, timezone
 from decimal import Decimal
@@ -30,39 +30,45 @@ class LeagueCreateRequest(BaseModel):
     # Advanced settings
     settings: Optional[dict] = None
 
-    @validator('tournament_format')
+    @field_validator('tournament_format')
+    @classmethod
     def validate_tournament_format(cls, v):
         valid_formats = ['round_robin', 'swiss']
         if v not in valid_formats:
             raise ValueError(f'tournament_format must be one of {valid_formats}')
         return v
 
-    @validator('format')
+    @field_validator('format')
+    @classmethod
     def validate_format(cls, v):
         valid_formats = ['7v7', '5v5']
         if v not in valid_formats:
             raise ValueError(f'format must be one of {valid_formats}')
         return v
 
-    @validator('max_teams')
+    @field_validator('max_teams')
+    @classmethod
     def validate_max_teams(cls, v):
         if v is not None and v > 10:
             raise ValueError('max_teams cannot exceed 10')
         return v
 
-    @validator('start_date')
+    @field_validator('start_date')
+    @classmethod
     def validate_start_date(cls, v):
         if v < datetime.now(timezone.utc).date():
             raise ValueError('start_date cannot be in the past')
         return v
 
-    @validator('num_weeks')
+    @field_validator('num_weeks')
+    @classmethod
     def validate_num_weeks(cls, v):
         if v < 1:
             raise ValueError('num_weeks must be at least 1')
         return v
 
-    @validator('registration_fee')
+    @field_validator('registration_fee')
+    @classmethod
     def validate_registration_fee(cls, v):
         if v is not None and v < 0:
             raise ValueError('registration_fee cannot be negative')
@@ -86,7 +92,8 @@ class LeagueUpdateRequest(BaseModel):
     settings: Optional[dict] = None
     is_active: Optional[bool] = None
 
-    @validator('max_teams')
+    @field_validator('max_teams')
+    @classmethod
     def validate_max_teams(cls, v):
         if v is not None and v > 10:
             raise ValueError('max_teams cannot exceed 10')
@@ -117,8 +124,7 @@ class LeagueResponse(BaseModel):
     registered_players_count: int
     registered_teams_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LeagueStatsResponse(BaseModel):
     league_id: UUID
@@ -144,8 +150,7 @@ class LeagueMemberResponse(BaseModel):
     waiver_status: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TeamResponse(BaseModel):
     id: UUID
@@ -156,8 +161,7 @@ class TeamResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TeamGenerationRequest(BaseModel):
     teams_count: Optional[int] = Field(None, ge=2, le=10)
@@ -193,8 +197,7 @@ class AdminConfigResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AdminConfigCreateRequest(BaseModel):
     email: EmailStr
@@ -216,8 +219,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     leagues_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PaginatedUserResponse(BaseModel):
     users: List[UserResponse]
@@ -242,8 +244,7 @@ class FieldResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FieldCreateRequest(BaseModel):
     name: str = Field(..., max_length=200)
@@ -256,28 +257,32 @@ class FieldCreateRequest(BaseModel):
     facility_name: Optional[str] = Field(None, max_length=200)
     additional_notes: Optional[str] = Field(None, max_length=1000)
 
-    @validator('zip_code')
+    @field_validator('zip_code')
+    @classmethod
     def validate_zip_code(cls, v):
         """Validate zip code format (basic validation)."""
         if not v or len(v.strip()) == 0:
             raise ValueError('zip_code cannot be empty')
         return v.strip()
 
-    @validator('state')
+    @field_validator('state')
+    @classmethod
     def validate_state(cls, v):
         """Validate state is provided."""
         if not v or len(v.strip()) == 0:
             raise ValueError('state cannot be empty')
         return v.strip()
 
-    @validator('city')
+    @field_validator('city')
+    @classmethod
     def validate_city(cls, v):
         """Validate city is provided."""
         if not v or len(v.strip()) == 0:
             raise ValueError('city cannot be empty')
         return v.strip()
 
-    @validator('street_address')
+    @field_validator('street_address')
+    @classmethod
     def validate_street_address(cls, v):
         """Validate street address is provided."""
         if not v or len(v.strip()) == 0:
@@ -313,8 +318,7 @@ class FieldAvailabilityResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FieldAvailabilityCreateRequest(BaseModel):
     field_id: UUID
@@ -327,36 +331,40 @@ class FieldAvailabilityCreateRequest(BaseModel):
     end_time: time
     notes: Optional[str] = Field(None, max_length=500)
 
-    @validator('day_of_week')
-    def validate_day_of_week(cls, v, values):
+    @field_validator('day_of_week')
+    @classmethod
+    def validate_day_of_week(cls, v, info: ValidationInfo):
         """Validate day_of_week is provided for recurring availability and is in valid range."""
-        is_recurring = values.get('is_recurring', False)
+        is_recurring = info.data.get('is_recurring', False)
         if is_recurring and v is None:
             raise ValueError('day_of_week is required for recurring availability')
         if v is not None and (v < 0 or v > 6):
             raise ValueError('day_of_week must be between 0 (Monday) and 6 (Sunday)')
         return v
 
-    @validator('recurrence_start_date')
-    def validate_recurrence_start_date(cls, v, values):
+    @field_validator('recurrence_start_date')
+    @classmethod
+    def validate_recurrence_start_date(cls, v, info: ValidationInfo):
         """Validate recurrence_start_date is provided for recurring availability."""
-        is_recurring = values.get('is_recurring', False)
+        is_recurring = info.data.get('is_recurring', False)
         if is_recurring and v is None:
             raise ValueError('recurrence_start_date is required for recurring availability')
         return v
 
-    @validator('custom_date')
-    def validate_custom_date(cls, v, values):
+    @field_validator('custom_date')
+    @classmethod
+    def validate_custom_date(cls, v, info: ValidationInfo):
         """Validate custom_date is provided for one-time availability."""
-        is_recurring = values.get('is_recurring', False)
+        is_recurring = info.data.get('is_recurring', False)
         if not is_recurring and v is None:
             raise ValueError('custom_date is required for one-time availability')
         return v
 
-    @validator('end_time')
-    def validate_end_time(cls, v, values):
+    @field_validator('end_time')
+    @classmethod
+    def validate_end_time(cls, v, info: ValidationInfo):
         """Validate end_time is after start_time."""
-        start_time = values.get('start_time')
+        start_time = info.data.get('start_time')
         if start_time and v <= start_time:
             raise ValueError('end_time must be after start_time')
         return v
@@ -373,7 +381,8 @@ class FieldAvailabilityUpdateRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=500)
     is_active: Optional[bool] = None
 
-    @validator('day_of_week')
+    @field_validator('day_of_week')
+    @classmethod
     def validate_day_of_week(cls, v):
         """Validate day_of_week is in valid range."""
         if v is not None and (v < 0 or v > 6):
@@ -390,13 +399,15 @@ class GameUpdateRequest(BaseModel):
     game_time: Optional[str] = Field(None, max_length=20)
     field_id: Optional[UUID] = None
 
-    @validator('status')
+    @field_validator('status')
+    @classmethod
     def validate_status(cls, v):
         if v is not None and v not in ('scheduled', 'in_progress', 'completed', 'cancelled'):
             raise ValueError('status must be one of: scheduled, in_progress, completed, cancelled')
         return v
 
-    @validator('game_time')
+    @field_validator('game_time')
+    @classmethod
     def validate_game_time(cls, v):
         if v is not None:
             parts = v.split(':')

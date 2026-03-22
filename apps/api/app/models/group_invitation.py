@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 from app.db.db import Base
@@ -28,3 +29,8 @@ class GroupInvitation(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+    # Opt-in relationships — use joinedload() explicitly; lazy="raise" prevents accidental N+1
+    group = relationship("Group", lazy="raise")
+    league = relationship("League", lazy="raise")
+    inviter = relationship("Player", foreign_keys=[invited_by], lazy="raise")

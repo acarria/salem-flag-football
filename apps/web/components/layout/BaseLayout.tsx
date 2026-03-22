@@ -134,7 +134,7 @@ export default function BaseLayout({
                     )}
 
                     <div className="flex items-center ml-1">
-                      <UserButton afterSignOutUrl="/" appearance={{ elements: { userButtonAvatarBox: 'w-8 h-8' } }} />
+                      <UserButton appearance={{ elements: { userButtonAvatarBox: 'w-8 h-8' } }} />
                     </div>
                   </>
                 )}
@@ -249,7 +249,7 @@ export default function BaseLayout({
               }}
               routing="hash"
               signUpUrl="/sign-up"
-              afterSignInUrl="/"
+              fallbackRedirectUrl="/"
             />
           </div>
         </div>

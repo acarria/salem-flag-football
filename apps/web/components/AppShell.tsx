@@ -59,7 +59,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     requestRef.current = request;
     getTokenRef.current = getToken;
-  });
+  }, [request, getToken]);
 
   useEffect(() => {
     const checkProfile = async () => {
