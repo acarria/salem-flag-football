@@ -1,6 +1,4 @@
 import pytest
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4
 
 # conftest sets env vars before import
 from app.services.league_service import get_player_cap, get_occupied_spots

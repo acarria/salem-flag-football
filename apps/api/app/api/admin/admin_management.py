@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -51,10 +51,10 @@ async def add_admin_email(
         logger.exception("Failed to add admin: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
-@router.put("/admins/{email}", response_model=AdminConfigResponse, summary="Update admin configuration")
+@router.put("/admins/{email:path}", response_model=AdminConfigResponse, summary="Update admin configuration")
 async def update_admin_config(
-    email: str,
     admin_data: AdminConfigUpdateRequest,
+    email: str = Path(..., max_length=320),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -77,9 +77,9 @@ async def update_admin_config(
         logger.exception("Failed to update admin: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
-@router.delete("/admins/{email}", summary="Remove admin privileges")
+@router.delete("/admins/{email:path}", summary="Remove admin privileges")
 async def remove_admin_email(
-    email: str,
+    email: str = Path(..., max_length=320),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):

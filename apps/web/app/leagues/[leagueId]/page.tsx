@@ -14,6 +14,7 @@ interface RegistrationInfo {
   id: string;
   league_id: string;
   registration_status: string;
+  waiver_status: string;
   team_id: string | null;
   group_id: string | null;
   group_name: string | null;
@@ -241,20 +242,37 @@ export default function LeagueDetailPage() {
                   </button>
                 )}
               </div>
-            ) : hasTeam ? (
-              <div className="flex items-center gap-2 text-sm text-white">
-                <span className="status-dot bg-blue-400" />
-                Registered · Team: <span className="font-medium">{myTeam?.team_name ?? myRegistration?.team_id}</span>
-              </div>
-            ) : myRegistration?.group_id ? (
-              <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
-                <span className="status-dot bg-green-400" />
-                Registered · Group: {myRegistration?.group_name ?? 'your group'} · Team assignment pending
-              </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
-                <span className="status-dot bg-green-400" />
-                Registered · Team assignment pending
+              <div>
+                <div className="flex items-center gap-2 text-sm text-white">
+                  {hasTeam ? (
+                    <>
+                      <span className="status-dot bg-blue-400" />
+                      Registered · Team: <span className="font-medium">{myTeam?.team_name ?? myRegistration?.team_id}</span>
+                    </>
+                  ) : myRegistration?.group_id ? (
+                    <>
+                      <span className="status-dot bg-green-400" />
+                      <span className="text-[#A0A0A0]">Registered · Group: {myRegistration?.group_name ?? 'your group'} · Team assignment pending</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="status-dot bg-green-400" />
+                      <span className="text-[#A0A0A0]">Registered · Team assignment pending</span>
+                    </>
+                  )}
+                </div>
+                {myRegistration?.waiver_status === 'pending' && (
+                  <div className="mt-3 flex items-center justify-between bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3">
+                    <span className="text-sm text-yellow-400">You still need to sign the liability waiver</span>
+                    <Link
+                      href={`/waiver/${leagueId}`}
+                      className="bg-accent text-white text-xs font-medium py-1.5 px-3 rounded-md hover:bg-accent-dark transition-colors flex-shrink-0"
+                    >
+                      Sign Waiver
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </div>

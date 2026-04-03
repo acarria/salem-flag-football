@@ -14,7 +14,7 @@ SAM template via the ScheduleEvent event source). Do not grant other principals 
 permission on this function.
 """
 import logging
-import os
+from datetime import datetime, timezone
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -47,10 +47,26 @@ def handler(event, context):
 
     from app.db.db import SessionLocal
     from app.models.group_invitation import GroupInvitation
+    from app.models.league import League
     from app.services.team_generation_service import trigger_team_generation_if_ready
+    from app.services.waiver_service import expire_unsigned_for_league
 
     db = SessionLocal()
     try:
+        # Idempotency guard: lock the league row and check if already processed
+        league = db.query(League).filter(League.id == league_id).with_for_update().first()
+        if not league:
+            logger.error("League %s not found", league_id)
+            return {"statusCode": 404, "error": "League not found"}
+        if league.deadline_processed_at is not None:
+            logger.info(
+                "Deadline already processed for league %s at %s — skipping",
+                league_id, league.deadline_processed_at,
+            )
+            return {"statusCode": 200, "league_id": str(league_id), "already_processed": True}
+        league.deadline_processed_at = datetime.now(timezone.utc)
+        db.flush()
+
         # Step 1: expire pending invitations so reserved spots no longer block generation
         expired_count = (
             db.query(GroupInvitation)
@@ -58,13 +74,19 @@ def handler(event, context):
                 GroupInvitation.league_id == league_id,
                 GroupInvitation.status == "pending",
             )
-            .update({"status": "expired"})
+            .update({"status": "expired", "updated_at": datetime.now(timezone.utc)})
         )
         if expired_count:
             db.commit()
             logger.info("Expired %d pending invitations for league %s", expired_count, league_id)
 
-        # Step 2: generate teams with whoever confirmed before the deadline
+        # Step 2: expire unsigned waivers so those spots are freed
+        expired_waivers = expire_unsigned_for_league(db, league_id)
+        if expired_waivers:
+            db.commit()
+            logger.info("Expired %d unsigned waivers for league %s", expired_waivers, league_id)
+
+        # Step 3: generate teams with whoever confirmed + signed before the deadline
         triggered = trigger_team_generation_if_ready(league_id, db)
         if triggered:
             logger.info("Teams generated for league %s at deadline", league_id)

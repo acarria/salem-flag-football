@@ -15,7 +15,7 @@ os.environ.setdefault("TESTING", "true")
 os.environ.setdefault("TEST_BYPASS_TOKEN", "test-secret-token-12345")
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 
 from app.db.db import Base, get_db
@@ -33,6 +33,7 @@ from app.models.game import Game
 from app.models.field import Field
 from app.models.field_availability import FieldAvailability
 from app.models.league_field import LeagueField
+from app.models.waiver import Waiver, WaiverSignature
 
 
 @pytest.fixture(scope="session")
@@ -313,3 +314,28 @@ def make_league_field(db, league_id, field_id) -> LeagueField:
     db.add(lf)
     db.flush()
     return lf
+
+
+def make_waiver(db, version="2025-v1", content="Test waiver content.", is_active=True, **kwargs) -> Waiver:
+    """Create and flush a Waiver."""
+    w = Waiver(version=version, content=content, is_active=is_active, **kwargs)
+    db.add(w)
+    db.flush()
+    return w
+
+
+def make_waiver_signature(db, waiver_id, player_id, league_id, full_name_typed="Test Player", **kwargs) -> WaiverSignature:
+    """Create and flush a WaiverSignature."""
+    defaults = dict(
+        waiver_id=waiver_id,
+        player_id=player_id,
+        league_id=league_id,
+        full_name_typed=full_name_typed,
+        ip_address="127.0.0.1",
+        user_agent="pytest",
+    )
+    defaults.update(kwargs)
+    sig = WaiverSignature(**defaults)
+    db.add(sig)
+    db.flush()
+    return sig

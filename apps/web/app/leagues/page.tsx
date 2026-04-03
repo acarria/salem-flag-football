@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth, useClerk } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import BaseLayout from '@/components/layout/BaseLayout';
 import RegistrationModal from '@/components/modals/RegistrationModal';
 import { League } from '@/services';
@@ -12,7 +12,6 @@ import { formatDate } from '@/utils/format';
 export default function LeaguesPage() {
   const { isSignedIn } = useAuth();
   const { openSignIn } = useClerk();
-  const router = useRouter();
   const { request: authenticatedRequest } = useAuthenticatedApi();
 
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -68,10 +67,10 @@ export default function LeaguesPage() {
     const registrationStatusKnown = league.is_registered !== undefined;
 
     return (
-      <div
+      <Link
         key={league.id}
-        className="border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all cursor-pointer group"
-        onClick={() => router.push(`/leagues/${league.id}`)}
+        href={`/leagues/${league.id}`}
+        className="block border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all group"
       >
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
@@ -129,7 +128,7 @@ export default function LeaguesPage() {
             </div>
           </div>
         )}
-      </div>
+      </Link>
     );
   };
 

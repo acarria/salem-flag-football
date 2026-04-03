@@ -490,7 +490,7 @@ def test_generate_teams_success(client, db):
     league = make_league(db, format="7v7", max_teams=2)
     for i in range(14):
         p = make_player(db, email=f"p{i}@test.com")
-        make_league_player(db, league.id, p.id)
+        make_league_player(db, league.id, p.id, waiver_status="signed")
     db.commit()
     resp = client.post(f"/admin/leagues/{league.id}/generate-teams", json={})
     _admin_teardown()
@@ -532,7 +532,6 @@ def test_get_members_pagination(client, db):
 
 
 def test_update_league_start_date_recalculates_end(client, db):
-    from datetime import date
     _admin_setup(db)
     league = make_league(db, start_date=date(2026, 6, 1), num_weeks=8)
     db.commit()

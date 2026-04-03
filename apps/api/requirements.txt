@@ -6,9 +6,9 @@ alembic==1.18.4
 psycopg2-binary==2.9.11
 pydantic[email]==2.12.5
 PyJWT[crypto]==2.10.1
-passlib[bcrypt]==1.7.4
 httpx==0.28.1
 resend==2.23.0
 mangum==0.21.0
 slowapi==0.1.9
 boto3==1.42.68
+fpdf2==2.8.3

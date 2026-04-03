@@ -235,13 +235,16 @@ export default function LeaguesSection({ authenticatedRequest, setError, setSucc
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                         <div>
                           <label className="text-xs text-[#6B6B6B] mb-1 block">Reg. Deadline</label>
-                          <input
-                            type="date"
-                            name="registration_deadline"
-                            value={(leagueDraft as any).registration_deadline || ''}
-                            onChange={(e) => setLeagueDraft(prev => ({ ...prev, registration_deadline: e.target.value || undefined } as any))}
-                            className={inputCls}
-                          />
+                          <div className="px-3 py-2 bg-[#1E1E1E] border border-white/10 text-[#6B6B6B] text-sm rounded-md">
+                            {(leagueDraft as any).start_date
+                              ? (() => {
+                                  const d = new Date((leagueDraft as any).start_date);
+                                  d.setDate(d.getDate() - 8);
+                                  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                })()
+                              : 'Set start date first'}
+                            <span className="text-[#4A4A4A] ml-1">(auto)</span>
+                          </div>
                         </div>
                         <div>
                           <label className="text-xs text-[#6B6B6B] mb-1 block">Reg. Fee ($)</label>

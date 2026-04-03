@@ -5,16 +5,16 @@ Extracts core team assignment logic so it can be triggered both manually
 (admin "Generate Teams" button) and automatically when registration is complete.
 """
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from uuid import UUID
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.league import League
 from app.models.league_player import LeaguePlayer
-from app.models.player import Player
 from app.models.team import Team
 from app.services.league_service import get_player_cap, get_occupied_spots
+from app.services.waiver_service import has_pending_waivers
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ def _run_team_generation(league, db: Session, teams_count: Optional[int] = None)
     registered_players = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league.id,
         LeaguePlayer.registration_status == 'confirmed',
+        LeaguePlayer.waiver_status == 'signed',
         LeaguePlayer.is_active == True,
     ).all()
 
@@ -194,6 +195,10 @@ def trigger_team_generation_if_ready(league_id: UUID, db: Session) -> bool:
     is_full = occupied >= player_cap
 
     if is_full or deadline_passed:
+        # Don't generate teams while waivers are still pending within their deadline
+        if has_pending_waivers(db, league_id):
+            logger.info("Team generation deferred: pending waivers remain for league %s", league_id)
+            return False
         _run_team_generation(league, db)
         return True
 

@@ -1,11 +1,12 @@
 from slowapi import Limiter
 
-# Use the leftmost IP in X-Forwarded-For (the original client IP as appended by
-# each proxy hop). This prevents spoofing via injected rightmost values. Assumes
-# the load balancer/proxy appends rather than overwrites the header.
+# Prefer request.client.host (set correctly by API Gateway / uvicorn).
+# Fall back to the leftmost X-Forwarded-For entry only when client.host
+# is unavailable (e.g. behind a non-standard proxy that strips it).
 limiter = Limiter(
     key_func=lambda request: (
-        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or (request.client.host if request.client else "unknown")
+        (request.client.host if request.client else None)
+        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or "unknown"
     )
 )

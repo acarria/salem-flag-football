@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import List, Dict, Optional
@@ -14,6 +14,7 @@ from app.api.schemas.admin import (
     FieldAvailabilityResponse, FieldAvailabilityCreateRequest, FieldAvailabilityUpdateRequest,
 )
 from app.api.admin.dependencies import get_admin_user
+from app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,9 @@ router = APIRouter()
 
 # Global Field Management Endpoints (fields are independent, not tied to leagues)
 @router.post("/fields", response_model=FieldResponse, summary="Create a new field")
+@limiter.limit("30/minute")
 async def create_field_global(
+    request: Request,
     field_data: FieldCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -79,7 +82,9 @@ async def create_field_global(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/fields", response_model=List[FieldResponse], summary="Get all fields")
+@limiter.limit("30/minute")
 async def get_all_fields(
+    request: Request,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -105,7 +110,9 @@ async def get_all_fields(
     return [FieldResponse.model_validate(field) for field in fields]
 
 @router.get("/fields/{field_id}", response_model=FieldResponse, summary="Get a specific field")
+@limiter.limit("30/minute")
 async def get_field_by_id_global(
+    request: Request,
     field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -132,7 +139,9 @@ async def get_field_by_id_global(
     return FieldResponse.model_validate(field)
 
 @router.put("/fields/{field_id}", response_model=FieldResponse, summary="Update a field")
+@limiter.limit("30/minute")
 async def update_field_global(
+    request: Request,
     field_id: UUID,
     field_data: FieldUpdateRequest,
     db: Session = Depends(get_db),
@@ -175,7 +184,9 @@ async def update_field_global(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/fields/{field_id}", summary="Delete a field")
+@limiter.limit("30/minute")
 async def delete_field_global(
+    request: Request,
     field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -216,7 +227,9 @@ async def delete_field_global(
 
 # League-Field Association Endpoints
 @router.post("/leagues/{league_id}/fields/{field_id}", response_model=Dict[str, str], summary="Associate a field with a league")
+@limiter.limit("30/minute")
 async def associate_field_with_league(
+    request: Request,
     league_id: UUID,
     field_id: UUID,
     db: Session = Depends(get_db),
@@ -273,7 +286,9 @@ async def associate_field_with_league(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/leagues/{league_id}/fields/{field_id}", summary="Disassociate a field from a league")
+@limiter.limit("30/minute")
 async def disassociate_field_from_league(
+    request: Request,
     league_id: UUID,
     field_id: UUID,
     db: Session = Depends(get_db),
@@ -319,7 +334,9 @@ async def disassociate_field_from_league(
 
 # League-Specific Field Endpoints (backward compatibility - uses league_fields junction table)
 @router.post("/leagues/{league_id}/fields", response_model=FieldResponse, summary="Create a new field and associate it with a league")
+@limiter.limit("30/minute")
 async def create_field(
+    request: Request,
     league_id: UUID,
     field_data: FieldCreateRequest,
     db: Session = Depends(get_db),
@@ -383,7 +400,9 @@ async def create_field(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/leagues/{league_id}/fields", response_model=List[FieldResponse], summary="Get all fields for a league")
+@limiter.limit("30/minute")
 async def get_fields(
+    request: Request,
     league_id: UUID,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
@@ -424,7 +443,9 @@ async def get_fields(
     return [FieldResponse.model_validate(field) for field in fields]
 
 @router.get("/leagues/{league_id}/fields/{field_id}", response_model=FieldResponse, summary="Get a specific field")
+@limiter.limit("30/minute")
 async def get_field_by_id(
+    request: Request,
     league_id: UUID,
     field_id: UUID,
     db: Session = Depends(get_db),
@@ -468,7 +489,9 @@ async def get_field_by_id(
     return FieldResponse.model_validate(field)
 
 @router.put("/leagues/{league_id}/fields/{field_id}", response_model=FieldResponse, summary="Update a field")
+@limiter.limit("30/minute")
 async def update_field(
+    request: Request,
     league_id: UUID,
     field_id: UUID,
     field_data: FieldUpdateRequest,
@@ -520,7 +543,9 @@ async def update_field(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/leagues/{league_id}/fields/{field_id}", summary="Delete a field")
+@limiter.limit("30/minute")
 async def delete_field(
+    request: Request,
     league_id: UUID,
     field_id: UUID,
     db: Session = Depends(get_db),
@@ -572,7 +597,9 @@ async def delete_field(
 
 # Field Availability Management Endpoints (field-only, not league-specific)
 @router.post("/field-availability", response_model=FieldAvailabilityResponse, summary="Create field availability")
+@limiter.limit("30/minute")
 async def create_field_availability_global(
+    request: Request,
     availability_data: FieldAvailabilityCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -644,7 +671,9 @@ async def create_field_availability_global(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get all field availability records")
+@limiter.limit("30/minute")
 async def get_all_field_availability(
+    request: Request,
     field_id: Optional[UUID] = None,
     is_active: Optional[bool] = None,
     skip: int = 0,
@@ -689,7 +718,9 @@ async def get_all_field_availability(
     return result
 
 @router.get("/leagues/{league_id}/field-availability", response_model=List[FieldAvailabilityResponse], summary="Get field availability for fields in a league")
+@limiter.limit("30/minute")
 async def get_field_availability_for_league(
+    request: Request,
     league_id: UUID,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
@@ -741,7 +772,9 @@ async def get_field_availability_for_league(
     return result
 
 @router.get("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Get a specific field availability record")
+@limiter.limit("30/minute")
 async def get_field_availability_by_id(
+    request: Request,
     availability_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -775,7 +808,9 @@ async def get_field_availability_by_id(
     return response
 
 @router.put("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Update field availability record")
+@limiter.limit("30/minute")
 async def update_field_availability_global(
+    request: Request,
     availability_id: UUID,
     availability_data: FieldAvailabilityUpdateRequest,
     db: Session = Depends(get_db),
@@ -844,7 +879,9 @@ async def update_field_availability_global(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/field-availability/{availability_id}", summary="Delete field availability record")
+@limiter.limit("30/minute")
 async def delete_field_availability_global(
+    request: Request,
     availability_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -892,7 +929,9 @@ async def delete_field_availability_global(
 # ---------------------------------------------------------------------------
 
 @router.post("/fields/{field_id}/availability", response_model=FieldAvailabilityResponse, summary="Add availability window to a field")
+@limiter.limit("30/minute")
 async def create_field_availability_scoped(
+    request: Request,
     field_id: UUID,
     avail_data: FieldAvailabilityCreateRequest,
     db: Session = Depends(get_db),
@@ -931,7 +970,9 @@ async def create_field_availability_scoped(
 
 
 @router.get("/fields/{field_id}/availability", response_model=List[FieldAvailabilityResponse], summary="Get all availability windows for a field")
+@limiter.limit("30/minute")
 async def get_field_availability_scoped(
+    request: Request,
     field_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user),
@@ -953,7 +994,9 @@ async def get_field_availability_scoped(
 
 
 @router.put("/fields/{field_id}/availability/{avail_id}", response_model=FieldAvailabilityResponse, summary="Update a field availability window")
+@limiter.limit("30/minute")
 async def update_field_availability_scoped(
+    request: Request,
     field_id: UUID,
     avail_id: UUID,
     avail_data: FieldAvailabilityUpdateRequest,
@@ -988,7 +1031,9 @@ async def update_field_availability_scoped(
 
 
 @router.delete("/fields/{field_id}/availability/{avail_id}", summary="Delete a field availability window")
+@limiter.limit("30/minute")
 async def delete_field_availability_scoped(
+    request: Request,
     field_id: UUID,
     avail_id: UUID,
     db: Session = Depends(get_db),

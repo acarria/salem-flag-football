@@ -18,6 +18,20 @@ _JWKS_LOCK = asyncio.Lock()
 
 # Normalize issuer: strip trailing slash so both "…dev" and "…dev/" validate.
 _CLERK_ISSUER_NORMALIZED = settings.CLERK_ISSUER.rstrip("/")
+_CLERK_JWT_AUDIENCE = settings.CLERK_JWT_AUDIENCE or None  # None disables aud check
+
+
+def _jwt_decode_options() -> dict:
+    """Return PyJWT decode kwargs for audience verification."""
+    opts: dict = {"verify_aud": bool(_CLERK_JWT_AUDIENCE)}
+    return opts
+
+
+def _jwt_decode_kwargs() -> dict:
+    """Return extra kwargs (audience) for pyjwt.decode."""
+    if _CLERK_JWT_AUDIENCE:
+        return {"audience": _CLERK_JWT_AUDIENCE}
+    return {}
 
 async def get_jwks():
     now = int(time.time())
@@ -108,8 +122,9 @@ async def get_optional_user(request: Request):
             token,
             key,
             algorithms=["RS256"],
-            options={"verify_aud": False},
+            options=_jwt_decode_options(),
             issuer=_CLERK_ISSUER_NORMALIZED,
+            **_jwt_decode_kwargs(),
         )
         user_id = payload.get("sub")
         if not user_id:
@@ -136,8 +151,9 @@ async def get_current_user(request: Request):
                 token,
                 key,
                 algorithms=["RS256"],
-                options={"verify_aud": False},
+                options=_jwt_decode_options(),
                 issuer=_CLERK_ISSUER_NORMALIZED,
+                **_jwt_decode_kwargs(),
             )
         except pyjwt.exceptions.InvalidIssuerError:
             # Diagnostic: decode without verification to log the mismatched issuer

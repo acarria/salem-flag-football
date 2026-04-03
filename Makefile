@@ -38,22 +38,23 @@ test-db-down:
 	docker-compose -f docker-compose.test.yml down
 
 # ── Backend tests ─────────────────────────────────────────────────────────────
+PYTEST := apps/api/.venv/bin/pytest
 
 # Unit tests have no DB dependency — run immediately without spinning up Docker.
 test-unit:
-	cd apps/api && pytest tests/unit/ -v
+	cd apps/api && .venv/bin/pytest tests/unit/ -v
 
 # Integration + full suite need the test DB.
 test-integration: test-db-up
-	cd apps/api && pytest tests/integration/ -v; \
+	cd apps/api && .venv/bin/pytest tests/integration/ -v; \
 	EXIT=$$?; $(MAKE) test-db-down; exit $$EXIT
 
 test: test-db-up
-	cd apps/api && pytest tests/ -v; \
+	cd apps/api && .venv/bin/pytest tests/ -v; \
 	EXIT=$$?; $(MAKE) test-db-down; exit $$EXIT
 
 test-cov: test-db-up
-	cd apps/api && pytest tests/ -v \
+	cd apps/api && .venv/bin/pytest tests/ -v \
 	  --cov=app \
 	  --cov-report=term-missing \
 	  --cov-report=xml:coverage.xml; \

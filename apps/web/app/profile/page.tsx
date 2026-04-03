@@ -67,6 +67,16 @@ export default function ProfilePage() {
   const [myGroups, setMyGroups] = useState<MyGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
+  interface LeagueRegistration {
+    id: string;
+    league_id: string;
+    league_name: string | null;
+    waiver_status: string;
+    registration_status: string;
+    created_at: string;
+  }
+  const [registrations, setRegistrations] = useState<LeagueRegistration[]>([]);
+
   useEffect(() => {
     const fetchProfile = async () => {
       if (user) {
@@ -141,6 +151,20 @@ export default function ProfilePage() {
       }
     };
     fetchGroups();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    const fetchRegistrations = async () => {
+      if (!user?.id) return;
+      try {
+        const data = await request<LeagueRegistration[]>(`/registration/player/${user.id}/leagues`);
+        setRegistrations(data);
+      } catch {
+        // Non-fatal
+      }
+    };
+    fetchRegistrations();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -471,6 +495,35 @@ export default function ProfilePage() {
             </label>
           </div>
         </form>
+
+        {registrations.filter(r => r.waiver_status === 'pending').length > 0 && (
+          <div className="border-t border-white/5 mt-10 pt-8">
+            <div className="section-label mb-4">PENDING WAIVERS</div>
+            <div className="space-y-3">
+              {registrations
+                .filter(r => r.waiver_status === 'pending')
+                .map(r => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4"
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-white">{r.league_name || 'League'}</div>
+                      <div className="text-xs text-[#6B6B6B] mt-0.5">
+                        Registered {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/waiver/${r.league_id}`}
+                      className="bg-accent text-white text-xs font-medium py-1.5 px-3 rounded-md hover:bg-accent-dark transition-colors flex-shrink-0"
+                    >
+                      Sign Waiver
+                    </Link>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {profile.registrationDate && (
           <div className="border-t border-white/5 mt-10 pt-8">

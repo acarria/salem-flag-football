@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Date
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Date, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -6,6 +6,9 @@ from app.db.db import Base
 
 class Game(Base):
     __tablename__ = "games"
+    __table_args__ = (
+        Index("ix_games_league_active_status", "league_id", "is_active", "status"),
+    )
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     league_id = Column(UUID(as_uuid=True), ForeignKey("leagues.id"), nullable=False)
     field_id = Column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=True, index=True)

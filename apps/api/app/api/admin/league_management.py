@@ -4,20 +4,23 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+from app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
 from app.db.db import get_db
 from app.models.league import League
-from app.models.player import Player
 from app.models.team import Team
 from app.models.league_player import LeaguePlayer
 from app.api.schemas.admin import (
     LeagueCreateRequest, LeagueUpdateRequest, LeagueResponse, LeagueStatsResponse
 )
 from app.api.admin.dependencies import get_admin_user
+from app.services.league_service import get_player_cap, get_occupied_spots
+from app.core.config import settings as app_settings
 
 router = APIRouter()
 
@@ -36,7 +39,9 @@ def calculate_end_date(start_date: date, num_weeks: int) -> date:
     return end_date
 
 @router.post("/leagues", response_model=LeagueResponse, summary="Create a new league")
+@limiter.limit("30/minute")
 async def create_league(
+    request: Request,
     league_data: LeagueCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -55,6 +60,11 @@ async def create_league(
         if not league_data.swiss_rounds:
             league_data.swiss_rounds = league_data.num_weeks
     
+    # Auto-calculate registration deadline: start_date - (WAIVER_EXPIRY_DAYS + 1)
+    registration_deadline = league_data.start_date - timedelta(
+        days=app_settings.WAIVER_EXPIRY_DAYS + 1
+    )
+
     # Create the league
     league = League(
         name=league_data.name,
@@ -70,7 +80,7 @@ async def create_league(
         games_per_week=league_data.games_per_week,
         max_teams=league_data.max_teams,
         min_teams=league_data.min_teams,
-        registration_deadline=league_data.registration_deadline,
+        registration_deadline=registration_deadline,
         registration_fee=league_data.registration_fee,
         settings=league_data.settings,
         created_by=admin_user["id"]
@@ -96,7 +106,9 @@ async def create_league(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/leagues", response_model=List[LeagueResponse], summary="Get all leagues (admin view)")
+@limiter.limit("30/minute")
 async def get_all_leagues(
+    request: Request,
     skip: int = 0,
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
@@ -133,7 +145,9 @@ async def get_all_leagues(
     ]
 
 @router.get("/leagues/{league_id}", response_model=LeagueResponse, summary="Get league details")
+@limiter.limit("30/minute")
 async def get_league_details(
+    request: Request,
     league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -158,7 +172,9 @@ async def get_league_details(
     return _league_response(league, player_count, team_count)
 
 @router.put("/leagues/{league_id}", response_model=LeagueResponse, summary="Update league")
+@limiter.limit("30/minute")
 async def update_league(
+    request: Request,
     league_id: UUID,
     league_data: LeagueUpdateRequest,
     db: Session = Depends(get_db),
@@ -177,6 +193,13 @@ async def update_league(
         start_date = update_data.get('start_date', league.start_date)
         num_weeks = update_data.get('num_weeks', league.num_weeks)
         update_data['end_date'] = calculate_end_date(start_date, num_weeks)
+
+    # Recalculate registration deadline if start_date changed
+    if 'start_date' in update_data:
+        start_date = update_data['start_date']
+        update_data['registration_deadline'] = start_date - timedelta(
+            days=app_settings.WAIVER_EXPIRY_DAYS + 1
+        )
     
     for field, value in update_data.items():
         setattr(league, field, value)
@@ -195,6 +218,7 @@ async def update_league(
         # Return with updated counts (using LeaguePlayer for many-to-many relationship)
         player_count = db.query(LeaguePlayer).filter(
             LeaguePlayer.league_id == league.id,
+            LeaguePlayer.registration_status == 'confirmed',
             LeaguePlayer.is_active == True
         ).count()
 
@@ -210,7 +234,9 @@ async def update_league(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/leagues/{league_id}", summary="Delete league")
+@limiter.limit("30/minute")
 async def delete_league(
+    request: Request,
     league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -231,7 +257,9 @@ async def delete_league(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/leagues/{league_id}/stats", response_model=LeagueStatsResponse, summary="Get league statistics")
+@limiter.limit("30/minute")
 async def get_league_stats(
+    request: Request,
     league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -253,14 +281,17 @@ async def get_league_stats(
         Team.is_active == True
     ).count()
     
-    # Determine registration status
+    # Determine registration status (consistent with public league endpoint)
     today = datetime.now(timezone.utc).date()
     if league.registration_deadline and today > league.registration_deadline:
         registration_status = 'closed'
-    elif league.max_teams and total_teams >= league.max_teams:
-        registration_status = 'full'
     else:
-        registration_status = 'open'
+        player_cap = get_player_cap(league.format, league.max_teams)
+        if player_cap is not None:
+            occupied = get_occupied_spots(league.id, db)
+            registration_status = 'full' if occupied >= player_cap else 'open'
+        else:
+            registration_status = 'open'
     
     # Calculate days until start and deadline
     days_until_start = (league.start_date - today).days

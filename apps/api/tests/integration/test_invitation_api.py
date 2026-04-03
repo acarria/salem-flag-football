@@ -1,8 +1,6 @@
 import pytest
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4
 from tests.conftest import (
-    make_league, make_player, make_league_player, make_group, make_group_invitation,
+    make_league, make_player, make_group, make_group_invitation,
     make_user_override
 )
 from app.utils.clerk_jwt import get_current_user

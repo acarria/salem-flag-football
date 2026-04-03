@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Index, CheckConstraint, text
+from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Index, CheckConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -10,6 +10,7 @@ class LeaguePlayer(Base):
         Index("ix_league_players_league_id", "league_id"),
         Index("ix_league_players_player_id", "player_id"),
         Index("ix_league_players_group_id", "group_id"),
+        Index("ix_league_players_league_regstatus_active", "league_id", "registration_status", "is_active"),
         Index("ix_league_players_league_player", "league_id", "player_id", unique=True,
               postgresql_where=text("is_active = TRUE")),
         CheckConstraint(
@@ -27,5 +28,6 @@ class LeaguePlayer(Base):
     waiver_status = Column(String, nullable=False, default="pending")   # pending, signed, expired
     created_by = Column(String, nullable=False)  # Clerk user id
     is_active = Column(Boolean, default=True)
+    waiver_deadline = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now()) 
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())

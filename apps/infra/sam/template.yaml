@@ -25,6 +25,7 @@ Globals:
         APP_URL: !Sub '{{resolve:ssm:/flagfootball/APP_URL}}'
         CORS_ORIGINS: !Sub '{{resolve:ssm:/flagfootball/CORS_ORIGINS}}'
         ADMIN_EMAIL: !Sub '{{resolve:ssm:/flagfootball/ADMIN_EMAIL}}'
+        WAIVER_S3_BUCKET: !Ref WaiverPdfBucket
 
 Resources:
   FlagFootballApi:
@@ -51,6 +52,9 @@ Resources:
         Command: ['app.main.handler']
       Architectures:
         - x86_64
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref WaiverPdfBucket
       Events:
         ApiEvent:
           Type: HttpApi
@@ -106,6 +110,40 @@ Resources:
         TargetArn: !GetAtt DeadlineDLQ.Arn
       # No API Gateway event — invoked exclusively by EventBridge Scheduler via SchedulerExecutionRole.
       # The resource policy is automatically scoped to that role; no other principal can invoke this function.
+    Metadata:
+      DockerfileUri: ../../api/Dockerfile
+
+  # S3 bucket for signed waiver PDFs
+  WaiverPdfBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'salem-flag-football-waivers-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # Daily waiver sweep — expires overdue unsigned waivers and triggers team generation
+  WaiverSweepFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageConfig:
+        Command: ['app.handlers.waiver_sweep_handler.handler']
+      Architectures:
+        - x86_64
+      Events:
+        DailySweep:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 day)
+            Description: Daily sweep of overdue unsigned waivers
+            Enabled: true
     Metadata:
       DockerfileUri: ../../api/Dockerfile
 

@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
-from app.api import user, registration, team, league, contact
+from app.api import user, registration, team, league, contact, waiver
 from app.api.admin.main import router as admin_router
 from app.db.db import SessionLocal, Base, engine, get_db
 from app.services.admin_service import AdminService
@@ -28,8 +28,31 @@ import app.models.league_player  # noqa: F401
 import app.models.player  # noqa: F401
 import app.models.team  # noqa: F401
 import app.models.user  # noqa: F401
+import app.models.waiver  # noqa: F401
 
-logging.basicConfig(level=logging.INFO)
+import json as _json
+
+class _JSONFormatter(logging.Formatter):
+    """Structured JSON formatter for CloudWatch Insights on Lambda."""
+    def format(self, record):
+        entry = {
+            "timestamp": self.formatTime(record),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            entry["exception"] = self.formatException(record.exc_info)
+        return _json.dumps(entry)
+
+if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(_JSONFormatter())
+    logging.root.addHandler(_handler)
+    logging.root.setLevel(logging.INFO)
+else:
+    logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 _default_origins = "http://localhost:3000,http://127.0.0.1:3000"
@@ -56,6 +79,7 @@ async def lifespan(app: FastAPI):
             if not AdminService.is_admin_email(db, admin_email):
                 AdminService.add_admin_email(db, admin_email.strip().lower(), "super_admin")
         except Exception:
+            logger.exception("Failed to seed initial admin from ADMIN_EMAIL")
             db.rollback()
         finally:
             db.close()
@@ -99,6 +123,7 @@ app.include_router(team.router, prefix="/team")
 app.include_router(league.router, prefix="/league")
 app.include_router(admin_router)
 app.include_router(contact.router, prefix="/contact")
+app.include_router(waiver.router, prefix="/waiver")
 
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):

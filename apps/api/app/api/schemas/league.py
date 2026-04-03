@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 # Public league response schema (moved from app/api/league.py)

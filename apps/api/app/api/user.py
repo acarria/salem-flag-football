@@ -1,13 +1,18 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy.orm import Session
-from app.utils.clerk_jwt import get_current_user
-from app.db.db import get_db
-from app.models.player import Player
-from app.models.league_player import LeaguePlayer
-from app.api.schemas.user import UserProfile
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from sqlalchemy.orm import Session
+
+from app.api.schemas.user import UserProfile
+from app.db.db import get_db
+from app.models.league_player import LeaguePlayer
+from app.models.player import Player
+from app.services.exceptions import ServiceError
+from app.services.player_service import upsert_player
+from app.core.limiter import limiter
+from app.utils.clerk_jwt import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -29,50 +34,22 @@ def _player_to_dict(player: Player) -> dict:
     }
 
 
-def _upsert_player(player: Player | None, user_id: str, profile: UserProfile, db: Session) -> Player:
-    """Create or update a Player record from a UserProfile. Does not commit."""
-    if profile.dateOfBirth and profile.dateOfBirth.strip():
-        try:
-            date_of_birth = datetime.strptime(profile.dateOfBirth, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid date format for dateOfBirth. Expected format: YYYY-MM-DD",
-            )
-    else:
-        date_of_birth = None
-
-    if player:
-        player.first_name = profile.firstName
-        player.last_name = profile.lastName
-        player.email = profile.email.lower().strip()
-        player.phone = profile.phone
-        player.date_of_birth = date_of_birth
-        player.gender = profile.gender if profile.gender else None
-        player.communications_accepted = profile.communicationsAccepted
-        player.payment_status = profile.paymentStatus if profile.paymentStatus else "pending"
-        player.waiver_status = profile.waiverStatus if profile.waiverStatus else "pending"
-        player.updated_at = datetime.now(timezone.utc)
-    else:
-        player = Player(
-            clerk_user_id=user_id,
-            first_name=profile.firstName,
-            last_name=profile.lastName,
-            email=profile.email.lower().strip(),
-            phone=profile.phone,
-            date_of_birth=date_of_birth,
-            gender=profile.gender if profile.gender else None,
-            communications_accepted=profile.communicationsAccepted,
-            payment_status=profile.paymentStatus if profile.paymentStatus else "pending",
-            waiver_status=profile.waiverStatus if profile.waiverStatus else "pending",
-            created_by=user_id,
+def _parse_dob(raw: str | None):
+    """Parse dateOfBirth string, returning date or None."""
+    if not raw or not raw.strip():
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format for dateOfBirth. Expected format: YYYY-MM-DD",
         )
-        db.add(player)
-    return player
 
 
 @router.get("/me", summary="Get current user profile")
-async def get_my_profile(user=Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_my_profile(request: Request, user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.get("id")
     player = db.query(Player).filter(Player.clerk_user_id == user_id).first()
     if not player:
@@ -81,16 +58,26 @@ async def get_my_profile(user=Depends(get_current_user), db: Session = Depends(g
 
 
 @router.put("/me", summary="Update current user profile")
-async def update_my_profile(profile: UserProfile, user=Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def update_my_profile(request: Request, profile: UserProfile, user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.get("id")
-    player = db.query(Player).filter(Player.clerk_user_id == user_id).first()
-    player = _upsert_player(player, user_id, profile, db)
+    dob = _parse_dob(profile.dateOfBirth)
     try:
+        player = upsert_player(
+            db, user_id,
+            first_name=profile.firstName, last_name=profile.lastName,
+            email=profile.email, phone=profile.phone,
+            date_of_birth=dob,
+            gender=profile.gender if profile.gender else None,
+            communications_accepted=profile.communicationsAccepted,
+            payment_status=profile.paymentStatus if profile.paymentStatus else "pending",
+            waiver_status=profile.waiverStatus if profile.waiverStatus else "pending",
+        )
         db.commit()
         db.refresh(player)
         return _player_to_dict(player)
-    except HTTPException:
-        raise
+    except ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update profile for user %s: %s", user_id, e)
@@ -98,7 +85,8 @@ async def update_my_profile(profile: UserProfile, user=Depends(get_current_user)
 
 
 @router.get("/profile/{user_id}", summary="Get user profile by ID")
-async def get_user_profile(user_id: str = Path(..., max_length=200), user=Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_user_profile(request: Request, user_id: str = Path(..., max_length=200), user=Depends(get_current_user), db: Session = Depends(get_db)):
     if user.get("id") != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
     player = db.query(Player).filter(Player.clerk_user_id == user_id).first()
@@ -108,8 +96,9 @@ async def get_user_profile(user_id: str = Path(..., max_length=200), user=Depend
 
 
 @router.get("/profile/{user_id}/registered/{league_id}", summary="Check if user is registered for a league")
+@limiter.limit("30/minute")
 async def check_league_registration(
-    user_id: str = Path(..., max_length=200), *, league_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)
+    request: Request, user_id: str = Path(..., max_length=200), *, league_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)
 ):
     if user.get("id") != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -125,19 +114,29 @@ async def check_league_registration(
 
 
 @router.put("/profile/{user_id}", summary="Update user profile by ID")
+@limiter.limit("10/minute")
 async def update_user_profile(
-    user_id: str = Path(..., max_length=200), *, profile: UserProfile, user=Depends(get_current_user), db: Session = Depends(get_db)
+    request: Request, user_id: str = Path(..., max_length=200), *, profile: UserProfile, user=Depends(get_current_user), db: Session = Depends(get_db)
 ):
     if user.get("id") != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    player = db.query(Player).filter(Player.clerk_user_id == user_id).first()
-    player = _upsert_player(player, user_id, profile, db)
+    dob = _parse_dob(profile.dateOfBirth)
     try:
+        player = upsert_player(
+            db, user_id,
+            first_name=profile.firstName, last_name=profile.lastName,
+            email=profile.email, phone=profile.phone,
+            date_of_birth=dob,
+            gender=profile.gender if profile.gender else None,
+            communications_accepted=profile.communicationsAccepted,
+            payment_status=profile.paymentStatus if profile.paymentStatus else "pending",
+            waiver_status=profile.waiverStatus if profile.waiverStatus else "pending",
+        )
         db.commit()
         db.refresh(player)
         return _player_to_dict(player)
-    except HTTPException:
-        raise
+    except ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update profile for user %s: %s", user_id, e)

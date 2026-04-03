@@ -9,7 +9,6 @@ import httpx
 import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 from fastapi import HTTPException
 from jwt import algorithms as jwt_algorithms
 

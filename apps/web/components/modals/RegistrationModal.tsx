@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { isHttpStatus, getApiErrorMessage } from '@/utils/errors';
@@ -36,6 +37,7 @@ type EmailErrorType = string | { message: string; suggestion: string };
 
 export default function RegistrationModal({ isOpen, onClose, onRegistrationComplete }: RegistrationModalProps) {
   const { user } = useUser();
+  const router = useRouter();
   const { request: authenticatedRequest } = useAuthenticatedApi();
   const [type, setType] = useState<RegistrationType>('solo');
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -293,9 +295,12 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
         });
         const selectedLeagueData = leagues.find(l => l.id === selectedLeague);
         const leagueName = selectedLeagueData ? selectedLeagueData.name : 'the league';
-        setSuccess(`Registration submitted successfully! Welcome to ${leagueName}!`);
+        setSuccess(`Registration submitted successfully! Welcome to ${leagueName}! Redirecting to sign your waiver...`);
         if (onRegistrationComplete) onRegistrationComplete();
-        setTimeout(() => onClose(), 2000);
+        setTimeout(() => {
+          onClose();
+          router.push(`/waiver/${selectedLeague}`);
+        }, 2000);
       } catch (err: unknown) {
         logger.error('Failed to register:', err);
         const msg = getApiErrorMessage(err);
@@ -327,9 +332,12 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
             communicationsAccepted: true,
           }),
         });
-        setSuccess(`Group registered! Invitations sent to ${group.length} player(s).`);
+        setSuccess(`Group registered! Invitations sent to ${group.length} player(s). Redirecting to sign your waiver...`);
         if (onRegistrationComplete) onRegistrationComplete();
-        setTimeout(() => onClose(), 2000);
+        setTimeout(() => {
+          onClose();
+          router.push(`/waiver/${selectedLeague}`);
+        }, 2000);
       } catch (err: unknown) {
         logger.error('Failed to register group:', err);
         setError(getApiErrorMessage(err));

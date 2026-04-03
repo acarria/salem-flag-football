@@ -20,6 +20,7 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     APP_URL: str = os.getenv("APP_URL", "http://localhost:3000")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "onboarding@resend.dev")
+    CLERK_JWT_AUDIENCE: str = os.getenv("CLERK_JWT_AUDIENCE", "")  # Optional: enable aud verification for multi-app Clerk
     RECAPTCHA_SECRET_KEY: str = os.getenv("RECAPTCHA_SECRET_KEY", "")
     CONTACT_EMAIL: str = os.getenv("CONTACT_EMAIL", os.getenv("ADMIN_EMAIL", ""))
     INVITATION_EXPIRY_DAYS: int = int(os.getenv("INVITATION_EXPIRY_DAYS", "7"))
@@ -34,6 +35,11 @@ class Settings:
         "#FF4444,#4444FF,#44FF44,#FFFF44,#FF44FF,#FF8844,#444444,#FFFFFF,#C0C0C0,#FFD700"
     ).split(",")]
 
+    # Waiver settings
+    WAIVER_EXPIRY_DAYS: int = int(os.getenv("WAIVER_EXPIRY_DAYS", "7"))
+    WAIVER_S3_BUCKET: str = os.getenv("WAIVER_S3_BUCKET", "")
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+
 
 settings = Settings()
 
@@ -45,3 +51,6 @@ if settings.TEAM_GENERATION_DIVISOR <= 0:
 
 if settings.INVITATION_EXPIRY_DAYS <= 0:
     raise RuntimeError("INVITATION_EXPIRY_DAYS must be a positive integer")
+
+if settings.WAIVER_EXPIRY_DAYS <= 0:
+    raise RuntimeError("WAIVER_EXPIRY_DAYS must be a positive integer")

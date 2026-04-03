@@ -1,9 +1,8 @@
-import pytest
 from datetime import date, timedelta
 from uuid import uuid4
 
 from tests.conftest import (
-    make_league, make_player, make_league_player, make_group, make_group_invitation
+    make_league, make_player, make_league_player, make_group
 )
 from app.services.team_generation_service import (
     trigger_team_generation_if_ready, _run_team_generation
@@ -13,11 +12,11 @@ from app.models.league_player import LeaguePlayer
 
 
 def _fill_league(db, league, count):
-    """Create `count` confirmed players for the league. Returns list of LeaguePlayers."""
+    """Create `count` confirmed+signed players for the league. Returns list of LeaguePlayers."""
     lps = []
     for _ in range(count):
         p = make_player(db)
-        lp = make_league_player(db, league.id, p.id, status="confirmed")
+        lp = make_league_player(db, league.id, p.id, status="confirmed", waiver_status="signed")
         lps.append(lp)
     return lps
 
@@ -73,12 +72,12 @@ def test_trigger_generates_when_deadline_passed(db):
 def test_run_keeps_group_together(db):
     league = make_league(db, format="7v7", max_teams=2)
     organizer = make_player(db)
-    org_lp = make_league_player(db, league.id, organizer.id, status="confirmed")
+    org_lp = make_league_player(db, league.id, organizer.id, status="confirmed", waiver_status="signed")
     group = make_group(db, league.id, organizer.id)
     org_lp.group_id = group.id
 
     partner = make_player(db)
-    partner_lp = make_league_player(db, league.id, partner.id, status="confirmed")
+    partner_lp = make_league_player(db, league.id, partner.id, status="confirmed", waiver_status="signed")
     partner_lp.group_id = group.id
     db.flush()
 
@@ -101,11 +100,11 @@ def test_run_splits_oversized_group(db):
     group = make_group(db, league.id, organizer.id)
 
     # Create 8 grouped players (exceeds 7-per-team)
-    org_lp = make_league_player(db, league.id, organizer.id, status="confirmed")
+    org_lp = make_league_player(db, league.id, organizer.id, status="confirmed", waiver_status="signed")
     org_lp.group_id = group.id
     for _ in range(7):
         p = make_player(db)
-        lp = make_league_player(db, league.id, p.id, status="confirmed")
+        lp = make_league_player(db, league.id, p.id, status="confirmed", waiver_status="signed")
         lp.group_id = group.id
 
     # Fill remaining 6 solo spots

@@ -25,7 +25,6 @@ if database_url:
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.db.db import Base
-from app.models import user, player, league, team, group, league_player, admin_config, field, field_availability, league_field, game, group_invitation
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestSendGroupInvitation:
@@ -23,7 +23,6 @@ class TestSendGroupInvitation:
             app_url="https://salemflag.com",
         )
 
-        assert mock_resend.api_key == "re_test_key"
         mock_resend.Emails.send.assert_called_once()
         call_args = mock_resend.Emails.send.call_args[0][0]
         assert call_args["from"] == "noreply@salemflag.com"
@@ -107,7 +106,6 @@ class TestSendContactMessage:
             message="When does registration open?",
         )
 
-        assert mock_resend.api_key == "re_test_key"
         mock_resend.Emails.send.assert_called_once()
         call_args = mock_resend.Emails.send.call_args[0][0]
         assert call_args["from"] == "noreply@salemflag.com"

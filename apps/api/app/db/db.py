@@ -20,7 +20,7 @@ if not DATABASE_URL:
 _is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 engine = create_engine(
     DATABASE_URL,
-    echo=not _is_lambda,  # suppress SQL noise in Lambda logs
+    echo=os.getenv("DEBUG_SQL", "").lower() in ("1", "true"),
     future=True,
     poolclass=NullPool if _is_lambda else QueuePool,
 )

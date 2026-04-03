@@ -36,5 +36,6 @@ class League(Base):
     
     created_by = Column(String, nullable=False)  # Clerk user id
     is_active = Column(Boolean, default=True)
+    deadline_processed_at = Column(DateTime(timezone=True), nullable=True)  # Idempotency guard for deadline handler
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now()) 

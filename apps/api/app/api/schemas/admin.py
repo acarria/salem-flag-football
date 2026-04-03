@@ -4,6 +4,11 @@ from datetime import datetime, date, time, timezone
 from decimal import Decimal
 from uuid import UUID
 
+class LeagueSettings(BaseModel):
+    """Typed settings for league configuration. Rejects unknown keys."""
+    model_config = ConfigDict(extra="forbid")
+
+
 # League Management Schemas
 class LeagueCreateRequest(BaseModel):
     name: str = Field(..., max_length=200)
@@ -24,11 +29,10 @@ class LeagueCreateRequest(BaseModel):
     min_teams: int = Field(4, ge=2, le=10)
 
     # Registration settings
-    registration_deadline: Optional[date] = None
     registration_fee: Optional[Decimal] = None
 
     # Advanced settings
-    settings: Optional[dict] = None
+    settings: Optional[LeagueSettings] = None
 
     @field_validator('tournament_format')
     @classmethod
@@ -87,10 +91,27 @@ class LeagueUpdateRequest(BaseModel):
     games_per_week: Optional[int] = Field(None, gt=0, le=10)
     max_teams: Optional[int] = Field(None, ge=2, le=10)
     min_teams: Optional[int] = Field(None, ge=2, le=10)
-    registration_deadline: Optional[date] = None
     registration_fee: Optional[Decimal] = None
-    settings: Optional[dict] = None
+    settings: Optional[LeagueSettings] = None
     is_active: Optional[bool] = None
+
+    @field_validator('format')
+    @classmethod
+    def validate_format(cls, v):
+        if v is not None:
+            valid_formats = ['7v7', '5v5']
+            if v not in valid_formats:
+                raise ValueError(f'format must be one of {valid_formats}')
+        return v
+
+    @field_validator('tournament_format')
+    @classmethod
+    def validate_tournament_format(cls, v):
+        if v is not None:
+            valid_formats = ['round_robin', 'swiss']
+            if v not in valid_formats:
+                raise ValueError(f'tournament_format must be one of {valid_formats}')
+        return v
 
     @field_validator('max_teams')
     @classmethod
@@ -116,7 +137,7 @@ class LeagueResponse(BaseModel):
     min_teams: int
     registration_deadline: Optional[date]
     registration_fee: Optional[Decimal]
-    settings: Optional[dict]
+    settings: Optional[LeagueSettings]
     is_active: bool
     created_by: str
     created_at: datetime

@@ -1,0 +1,13 @@
+[lint]
+ignore = [
+    "E711",  # == None required by SQLAlchemy for IS NULL filters
+    "E712",  # == True required by SQLAlchemy for boolean column filters
+]
+
+[lint.per-file-ignores]
+"app/handlers/*.py" = ["E402"]   # Late imports after env setup
+"app/main.py" = ["E402"]         # Late imports after logging config
+"app/api/admin/league_management.py" = ["E402"]  # Logger before imports
+"app/api/admin/admin_management.py" = ["E402"]   # Conditional imports
+"alembic/env.py" = ["E402"]      # Imports after sys.path setup
+"tests/**" = ["E402", "E741", "F841"]  # Test files: late imports, short vars, unused assigns for side effects

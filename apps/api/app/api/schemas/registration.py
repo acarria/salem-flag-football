@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, field_validator, EmailStr, Field
 from typing import List, Optional
-from datetime import date, datetime
+from datetime import date
 from uuid import UUID
 
 # Registration Request Schemas
@@ -67,8 +67,6 @@ class GroupRegistrationRequest(BaseModel):
     def validate_players(cls, v):
         if not v or len(v) == 0:
             raise ValueError('At least one invitee is required for group registration')
-        if len(v) > 6:
-            raise ValueError('Group cannot exceed 6 invitees (max team size is 7)')
         return v
 
 # Registration Response Schemas
@@ -153,7 +151,7 @@ class TeamMemberPublic(BaseModel):
 
 class MyTeamResponse(BaseModel):
     """The calling user's team roster for a league."""
-    team_id: str
+    team_id: UUID
     team_name: str
     team_color: Optional[str] = None
     members: List[TeamMemberPublic]

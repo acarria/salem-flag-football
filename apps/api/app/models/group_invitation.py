@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Index, CheckConstraint
+from sqlalchemy import Column, String, ForeignKey, DateTime, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -11,6 +11,7 @@ class GroupInvitation(Base):
     __table_args__ = (
         Index("ix_group_invitations_league_id", "league_id"),
         Index("ix_group_invitations_group_id", "group_id"),
+        Index("ix_group_invitations_league_status_expires", "league_id", "status", "expires_at"),
         CheckConstraint(
             "status IN ('pending', 'accepted', 'declined', 'expired', 'revoked')",
             name="ck_group_invitations_status",

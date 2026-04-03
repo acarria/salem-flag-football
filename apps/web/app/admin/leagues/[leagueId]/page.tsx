@@ -13,6 +13,7 @@ import MembersSection from './components/MembersSection';
 import LeagueFieldsSection from './components/LeagueFieldsSection';
 import TeamsSection from './components/TeamsSection';
 import ScheduleSection from './components/ScheduleSection';
+import WaiversSection from './components/WaiversSection';
 
 export default function LeagueAdminPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
@@ -102,6 +103,7 @@ export default function LeagueAdminPage() {
     { id: 'fields', label: 'Fields' },
     { id: 'teams', label: 'Teams' },
     { id: 'schedule', label: 'Schedule' },
+    { id: 'waivers', label: 'Waivers' },
   ];
 
   return (
@@ -231,6 +233,19 @@ export default function LeagueAdminPage() {
               onRefresh={(data) => setSchedule(data)}
               setError={setError}
               setSuccess={setSuccess}
+            />
+          </section>
+
+          {/* Waivers */}
+          <section
+            id="waivers"
+            className="scroll-mt-20"
+            ref={(el) => { sectionRefs.current.waivers = el; }}
+          >
+            <WaiversSection
+              leagueId={leagueId}
+              authenticatedRequest={authenticatedRequest}
+              totalMembers={members.length}
             />
           </section>
         </main>

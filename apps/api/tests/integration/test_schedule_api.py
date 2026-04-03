@@ -1,11 +1,11 @@
 """Integration tests for schedule management endpoints."""
-from datetime import date, datetime, time
+from datetime import date, time
 from uuid import uuid4
 
 from app.main import app
 from app.utils.clerk_jwt import get_current_user
 from app.api.admin.dependencies import get_admin_user
-from app.api.admin.schedule_management import (
+from app.services.schedule_service import (
     calculate_team_standings,
     get_available_time_slots_for_date,
     generate_time_slots_from_availability,
@@ -193,7 +193,8 @@ def test_generate_schedule_odd_teams_bye(client, db):
     assert resp.json()["games_created"] == 1
 
 
-def test_generate_schedule_swiss(client, db):
+def test_generate_schedule_swiss_returns_501(client, db):
+    """Swiss tournament scheduling is not yet implemented — should return 501."""
     league = make_league(db, num_weeks=1, tournament_format="swiss")
     t1 = make_team(db, league.id, name="T1")
     t2 = make_team(db, league.id, name="T2")
@@ -202,8 +203,7 @@ def test_generate_schedule_swiss(client, db):
         "time_slots": ["18:00"],
     })
     _admin_teardown()
-    assert resp.status_code == 200
-    assert resp.json()["games_created"] >= 1
+    assert resp.status_code == 501
 
 
 # ---------------------------------------------------------------------------
@@ -413,7 +413,6 @@ def test_available_slots_custom_date(db):
 
 
 def test_available_slots_with_field_filter(db):
-    from datetime import time as t
     league = make_league(db)
     f1 = make_field(db, name="F1")
     f2 = make_field(db, name="F2")

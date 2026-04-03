@@ -1,5 +1,4 @@
 import pytest
-from uuid import uuid4
 from tests.conftest import (
     make_league, make_player, make_league_player, make_user_override
 )

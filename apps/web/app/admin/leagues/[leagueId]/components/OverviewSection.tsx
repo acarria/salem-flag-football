@@ -179,8 +179,8 @@ export default function OverviewSection({
           label="Registration Deadline"
           name="registration_deadline"
           value={formData.registration_deadline}
-          displayValue={league.registration_deadline ? new Date(league.registration_deadline + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '\u2014'}
-          isEditing={isEditing}
+          displayValue={league.registration_deadline ? new Date(league.registration_deadline + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + ' (auto)' : '\u2014'}
+          isEditing={false}
           type="date"
           onChange={handleInputChange}
         />

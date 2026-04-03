@@ -21,7 +21,6 @@ FIELD_DATA = {
 
 
 def _admin_setup():
-    from app.models.admin_config import AdminConfig
     app.dependency_overrides[get_current_user] = make_user_override(ADMIN)
     app.dependency_overrides[get_admin_user] = make_user_override(ADMIN)
 

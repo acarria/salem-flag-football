@@ -1,11 +1,12 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.limiter import limiter
 from app.db.db import get_db
 from app.models.group_invitation import GroupInvitation
 from app.models.league import League
@@ -68,7 +69,9 @@ def _compute_league_response(
 
 
 @router.get("/public/leagues", response_model=List[PublicLeagueResponse], summary="Get all leagues (public view)")
+@limiter.limit("60/minute")
 async def get_public_leagues(
+    request: Request,
     skip: int = 0,
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
@@ -135,9 +138,10 @@ async def get_public_leagues(
 
 
 @router.get("/{league_id}/standings", summary="Get standings for a specific league")
-async def get_league_standings(league_id: UUID, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def get_league_standings(request: Request, league_id: UUID, db: Session = Depends(get_db)):
     """Return real standings computed from completed game results for a league."""
-    from app.api.admin.schedule_management import calculate_team_standings
+    from app.services.schedule_service import calculate_team_standings
 
     league = db.query(League).filter(League.id == league_id).first()
     if not league:
@@ -166,7 +170,8 @@ async def get_league_standings(league_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{league_id}/schedule", summary="Get schedule for a specific league")
-async def get_public_league_schedule(league_id: UUID, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def get_public_league_schedule(request: Request, league_id: UUID, db: Session = Depends(get_db)):
     """Return the full schedule for a league, grouped by week."""
     league = db.query(League).filter(League.id == league_id).first()
     if not league:
@@ -213,7 +218,9 @@ async def get_public_league_schedule(league_id: UUID, db: Session = Depends(get_
 
 
 @router.get("/{league_id}", response_model=PublicLeagueResponse, summary="Get a single league (public view)")
+@limiter.limit("60/minute")
 async def get_league_by_id(
+    request: Request,
     league_id: UUID,
     db: Session = Depends(get_db),
     user: dict | None = Depends(get_optional_user),

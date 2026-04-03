@@ -1,8 +1,7 @@
 import json
 import logging
-import pytest
-from datetime import date, datetime, timezone
-from unittest.mock import patch, MagicMock, call
+from datetime import date
+from unittest.mock import patch, MagicMock
 from uuid import uuid4
 
 
