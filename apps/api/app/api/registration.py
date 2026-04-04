@@ -10,12 +10,14 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.db.db import get_db
+from app.models.league import League
+from app.models.player import Player
 from app.utils.clerk_jwt import get_current_user
 from app.services.exceptions import ServiceError
 from app.services.email_service import send_group_invitation, send_waiver_prompt
@@ -63,14 +65,6 @@ async def register_player(
     clerk_user_id = _get_clerk_id(user)
 
     try:
-        dob = datetime.strptime(registration_data.dateOfBirth, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid date format for dateOfBirth. Expected format: YYYY-MM-DD",
-        )
-
-    try:
         result = registration_svc.register_solo(
             db,
             clerk_user_id,
@@ -79,7 +73,7 @@ async def register_player(
             last_name=registration_data.lastName,
             email=registration_data.email,
             phone=registration_data.phone,
-            date_of_birth=dob,
+            date_of_birth=registration_data.dateOfBirth,
             gender=registration_data.gender if registration_data.gender else None,
             communications_accepted=registration_data.communicationsAccepted,
             group_name=registration_data.groupName if registration_data.groupName else None,
@@ -94,18 +88,24 @@ async def register_player(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     try:
-        trigger_team_generation_if_ready(registration_data.league_id, db)
+        if trigger_team_generation_if_ready(registration_data.league_id, db):
+            db.commit()
     except Exception as e:
         logger.exception("Team generation trigger failed after solo registration: %s", e)
 
     # Send waiver prompt email (best-effort)
     try:
-        send_waiver_prompt(
-            to_email=result.player.email,
-            to_name=f"{result.player.first_name} {result.player.last_name}",
-            league_name=result.league_name,
-            league_id=str(registration_data.league_id),
-            expiry_days=settings.WAIVER_EXPIRY_DAYS,
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            functools.partial(
+                send_waiver_prompt,
+                to_email=result.player.email,
+                to_name=f"{result.player.first_name} {result.player.last_name}",
+                league_name=result.league_name,
+                league_id=str(registration_data.league_id),
+                expiry_days=settings.WAIVER_EXPIRY_DAYS,
+            ),
         )
     except Exception as e:
         logger.exception("Waiver prompt email failed after solo registration: %s", e)
@@ -193,15 +193,19 @@ async def register_group(
 
     # Send waiver prompt email to organizer (best-effort)
     try:
-        from app.models.player import Player
         organizer = db.query(Player).filter(Player.id == result.organizer_player_id).first()
         if organizer:
-            send_waiver_prompt(
-                to_email=organizer.email,
-                to_name=result.organizer_name,
-                league_name=result.league_name,
-                league_id=str(registration_data.league_id),
-                expiry_days=settings.WAIVER_EXPIRY_DAYS,
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                functools.partial(
+                    send_waiver_prompt,
+                    to_email=organizer.email,
+                    to_name=result.organizer_name,
+                    league_name=result.league_name,
+                    league_id=str(registration_data.league_id),
+                    expiry_days=settings.WAIVER_EXPIRY_DAYS,
+                ),
             )
     except Exception as e:
         logger.exception("Waiver prompt email failed after group registration: %s", e)
@@ -222,7 +226,7 @@ async def register_group(
 
 @router.get("/invite/{token}", response_model=InvitationDetailResponse, summary="Get invitation details (public)")
 @limiter.limit("10/minute")
-async def get_invitation(request: Request, token: str, db: Session = Depends(get_db)) -> InvitationDetailResponse:
+async def get_invitation(request: Request, token: str = Path(..., max_length=100), db: Session = Depends(get_db)) -> InvitationDetailResponse:
     try:
         detail = invitation_svc.get_invitation_details(db, token)
     except ServiceError as e:
@@ -245,7 +249,7 @@ async def get_invitation(request: Request, token: str, db: Session = Depends(get
 @limiter.limit("10/minute")
 async def accept_invitation(
     request: Request,
-    token: str,
+    token: str = Path(..., max_length=100),
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -263,23 +267,27 @@ async def accept_invitation(
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     try:
-        trigger_team_generation_if_ready(result.league_id, db)
+        if trigger_team_generation_if_ready(result.league_id, db):
+            db.commit()
     except Exception as e:
         logger.exception("Team generation trigger failed after invitation acceptance: %s", e)
 
     # Send waiver prompt email to the invitee who just accepted (best-effort)
     try:
-        from app.models.player import Player
-        from app.models.league import League
         player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
         league = db.query(League).filter(League.id == result.league_id).first()
         if player and league:
-            send_waiver_prompt(
-                to_email=player.email,
-                to_name=f"{player.first_name} {player.last_name}",
-                league_name=league.name,
-                league_id=str(result.league_id),
-                expiry_days=settings.WAIVER_EXPIRY_DAYS,
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                functools.partial(
+                    send_waiver_prompt,
+                    to_email=player.email,
+                    to_name=f"{player.first_name} {player.last_name}",
+                    league_name=league.name,
+                    league_id=str(result.league_id),
+                    expiry_days=settings.WAIVER_EXPIRY_DAYS,
+                ),
             )
     except Exception as e:
         logger.exception("Waiver prompt email failed after invitation acceptance: %s", e)
@@ -291,7 +299,7 @@ async def accept_invitation(
 @limiter.limit("5/minute")
 async def decline_invitation(
     request: Request,
-    token: str,
+    token: str = Path(..., max_length=100),
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -310,6 +318,22 @@ async def decline_invitation(
     return SuccessResponse(success=True, message="Invitation declined.")
 
 
+@router.get("/invitations/{invitation_id}/token", summary="Get the invitation token for navigation (authenticated)")
+@limiter.limit("30/minute")
+async def get_invitation_token(
+    request: Request,
+    invitation_id: UUID,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    clerk_user_id = _get_clerk_id(user)
+    try:
+        token = invitation_svc.get_invitation_token_for_user(db, clerk_user_id, invitation_id)
+    except ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+    return {"token": token}
+
+
 @router.get("/invitations/me", response_model=list[PendingInvitationResponse], summary="Get pending invitations for the current user")
 @limiter.limit("30/minute")
 async def get_my_invitations(
@@ -321,7 +345,7 @@ async def get_my_invitations(
     items = invitation_svc.get_pending_invitations(db, clerk_user_id)
     return [
         PendingInvitationResponse(
-            token=item.token,
+            invitation_id=item.invitation_id,
             group_name=item.group_name,
             league_name=item.league_name,
             inviter_name=item.inviter_name,
@@ -461,8 +485,8 @@ async def get_my_team(
 async def get_player_registrations(
     request: Request,
     user_id: str = Path(..., max_length=200),
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, le=200),
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[LeagueRegistrationResponse]:

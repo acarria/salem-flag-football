@@ -101,8 +101,8 @@ class TestGetWaiverStatus:
         make_waiver_signature(db, waiver.id, player.id, league.id)
 
         status = get_waiver_status(db, player.id, league.id)
-        assert status["signed"] is True
-        assert status["waiver_version"] == "2025-v1"
+        assert status.signed is True
+        assert status.waiver_version == "2025-v1"
 
     def test_not_signed(self, db):
         league = make_league(db)
@@ -110,7 +110,7 @@ class TestGetWaiverStatus:
         make_league_player(db, league.id, player.id)
 
         status = get_waiver_status(db, player.id, league.id)
-        assert status["signed"] is False
+        assert status.signed is False
 
 
 class TestCreateWaiverVersion:
@@ -221,6 +221,6 @@ class TestGetSignaturesForLeague:
 
         sigs = get_signatures_for_league(db, league.id)
         assert len(sigs) == 2
-        names = {s["player_name"] for s in sigs}
+        names = {s.player_name for s in sigs}
         assert "Alice Smith" in names
         assert "Bob Jones" in names

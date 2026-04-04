@@ -97,7 +97,8 @@ async def contact(request: Request, body: ContactRequest):
                 message=body.message,
             ),
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to send contact email: %s", e)
         raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")
 
     return {"success": True, "message": "Your message has been sent."}

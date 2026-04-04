@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth, useUser } from '@clerk/nextjs';
 import BaseLayout from '@/components/layout/BaseLayout';
 import RegistrationModal from '@/components/modals/RegistrationModal';
+import WaiverViewModal from '@/components/modals/WaiverViewModal';
 import { leagueApi, League, PublicStanding, LeagueSchedule, MyTeamResponse } from '@/services';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { formatDate, formatTime, formatCurrency } from '@/utils/format';
@@ -41,6 +42,8 @@ export default function LeagueDetailPage() {
   const [unregisterConfirm, setUnregisterConfirm] = useState(false);
   const [isUnregistering, setIsUnregistering] = useState(false);
   const [unregisterError, setUnregisterError] = useState<string | null>(null);
+  const [showWaiverModal, setShowWaiverModal] = useState(false);
+  const [waiverSigId, setWaiverSigId] = useState<string | null>(null);
 
   const loadPublicData = useCallback(async () => {
     if (!leagueId) return;
@@ -271,6 +274,26 @@ export default function LeagueDetailPage() {
                     >
                       Sign Waiver
                     </Link>
+                  </div>
+                )}
+                {myRegistration?.waiver_status === 'signed' && (
+                  <div className="mt-3 flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-md p-3">
+                    <span className="text-sm text-green-400">Liability waiver signed</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const sigs = await authenticatedRequest<{ signature_id: string; league_id: string }[]>('/waiver/my-signatures');
+                          const match = sigs.find(s => s.league_id === leagueId);
+                          if (match) {
+                            setWaiverSigId(match.signature_id);
+                            setShowWaiverModal(true);
+                          }
+                        } catch { /* ignore */ }
+                      }}
+                      className="bg-accent text-white text-xs font-medium py-1.5 px-3 rounded-md hover:bg-accent-dark transition-colors flex-shrink-0"
+                    >
+                      View Waiver
+                    </button>
                   </div>
                 )}
               </div>
@@ -525,6 +548,12 @@ export default function LeagueDetailPage() {
           onRegistrationComplete={handleRegistrationComplete}
         />
       )}
+
+      <WaiverViewModal
+        signatureId={waiverSigId}
+        isOpen={showWaiverModal}
+        onClose={() => setShowWaiverModal(false)}
+      />
     </BaseLayout>
   );
 }

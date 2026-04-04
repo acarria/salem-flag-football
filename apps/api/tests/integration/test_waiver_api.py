@@ -90,6 +90,36 @@ class TestSignWaiver:
         assert resp.status_code == 400
 
 
+    def test_sign_inactive_waiver(self, client, db, override_auth):
+        waiver = make_waiver(db, is_active=False)
+        league = make_league(db)
+        player = make_player(db, clerk_user_id=override_auth["id"], email=override_auth["email"])
+        make_league_player(
+            db, league.id, player.id,
+            waiver_deadline=datetime.now(timezone.utc) + timedelta(days=7),
+        )
+
+        resp = client.post("/waiver/sign", json={
+            "waiver_id": str(waiver.id),
+            "league_id": str(league.id),
+            "full_name_typed": "Test Player",
+        })
+        assert resp.status_code == 422
+
+    def test_sign_not_registered(self, client, db, override_auth):
+        waiver = make_waiver(db)
+        league = make_league(db)
+        make_player(db, clerk_user_id=override_auth["id"], email=override_auth["email"])
+        # No league_player created — player is not registered
+
+        resp = client.post("/waiver/sign", json={
+            "waiver_id": str(waiver.id),
+            "league_id": str(league.id),
+            "full_name_typed": "Test Player",
+        })
+        assert resp.status_code == 404
+
+
 class TestWaiverStatus:
     def test_signed_status(self, client, db, override_auth):
         waiver = make_waiver(db)

@@ -4,17 +4,16 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from app.models.league_player import LeaguePlayer
 from app.models.group_invitation import GroupInvitation
+from app.core.constants import INVITE_PENDING, PLAYERS_PER_TEAM, REG_CONFIRMED
 
-_PLAYERS_PER_TEAM = {'7v7': 7, '5v5': 5}
 
-
-def get_player_cap(format: str, max_teams: Optional[int]) -> Optional[int]:
+def get_player_cap(league_format: str, max_teams: Optional[int]) -> Optional[int]:
     """Return the total player cap, or None if uncapped. Raises ValueError for unknown formats."""
     if max_teams is None:
         return None
-    size = _PLAYERS_PER_TEAM.get(format)
+    size = PLAYERS_PER_TEAM.get(league_format)
     if size is None:
-        raise ValueError(f"Unknown league format: {format!r}")
+        raise ValueError(f"Unknown league format: {league_format!r}")
     return max_teams * size
 
 
@@ -24,12 +23,12 @@ def get_occupied_spots(league_id: UUID, db: Session) -> int:
 
     confirmed = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league_id,
-        LeaguePlayer.registration_status == "confirmed",
+        LeaguePlayer.registration_status == REG_CONFIRMED,
         LeaguePlayer.is_active == True,
     ).count()
     pending_invites = db.query(GroupInvitation).filter(
         GroupInvitation.league_id == league_id,
-        GroupInvitation.status == "pending",
+        GroupInvitation.status == INVITE_PENDING,
         GroupInvitation.expires_at > now,
     ).count()
     return confirmed + pending_invites

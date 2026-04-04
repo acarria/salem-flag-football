@@ -5,7 +5,7 @@ from tests.conftest import (
     make_league, make_player, make_league_player, make_group
 )
 from app.services.team_generation_service import (
-    trigger_team_generation_if_ready, _run_team_generation
+    trigger_team_generation_if_ready, generate_teams
 )
 from app.models.team import Team
 from app.models.league_player import LeaguePlayer
@@ -84,7 +84,7 @@ def test_run_keeps_group_together(db):
     # Fill remaining spots
     _fill_league(db, league, 12)
 
-    _run_team_generation(league, db)
+    generate_teams(league, db)
 
     # Reload
     db.expire_all()
@@ -111,7 +111,7 @@ def test_run_splits_oversized_group(db):
     _fill_league(db, league, 6)
     db.flush()
 
-    result = _run_team_generation(league, db)
+    result = generate_teams(league, db)
     # Should complete without error and report a split
     assert result["groups_split"] >= 1
 
@@ -124,7 +124,7 @@ def test_run_deactivates_existing_teams(db):
     old_id = old_team.id
 
     _fill_league(db, league, 14)
-    _run_team_generation(league, db)
+    generate_teams(league, db)
 
     db.expire_all()
     old_team_fresh = db.query(Team).get(old_id)
@@ -133,7 +133,7 @@ def test_run_deactivates_existing_teams(db):
 
 def test_run_empty_players(db):
     league = make_league(db, format="7v7", max_teams=2)
-    result = _run_team_generation(league, db)
+    result = generate_teams(league, db)
     assert result["teams_created"] == 0
     assert result["players_assigned"] == 0
 
@@ -141,7 +141,7 @@ def test_run_empty_players(db):
 def test_run_teams_count_override(db):
     league = make_league(db, format="7v7", max_teams=2)
     _fill_league(db, league, 14)
-    result = _run_team_generation(league, db, teams_count=7)
+    result = generate_teams(league, db, teams_count=7)
     assert result["teams_created"] == 7
 
 
@@ -150,7 +150,7 @@ def test_run_imbalanced_flag_present(db):
     league = make_league(db, format="7v7", max_teams=2)
     # 11 players / 3 teams → 3, 4, 4 (diff=1 → balanced)
     _fill_league(db, league, 11)
-    result = _run_team_generation(league, db, teams_count=3)
+    result = generate_teams(league, db, teams_count=3)
     assert "imbalanced" in result
     assert "team_sizes" in result
     assert len(result["team_sizes"]) == 3
@@ -161,5 +161,5 @@ def test_run_imbalanced_flag_present(db):
 def test_run_balanced_detection(db):
     league = make_league(db, format="7v7", max_teams=2)
     _fill_league(db, league, 14)
-    result = _run_team_generation(league, db, teams_count=2)
+    result = generate_teams(league, db, teams_count=2)
     assert result["imbalanced"] is False

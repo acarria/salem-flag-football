@@ -13,6 +13,7 @@ class LeaguePlayer(Base):
         Index("ix_league_players_league_regstatus_active", "league_id", "registration_status", "is_active"),
         Index("ix_league_players_league_player", "league_id", "player_id", unique=True,
               postgresql_where=text("is_active = TRUE")),
+        Index("ix_league_players_team_id", "team_id"),
         CheckConstraint(
             "registration_status IN ('confirmed', 'pending', 'declined', 'expired')",
             name="ck_league_players_registration_status",

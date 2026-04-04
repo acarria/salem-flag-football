@@ -12,6 +12,9 @@ from app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
 from app.db.db import get_db
+from app.models.game import Game
+from app.models.group import Group
+from app.models.group_invitation import GroupInvitation
 from app.models.league import League
 from app.models.team import Team
 from app.models.league_player import LeaguePlayer
@@ -21,6 +24,7 @@ from app.api.schemas.admin import (
 from app.api.admin.dependencies import get_admin_user
 from app.services.league_service import get_player_cap, get_occupied_spots
 from app.core.config import settings as app_settings
+from app.core.constants import INVITE_EXPIRED, INVITE_PENDING, REG_CONFIRMED
 
 router = APIRouter()
 
@@ -109,7 +113,7 @@ async def create_league(
 @limiter.limit("30/minute")
 async def get_all_leagues(
     request: Request,
-    skip: int = 0,
+    skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -126,7 +130,7 @@ async def get_all_leagues(
         db.query(LeaguePlayer.league_id, func.count(LeaguePlayer.id))
         .filter(
             LeaguePlayer.league_id.in_(league_ids),
-            LeaguePlayer.registration_status == 'confirmed',
+            LeaguePlayer.registration_status == REG_CONFIRMED,
             LeaguePlayer.is_active == True,
         )
         .group_by(LeaguePlayer.league_id)
@@ -160,7 +164,7 @@ async def get_league_details(
     # Count registered players and teams (using LeaguePlayer for many-to-many relationship)
     player_count = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league.id,
-        LeaguePlayer.registration_status == 'confirmed',
+        LeaguePlayer.registration_status == REG_CONFIRMED,
         LeaguePlayer.is_active == True
     ).count()
 
@@ -201,8 +205,15 @@ async def update_league(
             days=app_settings.WAIVER_EXPIRY_DAYS + 1
         )
     
+    _UPDATABLE_LEAGUE_FIELDS = {
+        "name", "description", "start_date", "end_date", "num_weeks", "format",
+        "tournament_format", "swiss_rounds", "swiss_pairing_method",
+        "game_duration", "games_per_week", "max_teams", "min_teams",
+        "registration_fee", "registration_deadline", "settings",
+    }
     for field, value in update_data.items():
-        setattr(league, field, value)
+        if field in _UPDATABLE_LEAGUE_FIELDS:
+            setattr(league, field, value)
     
     try:
         db.commit()
@@ -218,7 +229,7 @@ async def update_league(
         # Return with updated counts (using LeaguePlayer for many-to-many relationship)
         player_count = db.query(LeaguePlayer).filter(
             LeaguePlayer.league_id == league.id,
-            LeaguePlayer.registration_status == 'confirmed',
+            LeaguePlayer.registration_status == REG_CONFIRMED,
             LeaguePlayer.is_active == True
         ).count()
 
@@ -247,8 +258,34 @@ async def delete_league(
         raise HTTPException(status_code=404, detail="League not found")
     
     try:
-        # Soft delete by setting is_active to False
+        # Soft delete league and cascade to all child records
         league.is_active = False
+
+        db.query(LeaguePlayer).filter(
+            LeaguePlayer.league_id == league_id,
+            LeaguePlayer.is_active == True,
+        ).update({"is_active": False}, synchronize_session="fetch")
+
+        db.query(Team).filter(
+            Team.league_id == league_id,
+            Team.is_active == True,
+        ).update({"is_active": False}, synchronize_session="fetch")
+
+        db.query(Game).filter(
+            Game.league_id == league_id,
+            Game.is_active == True,
+        ).update({"is_active": False}, synchronize_session="fetch")
+
+        db.query(Group).filter(
+            Group.league_id == league_id,
+            Group.is_active == True,
+        ).update({"is_active": False}, synchronize_session="fetch")
+
+        db.query(GroupInvitation).filter(
+            GroupInvitation.league_id == league_id,
+            GroupInvitation.status == INVITE_PENDING,
+        ).update({"status": INVITE_EXPIRED}, synchronize_session="fetch")
+
         db.commit()
         return {"message": f"League '{league.name}' has been deleted"}
     except Exception as e:
@@ -272,7 +309,7 @@ async def get_league_stats(
     # Count players and teams (using LeaguePlayer for many-to-many relationship)
     total_players = db.query(LeaguePlayer).filter(
         LeaguePlayer.league_id == league.id,
-        LeaguePlayer.registration_status == 'confirmed',
+        LeaguePlayer.registration_status == REG_CONFIRMED,
         LeaguePlayer.is_active == True
     ).count()
     

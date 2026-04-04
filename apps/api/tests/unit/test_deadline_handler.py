@@ -34,21 +34,30 @@ def _setup_deadline_mock(mock_db):
     return mock_league
 
 
-def test_deadline_handler_calls_trigger_team_generation(mocker):
-    # SessionLocal and trigger_team_generation_if_ready are imported lazily
-    # inside the handler body, so patch at their source modules.
+def test_deadline_handler_calls_team_generation(mocker):
+    """Handler should call generate_teams when no existing teams and no pending waivers."""
     mock_db = MagicMock()
     _setup_deadline_mock(mock_db)
     mocker.patch("app.db.db.SessionLocal", return_value=mock_db)
-    mock_trigger = mocker.patch(
-        "app.services.team_generation_service.trigger_team_generation_if_ready",
-        return_value=True,
+    mock_run = mocker.patch(
+        "app.services.team_generation_service.generate_teams",
     )
+    mocker.patch(
+        "app.services.waiver_service.expire_unsigned_for_league",
+        return_value=0,
+    )
+    mocker.patch(
+        "app.services.waiver_service.has_pending_waivers",
+        return_value=False,
+    )
+    # Mock: no existing active teams
+    mock_db.query.return_value.filter.return_value.count.return_value = 0
 
     league_id = str(uuid4())
     result = handler({"source": "aws.scheduler", "league_id": league_id}, {})
     assert result["statusCode"] == 200
-    assert mock_trigger.called
+    # Single atomic commit
+    assert mock_db.commit.called
 
 
 def test_deadline_handler_expires_invitations(mocker):
@@ -57,7 +66,11 @@ def test_deadline_handler_expires_invitations(mocker):
     _setup_deadline_mock(mock_db)
     mocker.patch("app.db.db.SessionLocal", return_value=mock_db)
     mocker.patch(
-        "app.services.team_generation_service.trigger_team_generation_if_ready",
+        "app.services.waiver_service.expire_unsigned_for_league",
+        return_value=0,
+    )
+    mocker.patch(
+        "app.services.waiver_service.has_pending_waivers",
         return_value=False,
     )
 
@@ -75,15 +88,11 @@ def test_deadline_handler_skips_already_processed(mocker):
     mock_league.deadline_processed_at = "2026-04-01T00:00:00+00:00"
     mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = mock_league
     mocker.patch("app.db.db.SessionLocal", return_value=mock_db)
-    mock_trigger = mocker.patch(
-        "app.services.team_generation_service.trigger_team_generation_if_ready",
-    )
 
     league_id = str(uuid4())
     result = handler({"source": "aws.scheduler", "league_id": league_id}, {})
     assert result["statusCode"] == 200
     assert result.get("already_processed") is True
-    assert not mock_trigger.called
 
 
 def test_deadline_handler_exception_reraises(mocker):

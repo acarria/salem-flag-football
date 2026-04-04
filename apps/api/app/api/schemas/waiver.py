@@ -31,6 +31,31 @@ class WaiverStatusResponse(BaseModel):
     waiver_deadline: Optional[datetime] = None
 
 
+class SignedWaiverSummaryResponse(BaseModel):
+    signature_id: UUID
+    league_id: UUID
+    league_name: str
+    waiver_version: str
+    signed_at: datetime
+    full_name_typed: str
+    has_pdf: bool
+
+
+class SignedWaiverDetailResponse(BaseModel):
+    signature_id: UUID
+    league_id: UUID
+    league_name: str
+    waiver_version: str
+    waiver_content: str
+    full_name_typed: str
+    signed_at: datetime
+    has_pdf: bool
+
+
+class PresignedUrlResponse(BaseModel):
+    url: str
+
+
 class AdminWaiverSignatureResponse(BaseModel):
     id: UUID
     player_name: str

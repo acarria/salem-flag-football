@@ -163,8 +163,6 @@ def make_player(db, clerk_user_id=None, email=None, **kwargs) -> Player:
         phone="555-0000",
         date_of_birth=date(1990, 1, 1),
         communications_accepted=False,
-        payment_status="pending",
-        waiver_status="pending",
         created_by=cuid,
         is_active=True,
     )

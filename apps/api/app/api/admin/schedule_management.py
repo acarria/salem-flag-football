@@ -13,6 +13,7 @@ from app.api.schemas.admin import (
     GameUpdateRequest
 )
 from app.api.admin.dependencies import get_admin_user
+from app.core.constants import GAME_COMPLETED
 from app.core.limiter import limiter
 from app.services.schedule_service import (
     get_available_time_slots_for_date,
@@ -261,6 +262,10 @@ async def update_game(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    # Validate winner_id against game participants
+    if game_data.winner_id is not None and game_data.winner_id not in (game.team1_id, game.team2_id):
+        raise HTTPException(status_code=400, detail="Winner must be one of the teams in this game")
+
     scores_provided = game_data.team1_score is not None and game_data.team2_score is not None
     if game_data.team1_score is not None:
         game.team1_score = game_data.team1_score
@@ -275,7 +280,7 @@ async def update_game(
         elif game_data.team2_score > game_data.team1_score:
             game.winner_id = game.team2_id
         if game_data.status is None:
-            game.status = 'completed'
+            game.status = GAME_COMPLETED
 
     if game_data.winner_id is not None and not scores_provided:
         game.winner_id = game_data.winner_id

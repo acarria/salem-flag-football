@@ -17,6 +17,8 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
+from app.core.constants import INVITE_EXPIRED, INVITE_PENDING
+
 logger = logging.getLogger(__name__)
 
 # Expected source identifier injected by the EventBridge Scheduler payload.
@@ -48,8 +50,9 @@ def handler(event, context):
     from app.db.db import SessionLocal
     from app.models.group_invitation import GroupInvitation
     from app.models.league import League
-    from app.services.team_generation_service import trigger_team_generation_if_ready
-    from app.services.waiver_service import expire_unsigned_for_league
+    from app.models.team import Team
+    from app.services.team_generation_service import generate_teams
+    from app.services.waiver_service import expire_unsigned_for_league, has_pending_waivers
 
     db = SessionLocal()
     try:
@@ -72,26 +75,32 @@ def handler(event, context):
             db.query(GroupInvitation)
             .filter(
                 GroupInvitation.league_id == league_id,
-                GroupInvitation.status == "pending",
+                GroupInvitation.status == INVITE_PENDING,
             )
-            .update({"status": "expired", "updated_at": datetime.now(timezone.utc)})
+            .update({"status": INVITE_EXPIRED, "updated_at": datetime.now(timezone.utc)})
         )
         if expired_count:
-            db.commit()
             logger.info("Expired %d pending invitations for league %s", expired_count, league_id)
 
         # Step 2: expire unsigned waivers so those spots are freed
         expired_waivers = expire_unsigned_for_league(db, league_id)
         if expired_waivers:
-            db.commit()
             logger.info("Expired %d unsigned waivers for league %s", expired_waivers, league_id)
 
-        # Step 3: generate teams with whoever confirmed + signed before the deadline
-        triggered = trigger_team_generation_if_ready(league_id, db)
-        if triggered:
+        # Step 3: generate teams (inline readiness check to avoid separate commit)
+        triggered = False
+        existing_teams = db.query(Team).filter(
+            Team.league_id == league_id, Team.is_active == True
+        ).count()
+        if existing_teams == 0 and not has_pending_waivers(db, league_id):
+            generate_teams(league, db)
+            triggered = True
             logger.info("Teams generated for league %s at deadline", league_id)
         else:
             logger.info("No team generation needed for league %s at deadline", league_id)
+
+        # Single atomic commit for all work
+        db.commit()
 
         return {"statusCode": 200, "league_id": str(league_id), "teams_generated": triggered}
     except Exception as exc:

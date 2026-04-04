@@ -1,5 +1,7 @@
 """Waiver API — public endpoints for waiver display and signing."""
 
+import asyncio
+import functools
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
@@ -15,10 +17,13 @@ from app.utils.clerk_jwt import get_current_user, get_optional_user
 from app.services.exceptions import ServiceError
 import app.services.waiver_service as waiver_svc
 from app.services.pdf_service import generate_waiver_pdf
-from app.services.s3_service import upload_waiver_pdf
+from app.services.s3_service import upload_waiver_pdf, generate_presigned_url
 from app.services.email_service import send_waiver_confirmation
 from app.services.team_generation_service import trigger_team_generation_if_ready
 from app.api.schemas.waiver import (
+    PresignedUrlResponse,
+    SignedWaiverDetailResponse,
+    SignedWaiverSummaryResponse,
     WaiverResponse,
     WaiverSignRequest,
     WaiverSignResponse,
@@ -107,30 +112,34 @@ async def sign_waiver(
             league_name=league_name,
             player_name=body.full_name_typed,
             signed_at=signature.signed_at,
-            ip_address=_get_ip(request),
         )
 
         s3_key = upload_waiver_pdf(pdf_bytes, body.league_id, player.id, signature.id)
         if s3_key:
             signature.pdf_path = s3_key
-            db.commit()
 
-        send_waiver_confirmation(
-            to_email=player.email,
-            to_name=f"{player.first_name} {player.last_name}",
-            league_name=league_name,
-            waiver_version=waiver_version,
-            signed_at=signature.signed_at,
-            pdf_bytes=pdf_bytes,
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            functools.partial(
+                send_waiver_confirmation,
+                to_email=player.email,
+                to_name=f"{player.first_name} {player.last_name}",
+                league_name=league_name,
+                waiver_version=waiver_version,
+                signed_at=signature.signed_at,
+                pdf_bytes=pdf_bytes,
+            ),
         )
         signature.email_sent_at = datetime.now(timezone.utc)
-        db.commit()
+        db.commit()  # Single commit for pdf_path + email_sent_at
     except Exception as e:
         logger.exception("Post-sign PDF/email failed for signature %s: %s", signature.id, e)
 
     # Try to trigger team generation (all waivers might now be complete)
     try:
-        trigger_team_generation_if_ready(body.league_id, db)
+        if trigger_team_generation_if_ready(body.league_id, db):
+            db.commit()
     except Exception as e:
         logger.exception("Team generation trigger failed after waiver signing: %s", e)
 
@@ -160,5 +169,86 @@ async def get_waiver_status(
     if not player:
         raise HTTPException(status_code=404, detail="Player profile not found")
 
-    status = waiver_svc.get_waiver_status(db, player.id, league_id)
-    return WaiverStatusResponse(**status)
+    from dataclasses import asdict
+    result = waiver_svc.get_waiver_status(db, player.id, league_id)
+    return WaiverStatusResponse(**asdict(result))
+
+
+# ---------------------------------------------------------------------------
+# Authenticated: view signed waivers
+# ---------------------------------------------------------------------------
+
+@router.get("/my-signatures", response_model=list[SignedWaiverSummaryResponse], summary="List signed waivers for current user")
+@limiter.limit("30/minute")
+async def get_my_signatures(
+    request: Request,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    clerk_user_id = user.get("id")
+    if not clerk_user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+
+    player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
+    if not player:
+        return []
+
+    from dataclasses import asdict
+    signatures = waiver_svc.get_player_signatures(db, player.id)
+    return [SignedWaiverSummaryResponse(**asdict(s)) for s in signatures]
+
+
+@router.get("/my-signatures/{signature_id}", response_model=SignedWaiverDetailResponse, summary="Get signed waiver detail")
+@limiter.limit("30/minute")
+async def get_my_signature_detail(
+    request: Request,
+    signature_id: UUID,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    clerk_user_id = user.get("id")
+    if not clerk_user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+
+    player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Signature not found")
+
+    detail = waiver_svc.get_signature_detail(db, signature_id, player.id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Signature not found")
+
+    from dataclasses import asdict
+    return SignedWaiverDetailResponse(**asdict(detail))
+
+
+@router.get("/my-signatures/{signature_id}/pdf", response_model=PresignedUrlResponse, summary="Get download URL for signed waiver PDF")
+@limiter.limit("10/minute")
+async def get_my_signature_pdf(
+    request: Request,
+    signature_id: UUID,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    clerk_user_id = user.get("id")
+    if not clerk_user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+
+    player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="PDF not available")
+
+    from app.models.waiver import WaiverSignature
+    sig = db.query(WaiverSignature).filter(
+        WaiverSignature.id == signature_id,
+        WaiverSignature.player_id == player.id,
+    ).first()
+
+    if not sig or not sig.pdf_path:
+        raise HTTPException(status_code=404, detail="PDF not available")
+
+    url = generate_presigned_url(sig.pdf_path)
+    if not url:
+        raise HTTPException(status_code=404, detail="PDF not available")
+
+    return PresignedUrlResponse(url=url)

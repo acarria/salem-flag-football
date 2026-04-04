@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text, JSON, Numeric
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text, JSON, Numeric, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -6,13 +6,17 @@ from app.db.db import Base
 
 class League(Base):
     __tablename__ = "leagues"
+    __table_args__ = (
+        CheckConstraint("format IN ('7v7', '5v5')", name="ck_leagues_format"),
+        CheckConstraint("max_teams IS NULL OR (max_teams >= 2 AND max_teams <= 10)", name="ck_leagues_max_teams"),
+    )
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)  # Calculated based on format and num_weeks
     num_weeks = Column(Integer, nullable=False)
-    format = Column(String, nullable=False)  # '7v7', '5v5', '4v4', etc.
+    format = Column(String, nullable=False)  # '7v7' or '5v5' (see ck_leagues_format)
     
     # Tournament format settings
     tournament_format = Column(String, nullable=False, default='round_robin')  # 'round_robin', 'swiss'
