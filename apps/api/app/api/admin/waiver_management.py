@@ -34,12 +34,12 @@ async def list_waiver_signatures(
     signatures = waiver_svc.get_signatures_for_league(db, league_id)
     return [
         AdminWaiverSignatureResponse(
-            id=sig["id"],
-            player_name=sig["player_name"],
-            player_email=sig["player_email"],
-            waiver_version=sig["waiver_version"],
-            signed_at=sig["signed_at"],
-            pdf_url=generate_presigned_url(sig["pdf_path"]) if sig.get("pdf_path") else None,
+            id=sig.id,
+            player_name=sig.player_name,
+            player_email=sig.player_email,
+            waiver_version=sig.waiver_version,
+            signed_at=sig.signed_at,
+            pdf_url=generate_presigned_url(sig.pdf_path) if sig.pdf_path else None,
         )
         for sig in signatures
     ]

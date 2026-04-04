@@ -6,7 +6,7 @@ the transaction boundary.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -18,6 +18,16 @@ from app.models.league import League
 from app.models.league_player import LeaguePlayer
 from app.models.player import Player
 from app.core.config import settings
+from app.core.constants import (
+    INVITE_ACCEPTED,
+    INVITE_DECLINED,
+    INVITE_EXPIRED,
+    INVITE_PENDING,
+    INVITE_REVOKED,
+    PAY_PENDING,
+    REG_CONFIRMED,
+    WAIVER_PENDING,
+)
 from app.services.exceptions import ForbiddenError, NotFoundError, ServiceError
 from app.services.league_service import get_occupied_spots, get_player_cap
 
@@ -49,7 +59,7 @@ class AcceptResult:
 
 @dataclass
 class PendingInvitationInfo:
-    token: str
+    invitation_id: UUID
     group_name: str
     league_name: str
     inviter_name: str
@@ -103,8 +113,8 @@ def get_invitation_details(db: Session, token: str) -> InvitationDetail:
         raise NotFoundError("Invitation not found")
 
     effective_status = inv.status
-    if inv.status == "pending" and inv.expires_at < datetime.now(timezone.utc):
-        effective_status = "expired"
+    if inv.status == INVITE_PENDING and inv.expires_at < datetime.now(timezone.utc):
+        effective_status = INVITE_EXPIRED
 
     return InvitationDetail(
         group_id=inv.group_id,
@@ -134,10 +144,10 @@ def accept_invitation(
     ).with_for_update().first()
     if not inv:
         raise NotFoundError("Invitation not found")
-    if inv.status != "pending":
+    if inv.status != INVITE_PENDING:
         raise ServiceError("This invitation is no longer available")
     if inv.expires_at < datetime.now(timezone.utc):
-        inv.status = "expired"
+        inv.status = INVITE_EXPIRED
         raise ServiceError("Invitation has expired")
 
     player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
@@ -166,20 +176,10 @@ def accept_invitation(
         if occupied >= player_cap:
             raise ServiceError("This league is full")
 
-    from datetime import timedelta
-    league_player = LeaguePlayer(
-        league_id=inv.league_id,
-        player_id=player.id,
-        group_id=inv.group_id,
-        registration_status="confirmed",
-        payment_status="pending",
-        waiver_status="pending",
-        waiver_deadline=datetime.now(timezone.utc) + timedelta(days=settings.WAIVER_EXPIRY_DAYS),
-        created_by=clerk_user_id,
-    )
-    db.add(league_player)
+    from app.services.registration_service import _create_confirmed_league_player
+    league_player = _create_confirmed_league_player(db, inv.league_id, player.id, inv.group_id, clerk_user_id)
 
-    inv.status = "accepted"
+    inv.status = INVITE_ACCEPTED
     inv.player_id = player.id
     _invalidate_token(inv)
 
@@ -191,14 +191,14 @@ def decline_invitation(db: Session, user_email: str, token: str) -> None:
     inv = db.query(GroupInvitation).filter(GroupInvitation.token == token).first()
     if not inv:
         raise NotFoundError("Invitation not found")
-    if inv.status != "pending":
+    if inv.status != INVITE_PENDING:
         raise ServiceError("Invitation is no longer active")
 
     jwt_email = user_email.lower()
     if not jwt_email or jwt_email != inv.email.lower():
         raise ForbiddenError("This invitation was not sent to your email address.")
 
-    inv.status = "declined"
+    inv.status = INVITE_DECLINED
     _invalidate_token(inv)
 
 
@@ -211,14 +211,29 @@ def revoke_invitation(db: Session, clerk_user_id: str, invitation_id: UUID) -> N
     inv = db.query(GroupInvitation).filter(GroupInvitation.id == invitation_id).first()
     if not inv:
         raise NotFoundError("Invitation not found")
-    if inv.status != "pending":
+    if inv.status != INVITE_PENDING:
         raise ServiceError("This invitation is no longer available")
 
     if inv.invited_by != player.id:
         raise ForbiddenError("Only the group organizer can revoke invitations")
 
-    inv.status = "revoked"
+    inv.status = INVITE_REVOKED
     _invalidate_token(inv)
+
+
+def get_invitation_token_for_user(db: Session, clerk_user_id: str, invitation_id: UUID) -> str:
+    """Return the token for an invitation owned by the requesting user's email."""
+    player = db.query(Player).filter(Player.clerk_user_id == clerk_user_id).first()
+    if not player:
+        raise NotFoundError("Invitation not found")
+    inv = db.query(GroupInvitation).filter(
+        GroupInvitation.id == invitation_id,
+        GroupInvitation.email == player.email.lower(),
+        GroupInvitation.status == INVITE_PENDING,
+    ).first()
+    if not inv or not inv.token:
+        raise NotFoundError("Invitation not found")
+    return inv.token
 
 
 def get_pending_invitations(db: Session, clerk_user_id: str) -> list[PendingInvitationInfo]:
@@ -230,7 +245,7 @@ def get_pending_invitations(db: Session, clerk_user_id: str) -> list[PendingInvi
     now = datetime.now(timezone.utc)
     invitations = db.query(GroupInvitation).filter(
         GroupInvitation.email == player.email.lower(),
-        GroupInvitation.status == "pending",
+        GroupInvitation.status == INVITE_PENDING,
         GroupInvitation.expires_at > now,
     ).all()
 
@@ -255,7 +270,7 @@ def get_pending_invitations(db: Session, clerk_user_id: str) -> list[PendingInvi
         league = leagues_by_id.get(inv.league_id)
         inviter = inviters_by_id.get(inv.invited_by)
         result.append(PendingInvitationInfo(
-            token=inv.token,
+            invitation_id=inv.id,
             group_name=group.name if group else "",
             league_name=league.name if league else "",
             inviter_name=f"{inviter.first_name} {inviter.last_name}" if inviter else "",
@@ -293,7 +308,7 @@ def get_my_groups(db: Session, clerk_user_id: str) -> list[MyGroupInfo]:
     players_by_id = {p.id: p for p in db.query(Player).filter(Player.id.in_(member_ids)).all()}
     pending_invites = db.query(GroupInvitation).filter(
         GroupInvitation.group_id.in_(group_ids),
-        GroupInvitation.status == "pending",
+        GroupInvitation.status == INVITE_PENDING,
     ).all()
 
     group_lps_by_group: dict = {}

@@ -32,8 +32,16 @@ import app.models.waiver  # noqa: F401
 
 import json as _json
 
+class _CorrelationFilter(logging.Filter):
+    """Inject the current correlation ID into every log record."""
+    def filter(self, record):
+        from app.core.middleware import correlation_id_var
+        record.correlation_id = correlation_id_var.get("")
+        return True
+
+
 class _JSONFormatter(logging.Formatter):
-    """Structured JSON formatter for CloudWatch Insights on Lambda."""
+    """Structured JSON formatter for CloudWatch Insights."""
     def format(self, record):
         entry = {
             "timestamp": self.formatTime(record),
@@ -41,17 +49,21 @@ class _JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        if getattr(record, "correlation_id", None):
+            entry["correlation_id"] = record.correlation_id
+        if getattr(record, "event", None):
+            entry["event"] = record.event
         if record.exc_info:
             entry["exception"] = self.formatException(record.exc_info)
         return _json.dumps(entry)
 
-if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(_JSONFormatter())
-    logging.root.addHandler(_handler)
-    logging.root.setLevel(logging.INFO)
-else:
-    logging.basicConfig(level=logging.INFO)
+_log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(_JSONFormatter())
+_handler.addFilter(_CorrelationFilter())
+logging.root.addHandler(_handler)
+logging.root.setLevel(_log_level)
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +90,7 @@ async def lifespan(app: FastAPI):
         try:
             if not AdminService.is_admin_email(db, admin_email):
                 AdminService.add_admin_email(db, admin_email.strip().lower(), "super_admin")
+                db.commit()
         except Exception:
             logger.exception("Failed to seed initial admin from ADMIN_EMAIL")
             db.rollback()
@@ -116,6 +129,9 @@ app.add_middleware(
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+from app.core.middleware import CorrelationIDMiddleware
+app.add_middleware(CorrelationIDMiddleware)
 
 app.include_router(user.router, prefix="/user")
 app.include_router(registration.router, prefix="/registration")

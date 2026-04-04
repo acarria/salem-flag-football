@@ -1,0 +1,5 @@
+<h2>New Contact Form Submission</h2>
+<p><strong>From:</strong> {{ sender_name }} &lt;{{ sender_email }}&gt;</p>
+<p><strong>Subject:</strong> {{ subject }}</p>
+<hr />
+<p>{{ message_html | safe }}</p>

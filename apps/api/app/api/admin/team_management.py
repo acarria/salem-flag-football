@@ -1,9 +1,10 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
+from app.core.limiter import limiter
 from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
@@ -14,16 +15,18 @@ from app.api.schemas.admin import (
     LeagueMemberResponse, TeamResponse, TeamGenerationRequest, TeamGenerationResponse
 )
 from app.api.admin.dependencies import get_admin_user
-from app.services.team_generation_service import _run_team_generation
+from app.services.team_generation_service import generate_teams as run_team_generation
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.get("/leagues/{league_id}/members", response_model=List[LeagueMemberResponse], summary="Get all league members")
+@limiter.limit("30/minute")
 async def get_league_members(
+    request: Request,
     league_id: UUID,
-    skip: int = 0,
+    skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -76,7 +79,9 @@ async def get_league_members(
     return result
 
 @router.get("/leagues/{league_id}/teams", response_model=List[TeamResponse], summary="Get all teams for a league")
+@limiter.limit("30/minute")
 async def get_league_teams(
+    request: Request,
     league_id: UUID,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -96,7 +101,9 @@ async def get_league_teams(
     return [TeamResponse.model_validate(team) for team in teams]
 
 @router.post("/leagues/{league_id}/generate-teams", response_model=TeamGenerationResponse, summary="Generate teams for league")
+@limiter.limit("30/minute")
 async def generate_teams(
+    request: Request,
     league_id: UUID,
     team_data: TeamGenerationRequest,
     db: Session = Depends(get_db),
@@ -117,7 +124,8 @@ async def generate_teams(
         raise HTTPException(status_code=400, detail="No confirmed players found for this league")
 
     try:
-        result = _run_team_generation(league, db, teams_count=team_data.teams_count)
+        result = run_team_generation(league, db, teams_count=team_data.teams_count)
+        db.commit()
     except Exception as e:
         db.rollback()
         logger.exception("Team generation failed for league %s: %s", league_id, e)

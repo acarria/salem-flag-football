@@ -186,8 +186,8 @@ def get_available_time_slots_for_date(
 
     booked_by_field: Dict[UUID, List[Tuple[dt_time, dt_time]]] = {}
     for game in existing_games:
-        if game.field_id and game.game_time:
-            game_start = datetime.strptime(game.game_time, "%H:%M").time()
+        if game.field_id and game.game_datetime:
+            game_start = game.game_datetime.time()
             game_end_dt = datetime.combine(target_date, game_start) + timedelta(minutes=game.duration_minutes)
             booked_by_field.setdefault(game.field_id, []).append((game_start, game_end_dt.time()))
 

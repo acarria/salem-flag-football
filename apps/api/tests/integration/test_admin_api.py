@@ -438,7 +438,7 @@ def test_update_admin_not_found(client, db):
     _admin_setup(db)
     resp = client.put("/admin/admins/nonexistent@example.com", json={"role": "admin"})
     _admin_teardown()
-    assert resp.status_code in (404, 500)  # endpoint may not distinguish not-found
+    assert resp.status_code == 404
 
 
 def test_create_league_invalid_format(client, db):

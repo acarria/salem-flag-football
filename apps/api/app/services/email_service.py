@@ -1,16 +1,29 @@
 import base64
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import resend
-from html import escape
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# TODO: Replace fire-and-forget email sends with an SQS queue + DLQ for
+# reliable delivery. Critical emails like waiver prompts directly affect
+# registration lifecycle — a silent failure means the player's registration
+# may expire without notification. See REVIEW_REPORT.md item 6.
+
 # Set API key once at module load, not on every call
 if settings.RESEND_API_KEY:
     resend.api_key = settings.RESEND_API_KEY
+
+# Jinja2 environment with auto-escaping for HTML email templates
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "email"
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATE_DIR)),
+    autoescape=select_autoescape(["html"]),
+)
 
 
 def send_group_invitation(
@@ -25,23 +38,21 @@ def send_group_invitation(
 ):
     invite_url = f"{app_url}/invite/{token}"
     expiry_label = f"{expiry_days} day{'s' if expiry_days != 1 else ''}"
-    html = f"""
-    <h2>You've been invited to join a flag football group!</h2>
-    <p>Hi {escape(to_name)},</p>
-    <p><strong>{escape(inviter_name)}</strong> has invited you to join their group
-    <strong>{escape(group_name)}</strong> for the <strong>{escape(league_name)}</strong> league.</p>
-    <p>Click the link below to accept or decline your invitation:</p>
-    <p><a href="{invite_url}" style="background:#22c55e;color:#fff;padding:12px 24px;
-    border-radius:6px;text-decoration:none;font-weight:bold;">View Invitation</a></p>
-    <p>This invitation expires in {expiry_label}.</p>
-    <p>If you did not expect this invitation you can safely ignore this email.</p>
-    """
+    html = _jinja_env.get_template("group_invitation.html").render(
+        to_name=to_name,
+        inviter_name=inviter_name,
+        group_name=group_name,
+        league_name=league_name,
+        invite_url=invite_url,
+        expiry_label=expiry_label,
+    )
     resend.Emails.send({
         "from": settings.EMAIL_FROM,
         "to": to_email,
-        "subject": f"You're invited to join {escape(group_name)} – {escape(league_name)}",
+        "subject": f"You're invited to join {group_name} \u2013 {league_name}",
         "html": html,
     })
+    logger.info("Email sent: type=group_invitation to=%s", to_email)
 
 
 def send_contact_message(
@@ -50,19 +61,21 @@ def send_contact_message(
     subject: str,
     message: str,
 ):
-    html = f"""
-    <h2>New Contact Form Submission</h2>
-    <p><strong>From:</strong> {escape(sender_name)} &lt;{escape(sender_email)}&gt;</p>
-    <p><strong>Subject:</strong> {escape(subject)}</p>
-    <hr />
-    <p>{escape(message).replace(chr(10), '<br />')}</p>
-    """
+    from markupsafe import Markup, escape
+    message_html = escape(message).replace("\n", Markup("<br />"))
+    html = _jinja_env.get_template("contact_message.html").render(
+        sender_name=sender_name,
+        sender_email=sender_email,
+        subject=subject,
+        message_html=message_html,
+    )
     resend.Emails.send({
         "from": settings.EMAIL_FROM,
         "to": settings.CONTACT_EMAIL,
-        "subject": f"[Contact] {escape(subject)}",
+        "subject": f"[Contact] {subject}",
         "html": html,
     })
+    logger.info("Email sent: type=contact_message from=%s", sender_email)
 
 
 def send_waiver_prompt(
@@ -75,24 +88,19 @@ def send_waiver_prompt(
     """Send an email prompting the player to sign their waiver after registration."""
     waiver_url = f"{settings.APP_URL}/waiver/{league_id}"
     expiry_label = f"{expiry_days} day{'s' if expiry_days != 1 else ''}"
-    html = f"""
-    <h2>Welcome to {escape(league_name)}!</h2>
-    <p>Hi {escape(to_name)},</p>
-    <p>You have successfully registered for <strong>{escape(league_name)}</strong>.
-    To complete your registration, you need to sign the liability waiver.</p>
-    <p>You have <strong>{expiry_label}</strong> to sign the waiver. If you do not sign within
-    this period, your registration will expire and your spot will be released.</p>
-    <p><a href="{waiver_url}" style="background:#22c55e;color:#fff;padding:12px 24px;
-    border-radius:6px;text-decoration:none;font-weight:bold;">Sign Waiver Now</a></p>
-    <p style="color:#666;font-size:13px;">If you already signed the waiver during registration,
-    you can ignore this email.</p>
-    """
+    html = _jinja_env.get_template("waiver_prompt.html").render(
+        to_name=to_name,
+        league_name=league_name,
+        waiver_url=waiver_url,
+        expiry_label=expiry_label,
+    )
     resend.Emails.send({
         "from": settings.EMAIL_FROM,
         "to": to_email,
-        "subject": f"Action Required: Sign Your Waiver — {escape(league_name)}",
+        "subject": f"Action Required: Sign Your Waiver \u2014 {league_name}",
         "html": html,
     })
+    logger.info("Email sent: type=waiver_prompt to=%s", to_email)
 
 
 def send_waiver_confirmation(
@@ -104,20 +112,16 @@ def send_waiver_confirmation(
     pdf_bytes: bytes,
 ):
     signed_at_str = signed_at.strftime("%B %d, %Y at %I:%M %p UTC")
-    html = f"""
-    <h2>Waiver Signed Successfully</h2>
-    <p>Hi {escape(to_name)},</p>
-    <p>This confirms that you have signed the liability waiver for
-    <strong>{escape(league_name)}</strong>.</p>
-    <p><strong>Date signed:</strong> {signed_at_str}</p>
-    <p><strong>Waiver version:</strong> {escape(waiver_version)}</p>
-    <p>A PDF copy of your signed waiver is attached to this email for your records.</p>
-    <p>This document was signed electronically in accordance with the ESIGN Act.</p>
-    """
+    html = _jinja_env.get_template("waiver_confirmation.html").render(
+        to_name=to_name,
+        league_name=league_name,
+        signed_at_str=signed_at_str,
+        waiver_version=waiver_version,
+    )
     resend.Emails.send({
         "from": settings.EMAIL_FROM,
         "to": to_email,
-        "subject": f"Waiver Signed — {escape(league_name)}",
+        "subject": f"Waiver Signed \u2014 {league_name}",
         "html": html,
         "attachments": [
             {
@@ -126,3 +130,4 @@ def send_waiver_confirmation(
             }
         ],
     })
+    logger.info("Email sent: type=waiver_confirmation to=%s", to_email)

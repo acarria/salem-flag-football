@@ -93,8 +93,6 @@ class LeagueUpdateRequest(BaseModel):
     min_teams: Optional[int] = Field(None, ge=2, le=10)
     registration_fee: Optional[Decimal] = None
     settings: Optional[LeagueSettings] = None
-    is_active: Optional[bool] = None
-
     @field_validator('format')
     @classmethod
     def validate_format(cls, v):

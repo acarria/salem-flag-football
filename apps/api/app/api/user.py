@@ -25,12 +25,10 @@ def _player_to_dict(player: Player) -> dict:
         "lastName": player.last_name,
         "email": player.email,
         "phone": player.phone or "",
-        "dateOfBirth": player.date_of_birth.isoformat() if player.date_of_birth else "",
+        "dateOfBirth": player.date_of_birth.isoformat() if player.date_of_birth else None,
         "gender": player.gender or "",
         "communicationsAccepted": player.communications_accepted,
         "registrationDate": player.registration_date.isoformat() if player.registration_date else None,
-        "paymentStatus": player.payment_status,
-        "waiverStatus": player.waiver_status,
     }
 
 
@@ -70,8 +68,6 @@ async def update_my_profile(request: Request, profile: UserProfile, user=Depends
             date_of_birth=dob,
             gender=profile.gender if profile.gender else None,
             communications_accepted=profile.communicationsAccepted,
-            payment_status=profile.paymentStatus if profile.paymentStatus else "pending",
-            waiver_status=profile.waiverStatus if profile.waiverStatus else "pending",
         )
         db.commit()
         db.refresh(player)
@@ -129,8 +125,6 @@ async def update_user_profile(
             date_of_birth=dob,
             gender=profile.gender if profile.gender else None,
             communications_accepted=profile.communicationsAccepted,
-            payment_status=profile.paymentStatus if profile.paymentStatus else "pending",
-            waiver_status=profile.waiverStatus if profile.waiverStatus else "pending",
         )
         db.commit()
         db.refresh(player)

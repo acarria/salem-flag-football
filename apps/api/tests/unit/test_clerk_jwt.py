@@ -16,6 +16,7 @@ from app.utils.clerk_jwt import (
     JWKS_CACHE,
     JWKS_CACHE_TTL,
     _CLERK_ISSUER_NORMALIZED,
+    _EMAIL_CACHE,
     _fetch_clerk_email,
     _get_signing_key,
     _get_test_bypass_user,
@@ -65,13 +66,17 @@ def _make_request(token: str | None = None) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def _reset_jwks_cache():
-    """Clear JWKS cache before each test."""
+def _reset_caches():
+    """Clear JWKS and email caches before each test."""
     JWKS_CACHE["keys"] = None
     JWKS_CACHE["fetched_at"] = 0
+    JWKS_CACHE["failed_at"] = 0
+    _EMAIL_CACHE.clear()
     yield
     JWKS_CACHE["keys"] = None
     JWKS_CACHE["fetched_at"] = 0
+    JWKS_CACHE["failed_at"] = 0
+    _EMAIL_CACHE.clear()
 
 
 # ===================================================================

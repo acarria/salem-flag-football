@@ -30,7 +30,6 @@ def generate_waiver_pdf(
     league_name: str,
     player_name: str,
     signed_at: datetime,
-    ip_address: str | None,
 ) -> bytes:
     """Generate a signed waiver PDF and return the raw bytes."""
     waiver_content = _sanitize_for_latin1(waiver_content)
@@ -74,9 +73,6 @@ def generate_waiver_pdf(
 
     signed_at_str = signed_at.strftime("%B %d, %Y at %I:%M %p UTC")
     pdf.cell(0, 6, f"Date: {signed_at_str}", new_x="LMARGIN", new_y="NEXT")
-
-    if ip_address:
-        pdf.cell(0, 6, f"IP Address: {ip_address}", new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(8)
 

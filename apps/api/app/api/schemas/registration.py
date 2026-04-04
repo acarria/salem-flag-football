@@ -11,7 +11,7 @@ class SoloRegistrationRequest(BaseModel):
     lastName: str = Field(..., max_length=100)
     email: EmailStr
     phone: str = Field(..., max_length=20)
-    dateOfBirth: str  # Format: YYYY-MM-DD
+    dateOfBirth: date
     gender: str = Field(..., max_length=20)
     termsAccepted: bool
     communicationsAccepted: bool
@@ -23,18 +23,6 @@ class SoloRegistrationRequest(BaseModel):
         """Validate that terms are accepted."""
         if not v:
             raise ValueError('Terms must be accepted to register')
-        return v
-
-    @field_validator('dateOfBirth')
-    @classmethod
-    def validate_date_of_birth(cls, v):
-        """Validate date of birth format."""
-        if not v or len(v.strip()) == 0:
-            raise ValueError('dateOfBirth is required')
-        try:
-            date.fromisoformat(v)
-        except ValueError:
-            raise ValueError('dateOfBirth must be in YYYY-MM-DD format')
         return v
 
 class GroupPlayerInfo(BaseModel):
@@ -51,7 +39,7 @@ class GroupRegistrationRequest(BaseModel):
     """
     league_id: UUID
     groupName: str = Field(..., max_length=100)
-    players: List[GroupPlayerInfo]
+    players: List[GroupPlayerInfo] = Field(..., max_length=10)
     termsAccepted: bool
     communicationsAccepted: bool
 
@@ -109,7 +97,7 @@ class InvitationDetailResponse(BaseModel):
 
 class PendingInvitationResponse(BaseModel):
     """Summary of a pending invitation for the /invitations/me endpoint."""
-    token: str
+    invitation_id: UUID
     group_name: str
     league_name: str
     inviter_name: str

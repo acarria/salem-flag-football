@@ -53,6 +53,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+  const [firstInviteToken, setFirstInviteToken] = useState<string | null>(null);
 
   const requestRef = useRef(request);
   const getTokenRef = useRef(getToken);
@@ -85,6 +86,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
           if (authToken) {
             const invites = await invitationService.getPendingInvitations(authToken);
             setPendingInvitations(invites);
+            if (invites.length > 0) {
+              try {
+                const token = await invitationService.getInvitationToken(invites[0].invitation_id, authToken);
+                setFirstInviteToken(token);
+              } catch {
+                // Token resolution failed — link will be hidden
+              }
+            }
           }
         } catch (err) {
           logger.error('Failed to load invitations:', err);
@@ -137,11 +146,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-primary">
-        {isSignedIn && pendingInvitations.length > 0 && (
+        {isSignedIn && pendingInvitations.length > 0 && firstInviteToken && (
           <div className="bg-green-700 text-white text-center py-2 px-4 text-sm">
             You have {pendingInvitations.length} pending group invitation
             {pendingInvitations.length > 1 ? 's' : ''}.{' '}
-            <Link href={`/invite/${pendingInvitations[0].token}`} className="underline font-semibold">
+            <Link href={`/invite/${firstInviteToken}`} className="underline font-semibold">
               View invitation
             </Link>
           </div>

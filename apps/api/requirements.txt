@@ -12,3 +12,4 @@ mangum==0.21.0
 slowapi==0.1.9
 boto3==1.42.68
 fpdf2==2.8.3
+Jinja2>=3.1

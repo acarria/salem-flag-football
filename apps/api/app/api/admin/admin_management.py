@@ -1,12 +1,13 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from math import ceil
 
 logger = logging.getLogger(__name__)
+from app.core.limiter import limiter
 from app.db.db import get_db
 from app.models.admin_config import AdminConfig
 from app.models.player import Player
@@ -23,12 +24,18 @@ router = APIRouter()
 
 
 @router.get("/me", summary="Check if current user is an admin")
-async def get_admin_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_admin_me(request: Request, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    user_id = user.get("id")
+    if user_id and AdminService.is_admin_by_clerk_id(db, user_id):
+        return {"is_admin": True}
     email = user.get("email", "")
     return {"is_admin": bool(email and AdminService.is_admin_email(db, email))}
 
 @router.get("/admins", response_model=List[AdminConfigResponse], summary="Get all admin configurations")
+@limiter.limit("30/minute")
 async def get_admin_configs(
+    request: Request,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
@@ -37,7 +44,9 @@ async def get_admin_configs(
     return [AdminConfigResponse.model_validate(admin) for admin in admins]
 
 @router.post("/admins", response_model=AdminConfigResponse, summary="Add admin email")
+@limiter.limit("30/minute")
 async def add_admin_email(
+    request: Request,
     admin_data: AdminConfigCreateRequest,
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
@@ -45,14 +54,20 @@ async def add_admin_email(
     """Add a new admin email address"""
     try:
         admin_config = AdminService.add_admin_email(db, admin_data.email, admin_data.role)
+        db.commit()
+        db.refresh(admin_config)
         return AdminConfigResponse.model_validate(admin_config)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Failed to add admin: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.put("/admins/{email:path}", response_model=AdminConfigResponse, summary="Update admin configuration")
+@limiter.limit("30/minute")
 async def update_admin_config(
+    request: Request,
     admin_data: AdminConfigUpdateRequest,
     email: str = Path(..., max_length=320),
     db: Session = Depends(get_db),
@@ -62,7 +77,8 @@ async def update_admin_config(
     try:
         if admin_data.role:
             AdminService.update_admin_role(db, email, admin_data.role)
-        
+            db.commit()
+
         # Get updated admin config
         admin_config = db.query(AdminConfig).filter(
             AdminConfig.email == email.lower()
@@ -72,30 +88,42 @@ async def update_admin_config(
             raise HTTPException(status_code=404, detail="Admin not found")
         
         return AdminConfigResponse.model_validate(admin_config)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update admin: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.delete("/admins/{email:path}", summary="Remove admin privileges")
+@limiter.limit("30/minute")
 async def remove_admin_email(
+    request: Request,
     email: str = Path(..., max_length=320),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
     """Remove admin privileges from an email address"""
+    from app.services.exceptions import ServiceError
     try:
-        success = AdminService.remove_admin_email(db, email)
+        success = AdminService.remove_admin_email(db, email, caller_email=admin_user.get("email", ""))
         if not success:
             raise HTTPException(status_code=404, detail="Admin not found")
+        db.commit()
         return {"message": "Admin privileges removed successfully."}
+    except ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Failed to remove admin: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @router.get("/users", response_model=PaginatedUserResponse, summary="Get all users (paginated)")
+@limiter.limit("30/minute")
 async def get_all_users(
+    request: Request,
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(25, ge=1, le=100, description="Number of users per page"),
     db: Session = Depends(get_db),

@@ -14,7 +14,7 @@ export interface InvitationDetail {
 }
 
 export interface PendingInvitation {
-  token: string;
+  invitation_id: string;
   group_name: string;
   league_name: string;
   inviter_name: string;
@@ -53,6 +53,13 @@ class InvitationApiService extends BaseApiService {
     return this.request<PendingInvitation[]>('/registration/invitations/me', {
       headers: this.authHeaders(authToken),
     });
+  }
+
+  async getInvitationToken(invitationId: string, authToken: string): Promise<string> {
+    const data = await this.request<{ token: string }>(`/registration/invitations/${invitationId}/token`, {
+      headers: this.authHeaders(authToken),
+    });
+    return data.token;
   }
 
   async getMyGroups(authToken: string): Promise<MyGroup[]> {

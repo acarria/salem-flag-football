@@ -37,6 +37,7 @@ def handler(event, context):
                 try:
                     triggered = trigger_team_generation_if_ready(league_id, db)
                     if triggered:
+                        db.commit()
                         logger.info("Team generation triggered for league %s after waiver sweep", league_id)
                 except Exception as e:
                     logger.exception("Team generation failed for league %s: %s", league_id, e)

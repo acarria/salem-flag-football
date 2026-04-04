@@ -27,6 +27,11 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# TODO: Implement periodic archival of is_active=False records older than 12 months.
+# Soft-deleted records grow tables unbounded. Consider a nightly Lambda/cron that
+# moves old inactive records to an archive table or cold storage (S3/Glacier).
+# See REVIEW_REPORT.md item 13.
+
 # Database dependency for FastAPI
 def get_db():
     db = SessionLocal()

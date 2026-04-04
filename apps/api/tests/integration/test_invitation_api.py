@@ -161,6 +161,27 @@ def test_revoke_success(client, db):
     assert inv_fresh.status == "revoked"
 
 
+def test_get_invitation_token_success(client, db):
+    """GET /registration/invitations/{id}/token returns token for the user's own invitation."""
+    _, _, _, inv = _setup_invitation(db, email=INVITEE_EMAIL)
+    make_player(db, clerk_user_id=CLERK_USER_ID, email=INVITEE_EMAIL)
+    db.commit()
+
+    resp = client.get(f"/registration/invitations/{inv.id}/token")
+    assert resp.status_code == 200
+    assert resp.json()["token"] == inv.token
+
+
+def test_get_invitation_token_wrong_user(client, db):
+    """GET /registration/invitations/{id}/token returns 404 for another user's invitation."""
+    _, _, _, inv = _setup_invitation(db, email="someone_else@example.com")
+    make_player(db, clerk_user_id=CLERK_USER_ID, email=INVITEE_EMAIL)
+    db.commit()
+
+    resp = client.get(f"/registration/invitations/{inv.id}/token")
+    assert resp.status_code == 404
+
+
 def test_revoke_non_organizer_fails(client, db):
     league = make_league(db)
     organizer = make_player(db, email="real_org@example.com")

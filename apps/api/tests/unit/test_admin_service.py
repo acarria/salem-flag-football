@@ -1,5 +1,7 @@
+import pytest
 from app.models.admin_config import AdminConfig
 from app.services.admin_service import AdminService
+from app.services.exceptions import ServiceError
 
 
 def _seed_admin(db, email, is_active=True, role="admin") -> AdminConfig:
@@ -36,14 +38,31 @@ def test_add_admin_stores_lowercase(db):
 
 def test_remove_admin_soft_deletes(db):
     _seed_admin(db, "togo@example.com")
-    result = AdminService.remove_admin_email(db, "togo@example.com")
+    _seed_admin(db, "other@example.com")  # Ensure > 1 admin so last-admin guard doesn't fire
+    result = AdminService.remove_admin_email(db, "togo@example.com", caller_email="other@example.com")
     assert result is True
     assert AdminService.is_admin_email(db, "togo@example.com") is False
 
 
 def test_remove_admin_returns_false_for_nonexistent(db):
-    result = AdminService.remove_admin_email(db, "ghost@example.com")
+    _seed_admin(db, "keeper@example.com")
+    _seed_admin(db, "other@example.com")  # Need > 1 so last-admin guard doesn't fire
+    result = AdminService.remove_admin_email(db, "ghost@example.com", caller_email="keeper@example.com")
     assert result is False
+
+
+def test_remove_admin_blocks_self_removal(db):
+    _seed_admin(db, "self@example.com")
+    with pytest.raises(ServiceError, match="Cannot remove your own"):
+        AdminService.remove_admin_email(db, "self@example.com", caller_email="self@example.com")
+
+
+def test_remove_admin_blocks_last_admin(db):
+    # Deactivate any pre-existing admins so "last" is truly the only one
+    db.query(AdminConfig).filter(AdminConfig.is_active == True).update({"is_active": False})
+    _seed_admin(db, "last@example.com")
+    with pytest.raises(ServiceError, match="Cannot remove the last"):
+        AdminService.remove_admin_email(db, "last@example.com", caller_email="other@example.com")
 
 
 def test_get_all_admins(db):

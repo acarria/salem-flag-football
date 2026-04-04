@@ -18,8 +18,11 @@ services:
     volumes:
       - ./apps/api:/app
     env_file:
+      - ./apps/api/.env
       - .env
     ports:
+      # NOTE: Binds to all interfaces for Docker Desktop compatibility.
+      # In production, the backend runs on Lambda — not exposed via Docker.
       - "8000:8000"
     depends_on:
       - db

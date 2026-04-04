@@ -20,12 +20,15 @@ from app.models.league_player import LeaguePlayer
 from app.models.player import Player
 from app.models.team import Team
 from app.services.exceptions import ConflictError, NotFoundError, ServiceError
-from app.services.league_service import (
-    _PLAYERS_PER_TEAM,
-    get_occupied_spots,
-    get_player_cap,
-)
+from app.services.league_service import get_occupied_spots, get_player_cap
 from app.core.config import settings
+from app.core.constants import (
+    INVITE_PENDING,
+    PAY_PENDING,
+    PLAYERS_PER_TEAM,
+    REG_CONFIRMED,
+    WAIVER_PENDING,
+)
 from app.services.player_service import upsert_player
 
 logger = logging.getLogger(__name__)
@@ -129,6 +132,28 @@ def _check_not_registered(db: Session, league_id: UUID, player_id: UUID) -> None
         raise ServiceError("You are already registered for this league")
 
 
+def _create_confirmed_league_player(
+    db: Session,
+    league_id: UUID,
+    player_id: UUID,
+    group_id: Optional[UUID],
+    clerk_user_id: str,
+) -> LeaguePlayer:
+    """Create a confirmed LeaguePlayer with standard defaults. Does NOT commit."""
+    lp = LeaguePlayer(
+        league_id=league_id,
+        player_id=player_id,
+        group_id=group_id,
+        registration_status=REG_CONFIRMED,
+        payment_status=PAY_PENDING,
+        waiver_status=WAIVER_PENDING,
+        waiver_deadline=datetime.now(timezone.utc) + timedelta(days=settings.WAIVER_EXPIRY_DAYS),
+        created_by=clerk_user_id,
+    )
+    db.add(lp)
+    return lp
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -186,17 +211,7 @@ def register_solo(
             db.flush()
         gid = group.id
 
-    league_player = LeaguePlayer(
-        league_id=league_id,
-        player_id=player.id,
-        group_id=gid,
-        registration_status="confirmed",
-        payment_status="pending",
-        waiver_status="pending",
-        waiver_deadline=datetime.now(timezone.utc) + timedelta(days=settings.WAIVER_EXPIRY_DAYS),
-        created_by=clerk_user_id,
-    )
-    db.add(league_player)
+    league_player = _create_confirmed_league_player(db, league_id, player.id, gid, clerk_user_id)
 
     return SoloRegistrationResult(
         league_player=league_player,
@@ -222,7 +237,7 @@ def register_group(
     league = _validate_and_lock_league(db, league_id, spots_needed=1 + len(players))
 
     # Validate group size against format
-    players_per_team = _PLAYERS_PER_TEAM.get(league.format)
+    players_per_team = PLAYERS_PER_TEAM.get(league.format)
     if players_per_team is None:
         raise ServiceError("Unsupported league format")
     max_invitees = players_per_team - 1
@@ -246,17 +261,7 @@ def register_group(
     db.add(group)
     db.flush()
 
-    organizer_lp = LeaguePlayer(
-        league_id=league_id,
-        player_id=organizer.id,
-        group_id=group.id,
-        registration_status="confirmed",
-        payment_status="pending",
-        waiver_status="pending",
-        waiver_deadline=datetime.now(timezone.utc) + timedelta(days=settings.WAIVER_EXPIRY_DAYS),
-        created_by=clerk_user_id,
-    )
-    db.add(organizer_lp)
+    organizer_lp = _create_confirmed_league_player(db, league_id, organizer.id, group.id, clerk_user_id)
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=invitation_expiry_days)
     invitation_emails: list[InvitationEmailData] = []
@@ -273,7 +278,7 @@ def register_group(
             first_name=inv_first,
             last_name=inv_last,
             token=token,
-            status="pending",
+            status=INVITE_PENDING,
             invited_by=organizer.id,
             expires_at=expires_at,
         )

@@ -16,6 +16,7 @@ from app.models.team import Team
 from app.models.game import Game
 from app.api.schemas.league import PublicLeagueResponse
 from app.services.league_service import get_player_cap
+from app.core.constants import REG_CONFIRMED, INVITE_PENDING
 from app.utils.clerk_jwt import get_optional_user
 
 router = APIRouter()
@@ -72,7 +73,7 @@ def _compute_league_response(
 @limiter.limit("60/minute")
 async def get_public_leagues(
     request: Request,
-    skip: int = 0,
+    skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
     user: dict | None = Depends(get_optional_user),
@@ -91,7 +92,7 @@ async def get_public_leagues(
         db.query(LeaguePlayer.league_id, func.count(LeaguePlayer.id))
         .filter(
             LeaguePlayer.league_id.in_(league_ids),
-            LeaguePlayer.registration_status == 'confirmed',
+            LeaguePlayer.registration_status == REG_CONFIRMED,
             LeaguePlayer.is_active == True,
         )
         .group_by(LeaguePlayer.league_id)
@@ -107,7 +108,7 @@ async def get_public_leagues(
         db.query(GroupInvitation.league_id, func.count(GroupInvitation.id))
         .filter(
             GroupInvitation.league_id.in_(league_ids),
-            GroupInvitation.status == 'pending',
+            GroupInvitation.status == INVITE_PENDING,
             GroupInvitation.expires_at > now,
         )
         .group_by(GroupInvitation.league_id)
@@ -123,7 +124,7 @@ async def get_public_leagues(
                 row[0] for row in db.query(LeaguePlayer.league_id)
                 .filter(
                     LeaguePlayer.player_id == player.id,
-                    LeaguePlayer.registration_status == 'confirmed',
+                    LeaguePlayer.registration_status == REG_CONFIRMED,
                     LeaguePlayer.is_active == True,
                 )
                 .all()
@@ -234,7 +235,7 @@ async def get_league_by_id(
 
     confirmed_count = db.query(func.count(LeaguePlayer.id)).filter(
         LeaguePlayer.league_id == league_id,
-        LeaguePlayer.registration_status == 'confirmed',
+        LeaguePlayer.registration_status == REG_CONFIRMED,
         LeaguePlayer.is_active == True,
     ).scalar() or 0
 
@@ -244,7 +245,7 @@ async def get_league_by_id(
 
     pending_invite_count = db.query(func.count(GroupInvitation.id)).filter(
         GroupInvitation.league_id == league_id,
-        GroupInvitation.status == 'pending',
+        GroupInvitation.status == INVITE_PENDING,
         GroupInvitation.expires_at > now,
     ).scalar() or 0
 
@@ -259,7 +260,7 @@ async def get_league_by_id(
             lp = db.query(LeaguePlayer).filter(
                 LeaguePlayer.player_id == player.id,
                 LeaguePlayer.league_id == league_id,
-                LeaguePlayer.registration_status == 'confirmed',
+                LeaguePlayer.registration_status == REG_CONFIRMED,
                 LeaguePlayer.is_active == True,
             ).first()
             registered_league_ids = {league_id} if lp else set()

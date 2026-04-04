@@ -36,9 +36,6 @@ from app.api.schemas.admin import (
 # User schemas
 from app.api.schemas.user import (
     UserProfile,
-    UserBase,
-    UserCreate,
-    UserOut,
 )
 
 # League schemas

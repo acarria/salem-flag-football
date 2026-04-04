@@ -676,7 +676,7 @@ async def get_all_field_availability(
     request: Request,
     field_id: Optional[UUID] = None,
     is_active: Optional[bool] = None,
-    skip: int = 0,
+    skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)

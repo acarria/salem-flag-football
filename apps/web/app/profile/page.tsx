@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useUser, useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
 import BaseLayout from '@/components/layout/BaseLayout';
+import WaiverViewModal from '@/components/modals/WaiverViewModal';
 import { isHttpStatus, getApiErrorMessage } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import {
@@ -76,6 +77,20 @@ export default function ProfilePage() {
     created_at: string;
   }
   const [registrations, setRegistrations] = useState<LeagueRegistration[]>([]);
+
+  // Signed waivers for "My Documents" section
+  interface SignedWaiverItem {
+    signature_id: string;
+    league_id: string;
+    league_name: string;
+    waiver_version: string;
+    signed_at: string;
+    full_name_typed: string;
+    has_pdf: boolean;
+  }
+  const [signedWaivers, setSignedWaivers] = useState<SignedWaiverItem[]>([]);
+  const [showWaiverModal, setShowWaiverModal] = useState(false);
+  const [viewingSigId, setViewingSigId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -165,6 +180,20 @@ export default function ProfilePage() {
       }
     };
     fetchRegistrations();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    const fetchSignedWaivers = async () => {
+      if (!user?.id) return;
+      try {
+        const data = await request<SignedWaiverItem[]>('/waiver/my-signatures');
+        setSignedWaivers(data);
+      } catch {
+        // Non-fatal
+      }
+    };
+    fetchSignedWaivers();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -525,6 +554,60 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {signedWaivers.length > 0 && (
+          <div className="border-t border-white/5 mt-10 pt-8">
+            <div className="section-label mb-4">MY DOCUMENTS</div>
+            <div className="space-y-3">
+              {signedWaivers.map(w => (
+                <div
+                  key={w.signature_id}
+                  className="flex items-center justify-between bg-[#1A1A1A] border border-white/10 rounded-lg p-4"
+                >
+                  <div>
+                    <div className="text-sm font-medium text-white">
+                      Liability Waiver &mdash; {w.league_name}
+                    </div>
+                    <div className="text-xs text-[#6B6B6B] mt-0.5">
+                      {w.waiver_version} &middot; Signed{' '}
+                      {new Date(w.signed_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setViewingSigId(w.signature_id);
+                        setShowWaiverModal(true);
+                      }}
+                      className="text-accent text-xs font-medium py-1.5 px-3 rounded-md border border-accent/30 hover:bg-accent/10 transition-colors"
+                    >
+                      View
+                    </button>
+                    {w.has_pdf && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const data = await request<{ url: string }>(`/waiver/my-signatures/${w.signature_id}/pdf`);
+                            window.open(data.url, '_blank');
+                          } catch {
+                            // PDF not available
+                          }
+                        }}
+                        className="text-[#A0A0A0] text-xs font-medium py-1.5 px-3 rounded-md border border-white/10 hover:bg-white/5 transition-colors"
+                      >
+                        Download
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {profile.registrationDate && (
           <div className="border-t border-white/5 mt-10 pt-8">
             <div className="section-label mb-4">LEAGUE INFORMATION</div>
@@ -624,6 +707,12 @@ export default function ProfilePage() {
         </div>
 
       </div>
+
+      <WaiverViewModal
+        signatureId={viewingSigId}
+        isOpen={showWaiverModal}
+        onClose={() => setShowWaiverModal(false)}
+      />
     </BaseLayout>
   );
 }
