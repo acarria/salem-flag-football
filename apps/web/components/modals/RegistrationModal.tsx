@@ -15,7 +15,7 @@ import {
   normalizePhoneDigits,
   COUNTRIES,
 } from '@/utils/validation';
-import { apiService, UserProfile, League } from '@/services';
+import { leagueApi, UserProfile, League } from '@/services';
 import SoloRegistrationForm from './registration/SoloRegistrationForm';
 import GroupRegistrationForm from './registration/GroupRegistrationForm';
 
@@ -72,7 +72,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
       const loadData = async () => {
         setIsLoading(true);
         try {
-          const leaguesData = await apiService.getPublicLeagues();
+          const leaguesData = await leagueApi.getPublicLeagues();
           setLeagues(leaguesData);
           if (leaguesData.length > 0) {
             setSelectedLeague(leaguesData[0].id);

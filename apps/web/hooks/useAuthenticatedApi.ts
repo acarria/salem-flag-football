@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { logger } from '@/utils/logger';
 import { parseApiErrorResponse, throwApiError } from '@/utils/errors';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { API_BASE_URL } from '@/services/core/base';
 
 export const useAuthenticatedApi = () => {
   const { getToken } = useAuth();

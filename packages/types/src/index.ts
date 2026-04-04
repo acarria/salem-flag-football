@@ -9,26 +9,7 @@ export interface Team {
   league_id: string;
 }
 
-// Legacy public standings/schedule (sample data format)
-export interface Standing {
-  rank: number;
-  team: string;
-  wins: number;
-  losses: number;
-  pointsFor: number;
-  pointsAgainst: number;
-}
-
-export interface Game {
-  week: number;
-  home: string;
-  away: string;
-  date: string;
-  time: string;
-  location: string;
-}
-
-// Real DB-backed standings from /league/{id}/standings
+// Public standings from /league/{id}/standings
 export interface PublicStanding {
   rank: number;
   team_id: string;
@@ -391,4 +372,19 @@ export interface MyTeamResponse {
   team_name: string;
   team_color: string | null;
   members: TeamMemberPublic[];
+}
+
+// Waiver Types
+export interface SignedWaiverSummary {
+  signature_id: string;
+  league_id: string;
+  league_name: string;
+  waiver_version: string;
+  signed_at: string;
+  full_name_typed: string;
+  has_pdf: boolean;
+}
+
+export interface SignedWaiverDetail extends SignedWaiverSummary {
+  waiver_content: string;
 }

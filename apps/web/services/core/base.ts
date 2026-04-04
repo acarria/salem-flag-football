@@ -2,7 +2,7 @@ import { ZodSchema } from 'zod';
 import { logger } from '@/utils/logger';
 import { parseApiErrorResponse, throwApiError } from '@/utils/errors';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 if (process.env.NODE_ENV === 'production' && !API_BASE_URL.startsWith('https://')) {
   throw new Error('NEXT_PUBLIC_API_URL must use HTTPS in production. Current value: ' + API_BASE_URL);
 }

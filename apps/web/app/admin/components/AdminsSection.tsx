@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { AdminConfig, AdminConfigCreateRequest } from '@/services';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import { inputCls, selectCls } from './constants';
+import { inputCls, selectCls } from '@/utils/formStyles';
 
 interface AdminsSectionProps {
   authenticatedRequest: <T>(url: string, options?: RequestInit) => Promise<T>;

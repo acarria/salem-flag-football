@@ -104,19 +104,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     checkProfile();
   }, [isSignedIn, isLoaded, userId]);
 
-  const handleProfileComplete = async (profileData: any) => {
+  const handleProfileComplete = async (profileData: UserProfile) => {
     if (userId) {
       try {
-        const userProfile: UserProfile = {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-          email: profileData.email,
-          phone: profileData.phone,
-          dateOfBirth: profileData.dateOfBirth,
-          gender: profileData.gender,
-          communicationsAccepted: profileData.communicationsAccepted,
-        };
-        await request('/user/me', { method: 'PUT', body: JSON.stringify(userProfile) });
+        await request('/user/me', { method: 'PUT', body: JSON.stringify(profileData) });
         setIsProfileComplete(true);
         setShowProfileModal(false);
       } catch (err) {

@@ -2,11 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { League, LeagueCreateRequest } from '@/services';
+import { League, LeagueCreateRequest, TournamentFormat } from '@/services';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import { inputCls, selectCls } from './constants';
-
-type TournamentFormat = 'round_robin' | 'swiss';
+import { inputCls, selectCls } from '@/utils/formStyles';
 
 interface LeaguesSectionProps {
   authenticatedRequest: <T>(url: string, options?: RequestInit) => Promise<T>;

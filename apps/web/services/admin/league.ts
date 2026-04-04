@@ -43,8 +43,8 @@ export class LeagueApiService extends BaseApiService {
     });
   }
 
-  async deleteLeague(leagueId: string): Promise<any> {
-    return this.request<any>(`/admin/leagues/${leagueId}`, {
+  async deleteLeague(leagueId: string): Promise<void> {
+    await this.request<void>(`/admin/leagues/${leagueId}`, {
       method: 'DELETE',
     });
   }

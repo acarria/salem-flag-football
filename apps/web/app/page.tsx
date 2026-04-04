@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth, useClerk } from '@clerk/nextjs';
 import RegistrationModal from '@/components/modals/RegistrationModal';
 import BaseLayout from '@/components/layout/BaseLayout';
-import { apiService, League, PublicStanding, LeagueSchedule } from '@/services';
+import { leagueApi, League, PublicStanding, LeagueSchedule } from '@/services';
 import { logger } from '@/utils/logger';
 
 export default function HomePage() {
@@ -34,7 +35,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchLeagues = async () => {
       try {
-        const data = await apiService.getPublicLeagues();
+        const data = await leagueApi.getPublicLeagues();
         const active = data.filter((l) => l.is_active);
         setLeagues(active);
         if (active.length > 0) {
@@ -59,8 +60,8 @@ export default function HomePage() {
         setError(null);
 
         const [standingsData, scheduleData] = await Promise.all([
-          apiService.getLeagueStandings(selectedLeagueId),
-          apiService.getLeaguePublicSchedule(selectedLeagueId),
+          leagueApi.getLeagueStandings(selectedLeagueId),
+          leagueApi.getLeaguePublicSchedule(selectedLeagueId),
         ]);
 
         setStandings(standingsData);
@@ -114,15 +115,15 @@ export default function HomePage() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="border-t border-b border-white/5 py-4 mb-16">
           <div className="flex flex-wrap gap-8">
-            <a href="/rules" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
+            <Link href="/rules" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
               League Rules <span>→</span>
-            </a>
-            <a href="/info" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
+            </Link>
+            <Link href="/info" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
               League Info <span>→</span>
-            </a>
-            <a href="/contact" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
+            </Link>
+            <Link href="/contact" className="text-sm text-[#A0A0A0] hover:text-white transition-colors flex items-center gap-1.5">
               Contact Us <span>→</span>
-            </a>
+            </Link>
           </div>
         </div>
 

@@ -3,9 +3,7 @@
 import React, { useState } from 'react';
 import { LeagueSchedule, ScheduledGame, GameUpdateRequest } from '@/services';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-
-const inputCls =
-  'w-full px-2.5 py-1.5 bg-[#1E1E1E] border border-white/10 focus:border-accent/40 text-white text-sm rounded-md outline-none transition-colors';
+import { inputCls } from '@/utils/formStyles';
 
 interface ScheduleSectionProps {
   schedule: LeagueSchedule | null;

@@ -2,11 +2,9 @@
 
 import React, { useState } from 'react';
 import {
-  League, LeagueCreateRequest, LeagueUpdateRequest, TournamentFormat,
+  League, LeagueCreateRequest, LeagueUpdateRequest, TournamentFormat, GameFormat,
 } from '@/services';
 import InlineEditableField from '@/components/common/InlineEditableField';
-
-type GameFormat = '7v7' | '5v5';
 
 interface OverviewSectionProps {
   league: League;

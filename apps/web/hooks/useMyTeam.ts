@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '@/utils/logger';
 
 interface RegistrationSummary {
   league_id: string;
@@ -31,7 +32,7 @@ export function useMyTeam(): { teamId: string | null } {
         const withTeam = registrations.find(r => r.team_id != null);
         setTeamId(withTeam?.team_id ?? null);
       } catch (err) {
-        console.error('Failed to fetch team:', err);
+        logger.error('Failed to fetch team:', err);
         if (!cancelled) setTeamId(null);
       }
     };
