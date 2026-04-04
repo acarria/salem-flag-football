@@ -2,6 +2,43 @@
 
 Flag football league management platform — player registration, team generation, scheduling, and standings for the Salem Flag Football League.
 
+## Screenshots
+
+### Home Page
+Landing page with hero section, league highlights, current standings, and registration CTA.
+
+![Home Page](docs/screenshots/01-home.png)
+
+### Browse Leagues
+View all active leagues with format, dates, registration status, and available spots.
+
+![Leagues](docs/screenshots/02-leagues.png)
+
+### League Detail
+Detailed league view showing schedule, format, registration progress bar, standings, and registration button.
+
+![League Detail](docs/screenshots/03-league-detail.png)
+
+### Rules
+League rules page explaining flag football gameplay — no contact, rush rules, scoring, and game format.
+
+![Rules](docs/screenshots/04-rules.png)
+
+### League Info
+About page with league history, mission, and funding transparency breakdown.
+
+![Info](docs/screenshots/05-info.png)
+
+### Contact
+Contact form with reCAPTCHA protection for questions about registration, rules, or general inquiries.
+
+![Contact](docs/screenshots/06-contact.png)
+
+### Sign In
+Clerk-powered authentication with Apple, Facebook, Google OAuth, or email sign-in.
+
+![Sign In](docs/screenshots/08-sign-in.png)
+
 ## Stack
 
 | Layer | Technology |
