@@ -261,7 +261,7 @@ def register_group(
     db.add(group)
     db.flush()
 
-    organizer_lp = _create_confirmed_league_player(db, league_id, organizer.id, group.id, clerk_user_id)
+    _create_confirmed_league_player(db, league_id, organizer.id, group.id, clerk_user_id)
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=invitation_expiry_days)
     invitation_emails: list[InvitationEmailData] = []
