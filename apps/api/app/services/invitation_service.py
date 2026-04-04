@@ -6,7 +6,7 @@ the transaction boundary.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -17,16 +17,12 @@ from app.models.group_invitation import GroupInvitation
 from app.models.league import League
 from app.models.league_player import LeaguePlayer
 from app.models.player import Player
-from app.core.config import settings
 from app.core.constants import (
     INVITE_ACCEPTED,
     INVITE_DECLINED,
     INVITE_EXPIRED,
     INVITE_PENDING,
     INVITE_REVOKED,
-    PAY_PENDING,
-    REG_CONFIRMED,
-    WAIVER_PENDING,
 )
 from app.services.exceptions import ForbiddenError, NotFoundError, ServiceError
 from app.services.league_service import get_occupied_spots, get_player_cap
@@ -177,7 +173,7 @@ def accept_invitation(
             raise ServiceError("This league is full")
 
     from app.services.registration_service import _create_confirmed_league_player
-    league_player = _create_confirmed_league_player(db, inv.league_id, player.id, inv.group_id, clerk_user_id)
+    _create_confirmed_league_player(db, inv.league_id, player.id, inv.group_id, clerk_user_id)
 
     inv.status = INVITE_ACCEPTED
     inv.player_id = player.id

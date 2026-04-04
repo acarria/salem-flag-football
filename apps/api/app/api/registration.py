@@ -7,7 +7,6 @@ Domain logic lives in services/registration_service.py and services/invitation_s
 import asyncio
 import functools
 import logging
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
