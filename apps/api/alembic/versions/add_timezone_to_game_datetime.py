@@ -1,7 +1,7 @@
 """Add timezone to game_datetime column
 
 Revision ID: 86e4632e7e4a
-Revises: update_reg_fee_decimal
+Revises: e1f2a3b4c5d6
 Create Date: 2026-04-04
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '86e4632e7e4a'
-down_revision: Union[str, None] = 'update_reg_fee_decimal'
+down_revision: Union[str, None] = 'e1f2a3b4c5d6'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
