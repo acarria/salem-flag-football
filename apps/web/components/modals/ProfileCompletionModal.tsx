@@ -20,20 +20,20 @@ interface ProfileCompletionModalProps {
 }
 
 interface ProfileData {
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   email: string;
   phone: string;
-  dateOfBirth: string;
+  date_of_birth: string;
   gender: string;
-  termsAccepted: boolean;
-  communicationsAccepted: boolean;
+  terms_accepted: boolean;
+  communications_accepted: boolean;
 }
 
 // Date of birth validation (must be 18+ years old)
-function isValidDateOfBirth(dateOfBirth: string): string | null {
-  if (!dateOfBirth) return 'Date of birth is required.';
-  const birthDate = new Date(dateOfBirth);
+function isValidDateOfBirth(date_of_birth: string): string | null {
+  if (!date_of_birth) return 'Date of birth is required.';
+  const birthDate = new Date(date_of_birth);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
@@ -47,14 +47,14 @@ function isValidDateOfBirth(dateOfBirth: string): string | null {
 
 export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, clerkUser }: ProfileCompletionModalProps) {
   const [profileData, setProfileData] = useState<Omit<ProfileData, 'phone'> & { phone: string }>({
-    firstName: '',
-    lastName: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
-    dateOfBirth: '',
+    date_of_birth: '',
     gender: '',
-    termsAccepted: false,
-    communicationsAccepted: false
+    terms_accepted: false,
+    communications_accepted: false
   });
   const [countryIso, setCountryIso] = useState('US');
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
@@ -64,8 +64,8 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
     if (clerkUser && isOpen) {
       setProfileData(prev => ({
         ...prev,
-        firstName: clerkUser.firstName || '',
-        lastName: clerkUser.lastName || '',
+        first_name: clerkUser.firstName || '',
+        last_name: clerkUser.lastName || '',
         email: clerkUser.primaryEmailAddress?.emailAddress || ''
       }));
     }
@@ -114,8 +114,8 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
   const validateForm = () => {
     const errors: { [key: string]: string } = {};
 
-    if (!profileData.firstName) errors.firstName = 'First name is required.';
-    if (!profileData.lastName) errors.lastName = 'Last name is required.';
+    if (!profileData.first_name) errors.first_name = 'First name is required.';
+    if (!profileData.last_name) errors.last_name = 'Last name is required.';
 
     const emailError = getEmailError(profileData.email);
     if (emailError) {
@@ -125,12 +125,12 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
     const phoneError = getPhoneErrorForCountry(profileData.phone, countryIso);
     if (phoneError) errors.phone = phoneError;
 
-    const dobError = isValidDateOfBirth(profileData.dateOfBirth);
-    if (!profileData.dateOfBirth) errors.dateOfBirth = 'Date of birth is required.';
-    else if (dobError) errors.dateOfBirth = dobError;
+    const dobError = isValidDateOfBirth(profileData.date_of_birth);
+    if (!profileData.date_of_birth) errors.date_of_birth = 'Date of birth is required.';
+    else if (dobError) errors.date_of_birth = dobError;
 
     if (!profileData.gender) errors.gender = 'Gender is required.';
-    if (!profileData.termsAccepted) errors.termsAccepted = 'You must accept the terms of service.';
+    if (!profileData.terms_accepted) errors.terms_accepted = 'You must accept the terms of service.';
 
     return errors;
   };
@@ -152,13 +152,13 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
 
   // Check if form is valid for submit button
   const isFormValid = () => {
-    return profileData.firstName &&
-           profileData.lastName &&
+    return profileData.first_name &&
+           profileData.last_name &&
            isValidEmail(profileData.email) &&
            !getPhoneErrorForCountry(profileData.phone, countryIso) &&
-           !isValidDateOfBirth(profileData.dateOfBirth) &&
+           !isValidDateOfBirth(profileData.date_of_birth) &&
            profileData.gender &&
-           profileData.termsAccepted;
+           profileData.terms_accepted;
   };
 
   return (
@@ -177,30 +177,30 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="profile-firstName" className={labelCls}>First Name</label>
+              <label htmlFor="profile-first_name" className={labelCls}>First Name</label>
               <input
-                id="profile-firstName"
-                className={fieldErrors.firstName ? inputErrCls : inputCls}
-                name="firstName"
+                id="profile-first_name"
+                className={fieldErrors.first_name ? inputErrCls : inputCls}
+                name="first_name"
                 placeholder="First"
-                value={profileData.firstName}
+                value={profileData.first_name}
                 onChange={handleInput}
                 autoComplete="given-name"
               />
-              {fieldErrors.firstName && <div className="text-red-400 text-xs mt-1">{fieldErrors.firstName}</div>}
+              {fieldErrors.first_name && <div className="text-red-400 text-xs mt-1">{fieldErrors.first_name}</div>}
             </div>
             <div>
-              <label htmlFor="profile-lastName" className={labelCls}>Last Name</label>
+              <label htmlFor="profile-last_name" className={labelCls}>Last Name</label>
               <input
-                id="profile-lastName"
-                className={fieldErrors.lastName ? inputErrCls : inputCls}
-                name="lastName"
+                id="profile-last_name"
+                className={fieldErrors.last_name ? inputErrCls : inputCls}
+                name="last_name"
                 placeholder="Last"
-                value={profileData.lastName}
+                value={profileData.last_name}
                 onChange={handleInput}
                 autoComplete="family-name"
               />
-              {fieldErrors.lastName && <div className="text-red-400 text-xs mt-1">{fieldErrors.lastName}</div>}
+              {fieldErrors.last_name && <div className="text-red-400 text-xs mt-1">{fieldErrors.last_name}</div>}
             </div>
           </div>
 
@@ -256,17 +256,17 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
           </div>
 
           <div>
-            <label htmlFor="profile-dateOfBirth" className={labelCls}>Date of Birth</label>
+            <label htmlFor="profile-date_of_birth" className={labelCls}>Date of Birth</label>
             <input
-              id="profile-dateOfBirth"
-              className={fieldErrors.dateOfBirth ? inputErrCls : inputCls}
-              name="dateOfBirth"
-              value={profileData.dateOfBirth}
+              id="profile-date_of_birth"
+              className={fieldErrors.date_of_birth ? inputErrCls : inputCls}
+              name="date_of_birth"
+              value={profileData.date_of_birth}
               onChange={handleInput}
               autoComplete="bday"
               type="date"
             />
-            {fieldErrors.dateOfBirth && <div className="text-red-400 text-xs mt-1">{fieldErrors.dateOfBirth}</div>}
+            {fieldErrors.date_of_birth && <div className="text-red-400 text-xs mt-1">{fieldErrors.date_of_birth}</div>}
           </div>
 
           <div>
@@ -291,8 +291,8 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                name="termsAccepted"
-                checked={profileData.termsAccepted}
+                name="terms_accepted"
+                checked={profileData.terms_accepted}
                 onChange={handleInput}
                 className="mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0"
               />
@@ -300,13 +300,13 @@ export default function ProfileCompletionModal({ isOpen, onComplete, onCancel, c
                 I agree to the <a href="/terms" className="text-white underline hover:text-[#A0A0A0]">Terms of Service</a> and acknowledge that by creating an account and providing my information, I am bound by these terms.
               </span>
             </label>
-            {fieldErrors.termsAccepted && <div className="text-red-400 text-xs">{fieldErrors.termsAccepted}</div>}
+            {fieldErrors.terms_accepted && <div className="text-red-400 text-xs">{fieldErrors.terms_accepted}</div>}
 
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                name="communicationsAccepted"
-                checked={profileData.communicationsAccepted}
+                name="communications_accepted"
+                checked={profileData.communications_accepted}
                 onChange={handleInput}
                 className="mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0"
               />

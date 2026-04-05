@@ -14,14 +14,14 @@ type EmailErrorType = string | { message: string; suggestion: string };
 
 interface SoloRegistrationFormProps {
   solo: {
-    firstName: string;
-    lastName: string;
+    first_name: string;
+    last_name: string;
     email: string;
     phone: string;
-    dateOfBirth: string;
+    date_of_birth: string;
     gender: string;
-    termsAccepted: boolean;
-    communicationsAccepted: boolean;
+    terms_accepted: boolean;
+    communications_accepted: boolean;
   };
   countryIso: string;
   fieldErrors: { [key: string]: string | EmailErrorType };
@@ -73,37 +73,37 @@ export default function SoloRegistrationForm({
     <>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="solo-firstName" className={labelCls}>First Name</label>
+          <label htmlFor="solo-first_name" className={labelCls}>First Name</label>
           <input
-            id="solo-firstName"
-            className={getVisibleError('firstName') ? inputErrCls : inputCls}
-            name="firstName"
+            id="solo-first_name"
+            className={getVisibleError('first_name') ? inputErrCls : inputCls}
+            name="first_name"
             placeholder="First"
-            value={solo.firstName}
+            value={solo.first_name}
             onChange={onInput}
-            onBlur={() => onBlur('firstName')}
+            onBlur={() => onBlur('first_name')}
             autoComplete="given-name"
             readOnly={!!userFirstName}
           />
-          {getVisibleError('firstName') && (
-            <p className="text-red-400 text-xs mt-1">{getVisibleError('firstName') as string}</p>
+          {getVisibleError('first_name') && (
+            <p className="text-red-400 text-xs mt-1">{getVisibleError('first_name') as string}</p>
           )}
         </div>
         <div>
-          <label htmlFor="solo-lastName" className={labelCls}>Last Name</label>
+          <label htmlFor="solo-last_name" className={labelCls}>Last Name</label>
           <input
-            id="solo-lastName"
-            className={getVisibleError('lastName') ? inputErrCls : inputCls}
-            name="lastName"
+            id="solo-last_name"
+            className={getVisibleError('last_name') ? inputErrCls : inputCls}
+            name="last_name"
             placeholder="Last"
-            value={solo.lastName}
+            value={solo.last_name}
             onChange={onInput}
-            onBlur={() => onBlur('lastName')}
+            onBlur={() => onBlur('last_name')}
             autoComplete="family-name"
             readOnly={!!userLastName}
           />
-          {getVisibleError('lastName') && (
-            <p className="text-red-400 text-xs mt-1">{getVisibleError('lastName') as string}</p>
+          {getVisibleError('last_name') && (
+            <p className="text-red-400 text-xs mt-1">{getVisibleError('last_name') as string}</p>
           )}
         </div>
       </div>
@@ -183,19 +183,19 @@ export default function SoloRegistrationForm({
       </div>
 
       <div>
-        <label htmlFor="solo-dateOfBirth" className={labelCls}>Date of Birth</label>
+        <label htmlFor="solo-date_of_birth" className={labelCls}>Date of Birth</label>
         <input
-          id="solo-dateOfBirth"
-          className={getVisibleError('dateOfBirth') ? inputErrCls : inputCls}
-          name="dateOfBirth"
-          value={solo.dateOfBirth}
+          id="solo-date_of_birth"
+          className={getVisibleError('date_of_birth') ? inputErrCls : inputCls}
+          name="date_of_birth"
+          value={solo.date_of_birth}
           onChange={onInput}
-          onBlur={() => onBlur('dateOfBirth')}
+          onBlur={() => onBlur('date_of_birth')}
           autoComplete="bday"
           type="date"
         />
-        {getVisibleError('dateOfBirth') && (
-          <p className="text-red-400 text-xs mt-1">{getVisibleError('dateOfBirth') as string}</p>
+        {getVisibleError('date_of_birth') && (
+          <p className="text-red-400 text-xs mt-1">{getVisibleError('date_of_birth') as string}</p>
         )}
       </div>
 
@@ -224,10 +224,10 @@ export default function SoloRegistrationForm({
         <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
-            name="termsAccepted"
-            checked={solo.termsAccepted}
+            name="terms_accepted"
+            checked={solo.terms_accepted}
             onChange={onInput}
-            onBlur={() => onBlur('termsAccepted')}
+            onBlur={() => onBlur('terms_accepted')}
             className="mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0"
           />
           <span className="text-xs text-[#A0A0A0] leading-relaxed">
@@ -238,15 +238,15 @@ export default function SoloRegistrationForm({
             and acknowledge that by registering, I am bound by these terms.
           </span>
         </label>
-        {getVisibleError('termsAccepted') && (
-          <p className="text-red-400 text-xs">{getVisibleError('termsAccepted') as string}</p>
+        {getVisibleError('terms_accepted') && (
+          <p className="text-red-400 text-xs">{getVisibleError('terms_accepted') as string}</p>
         )}
 
         <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
-            name="communicationsAccepted"
-            checked={solo.communicationsAccepted}
+            name="communications_accepted"
+            checked={solo.communications_accepted}
             onChange={onInput}
             className="mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0"
           />

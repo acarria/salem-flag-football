@@ -68,14 +68,14 @@ async def register_player(
             db,
             clerk_user_id,
             league_id=registration_data.league_id,
-            first_name=registration_data.firstName,
-            last_name=registration_data.lastName,
+            first_name=registration_data.first_name,
+            last_name=registration_data.last_name,
             email=registration_data.email,
             phone=registration_data.phone,
-            date_of_birth=registration_data.dateOfBirth,
+            date_of_birth=registration_data.date_of_birth,
             gender=registration_data.gender if registration_data.gender else None,
-            communications_accepted=registration_data.communicationsAccepted,
-            group_name=registration_data.groupName if registration_data.groupName else None,
+            communications_accepted=registration_data.communications_accepted,
+            group_name=registration_data.group_name if registration_data.group_name else None,
         )
         db.commit()
         db.refresh(result.league_player)
@@ -150,7 +150,7 @@ async def register_group(
             db,
             clerk_user_id,
             league_id=registration_data.league_id,
-            group_name=registration_data.groupName,
+            group_name=registration_data.group_name,
             players=[p.model_dump() for p in registration_data.players],
             invitation_expiry_days=settings.INVITATION_EXPIRY_DAYS,
         )

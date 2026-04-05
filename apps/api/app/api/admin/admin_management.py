@@ -17,6 +17,7 @@ from app.api.schemas.admin import (
     UserResponse, PaginatedUserResponse
 )
 from app.api.admin.dependencies import get_admin_user
+from app.api.schemas.common import SuccessResponse
 from app.utils.clerk_jwt import get_current_user
 from app.services.admin_service import AdminService
 
@@ -95,7 +96,7 @@ async def update_admin_config(
         logger.exception("Failed to update admin: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
-@router.delete("/admins/{email:path}", summary="Remove admin privileges")
+@router.delete("/admins/{email:path}", response_model=SuccessResponse, summary="Remove admin privileges")
 @limiter.limit("30/minute")
 async def remove_admin_email(
     request: Request,
@@ -110,7 +111,7 @@ async def remove_admin_email(
         if not success:
             raise HTTPException(status_code=404, detail="Admin not found")
         db.commit()
-        return {"message": "Admin privileges removed successfully."}
+        return SuccessResponse(success=True, message="Admin privileges removed successfully.")
     except ServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
     except HTTPException:
@@ -124,28 +125,23 @@ async def remove_admin_email(
 @limiter.limit("30/minute")
 async def get_all_users(
     request: Request,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(25, ge=1, le=100, description="Number of users per page"),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, le=100),
     db: Session = Depends(get_db),
     admin_user=Depends(get_admin_user)
 ):
-    """Get all users with their basic information (paginated)"""
     try:
-        # Get total count of active players
+        limit = min(limit, 100)
+
         total_count = db.query(func.count(Player.id)).filter(Player.is_active == True).scalar() or 0
-        
-        # Calculate pagination
-        total_pages = ceil(total_count / page_size) if total_count > 0 else 0
-        
-        # Validate page number
-        if page > total_pages and total_pages > 0:
-            raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}")
-        
-        # Get paginated players, ordered by creation date (newest first)
-        offset = (page - 1) * page_size
+
         players = db.query(Player).filter(
             Player.is_active == True
-        ).order_by(Player.created_at.desc()).offset(offset).limit(page_size).all()
+        ).order_by(Player.created_at.desc()).offset(skip).limit(limit).all()
+
+        page_size = limit
+        page = (skip // limit) + 1 if limit > 0 else 1
+        total_pages = ceil(total_count / page_size) if total_count > 0 else 0
         
         # Fetch league counts for all players on this page in a single query
         player_ids = [p.id for p in players]

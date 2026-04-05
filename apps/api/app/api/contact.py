@@ -1,79 +1,22 @@
 import asyncio
 import functools
-import html
 import logging
-import httpx
-from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from fastapi import APIRouter, HTTPException, Request
+
+from app.api.schemas.common import SuccessResponse
+from app.api.schemas.contact import ContactRequest
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.services.email_service import send_contact_message
+from app.utils.recaptcha import verify_recaptcha
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-class ContactRequest(BaseModel):
-    name: str
-    email: EmailStr
-    subject: str
-    message: str
-    recaptcha_token: str = Field(..., max_length=2048)
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Name is required")
-        if len(v) > 100:
-            raise ValueError("Name must be 100 characters or fewer")
-        return html.escape(v)
-
-    @field_validator("subject")
-    @classmethod
-    def validate_subject(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Subject is required")
-        if len(v) > 200:
-            raise ValueError("Subject must be 200 characters or fewer")
-        return html.escape(v)
-
-    @field_validator("message")
-    @classmethod
-    def validate_message(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Message is required")
-        if len(v) > 2000:
-            raise ValueError("Message must be 2000 characters or fewer")
-        return html.escape(v)
-
-
-async def verify_recaptcha(token: str) -> bool:
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
-                "https://www.google.com/recaptcha/api/siteverify",
-                data={
-                    "secret": settings.RECAPTCHA_SECRET_KEY,
-                    "response": token,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("success", False) and data.get("score", 1.0) >= 0.5
-    except httpx.TimeoutException:
-        logger.error("reCAPTCHA verification timed out")
-        raise HTTPException(status_code=503, detail="Service temporarily unavailable.")
-    except Exception as e:
-        logger.error("reCAPTCHA verification failed: %s", e)
-        raise HTTPException(status_code=400, detail="Could not verify reCAPTCHA.")
-
-
-@router.post("")
+@router.post("", response_model=SuccessResponse)
 @limiter.limit("5/hour")
 async def contact(request: Request, body: ContactRequest):
     if not settings.RECAPTCHA_SECRET_KEY:
@@ -101,4 +44,4 @@ async def contact(request: Request, body: ContactRequest):
         logger.exception("Failed to send contact email: %s", e)
         raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")
 
-    return {"success": True, "message": "Your message has been sent."}
+    return SuccessResponse(success=True, message="Your message has been sent.")

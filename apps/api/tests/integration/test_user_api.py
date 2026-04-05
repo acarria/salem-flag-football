@@ -14,13 +14,13 @@ OTHER_USER_ID = "test_clerk_user_other"
 OTHER_USER_DATA = {"id": OTHER_USER_ID, "email": "other@example.com"}
 
 VALID_PROFILE = {
-    "firstName": "John",
-    "lastName": "Doe",
+    "first_name": "John",
+    "last_name": "Doe",
     "email": "john@example.com",
     "phone": "555-0000",
-    "dateOfBirth": "1990-01-01",
+    "date_of_birth": "1990-01-01",
     "gender": "male",
-    "communicationsAccepted": True,
+    "communications_accepted": True,
 }
 
 
@@ -48,8 +48,8 @@ def test_get_my_profile_success(client, db):
     resp = client.get("/user/me")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["firstName"] == "John"
-    assert data["lastName"] == "Doe"
+    assert data["first_name"] == "John"
+    assert data["last_name"] == "Doe"
     assert data["email"] == "john@example.com"
     assert "paymentStatus" not in data
     assert "waiverStatus" not in data
@@ -70,11 +70,11 @@ def test_update_my_profile_create(client, db):
     resp = client.put("/user/me", json=VALID_PROFILE)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["firstName"] == "John"
-    assert data["lastName"] == "Doe"
+    assert data["first_name"] == "John"
+    assert data["last_name"] == "Doe"
     assert data["email"] == "john@example.com"
     assert data["gender"] == "male"
-    assert data["dateOfBirth"] == "1990-01-01"
+    assert data["date_of_birth"] == "1990-01-01"
 
 
 def test_update_my_profile_update(client, db):
@@ -91,17 +91,16 @@ def test_update_my_profile_update(client, db):
     resp = client.put("/user/me", json=VALID_PROFILE)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["firstName"] == "John"
-    assert data["lastName"] == "Doe"
+    assert data["first_name"] == "John"
+    assert data["last_name"] == "Doe"
     assert data["email"] == "john@example.com"
 
 
 def test_update_my_profile_invalid_date(client, db):
-    """Bad dateOfBirth format returns 400."""
-    payload = {**VALID_PROFILE, "dateOfBirth": "not-a-date"}
+    """Bad date_of_birth format returns 422 (Pydantic validation)."""
+    payload = {**VALID_PROFILE, "date_of_birth": "not-a-date"}
     resp = client.put("/user/me", json=payload)
-    assert resp.status_code == 400
-    assert "Invalid date format" in resp.json()["detail"]
+    assert resp.status_code == 422
 
 
 def test_update_my_profile_email_normalized(client, db):
@@ -135,7 +134,7 @@ def test_get_profile_by_id_success(client, db):
     resp = client.get(f"/user/profile/{USER_ID}")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["firstName"] == "John"
+    assert data["first_name"] == "John"
     assert data["email"] == "john@example.com"
 
 
@@ -157,7 +156,7 @@ def test_get_profile_by_id_not_found(client, db):
 
 
 def test_check_registration_true(client, db):
-    """Player registered in the league returns isRegistered: true."""
+    """Player registered in the league returns is_registered: true."""
     league = make_league(db)
     player = make_player(db, clerk_user_id=USER_ID, email="john@example.com")
     make_league_player(db, league.id, player.id, status="confirmed")
@@ -165,28 +164,28 @@ def test_check_registration_true(client, db):
 
     resp = client.get(f"/user/profile/{USER_ID}/registered/{league.id}")
     assert resp.status_code == 200
-    assert resp.json()["isRegistered"] is True
+    assert resp.json()["is_registered"] is True
 
 
 def test_check_registration_false(client, db):
-    """Player exists but is not registered in the league returns isRegistered: false."""
+    """Player exists but is not registered in the league returns is_registered: false."""
     league = make_league(db)
     make_player(db, clerk_user_id=USER_ID, email="john@example.com")
     db.commit()
 
     resp = client.get(f"/user/profile/{USER_ID}/registered/{league.id}")
     assert resp.status_code == 200
-    assert resp.json()["isRegistered"] is False
+    assert resp.json()["is_registered"] is False
 
 
 def test_check_registration_no_player(client, db):
-    """No player record at all returns isRegistered: false."""
+    """No player record at all returns is_registered: false."""
     league = make_league(db)
     db.commit()
 
     resp = client.get(f"/user/profile/{USER_ID}/registered/{league.id}")
     assert resp.status_code == 200
-    assert resp.json()["isRegistered"] is False
+    assert resp.json()["is_registered"] is False
 
 
 def test_check_registration_forbidden(client, db):
@@ -216,8 +215,8 @@ def test_update_profile_by_id_success(client, db):
     resp = client.put(f"/user/profile/{USER_ID}", json=VALID_PROFILE)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["firstName"] == "John"
-    assert data["lastName"] == "Doe"
+    assert data["first_name"] == "John"
+    assert data["last_name"] == "Doe"
     assert data["email"] == "john@example.com"
 
 
@@ -233,7 +232,7 @@ def test_update_profile_by_id_creates(client, db):
     resp = client.put(f"/user/profile/{USER_ID}", json=VALID_PROFILE)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["firstName"] == "John"
-    assert data["lastName"] == "Doe"
+    assert data["first_name"] == "John"
+    assert data["last_name"] == "Doe"
     assert data["email"] == "john@example.com"
     assert data["gender"] == "male"

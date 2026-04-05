@@ -256,36 +256,36 @@ export interface GameUpdateRequest {
 
 // User Types
 export interface UserProfile {
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   email: string;
   phone: string;
-  dateOfBirth: string;
+  date_of_birth: string;
   gender: string;
-  communicationsAccepted: boolean;
-  registrationDate?: string;
-  paymentStatus?: 'pending' | 'paid' | 'failed';
-  waiverStatus?: 'pending' | 'signed' | 'expired';
+  communications_accepted: boolean;
+  registration_date?: string;
+  payment_status?: 'pending' | 'paid' | 'failed';
+  waiver_status?: 'pending' | 'signed' | 'expired';
 }
 
 // Registration Types
 export interface RegistrationData {
   type: 'solo' | 'group';
   solo?: {
-    firstName: string;
-    lastName: string;
+    first_name: string;
+    last_name: string;
     email: string;
     phone: string;
-    dateOfBirth: string;
+    date_of_birth: string;
     gender: string;
-    termsAccepted: boolean;
-    communicationsAccepted: boolean;
+    terms_accepted: boolean;
+    communications_accepted: boolean;
   };
   group?: {
     name: string;
     players: Array<{
-      firstName: string;
-      lastName: string;
+      first_name: string;
+      last_name: string;
       email: string;
     }>;
   };

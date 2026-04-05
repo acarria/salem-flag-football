@@ -56,9 +56,9 @@ def test_unauthenticated_registration_401(client, db):
     league = make_league(db)
     db.commit()
     payload = {
-        "firstName": "X", "lastName": "Y", "email": "x@example.com",
-        "phone": "555", "dateOfBirth": "1990-01-01", "gender": "other",
-        "termsAccepted": True, "communicationsAccepted": False,
+        "first_name": "X", "last_name": "Y", "email": "x@example.com",
+        "phone": "555", "date_of_birth": "1990-01-01", "gender": "other",
+        "terms_accepted": True, "communications_accepted": False,
         "league_id": str(league.id),
     }
     resp = client.post("/registration/player", json=payload)
@@ -347,7 +347,7 @@ def test_get_users_paginated(client, db):
             make_player(db, first_name=f"User{i}", last_name="Test")
         db.commit()
 
-        resp = client.get("/admin/users", params={"page": 1, "page_size": 2})
+        resp = client.get("/admin/users", params={"skip": 0, "limit": 2})
         assert resp.status_code == 200
         data = resp.json()
         assert "users" in data

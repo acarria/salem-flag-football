@@ -108,13 +108,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if (userId) {
       try {
         const userProfile: UserProfile = {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
+          first_name: profileData.first_name,
+          last_name: profileData.last_name,
           email: profileData.email,
           phone: profileData.phone,
-          dateOfBirth: profileData.dateOfBirth,
+          date_of_birth: profileData.date_of_birth,
           gender: profileData.gender,
-          communicationsAccepted: profileData.communicationsAccepted,
+          communications_accepted: profileData.communications_accepted,
         };
         await request('/user/me', { method: 'PUT', body: JSON.stringify(userProfile) });
         setIsProfileComplete(true);
