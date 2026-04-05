@@ -3,6 +3,8 @@ from typing import List, Optional
 from datetime import date
 from uuid import UUID
 
+from app.api.schemas.common import SuccessResponse  # noqa: F401 — re-export for backward compat
+
 # Registration Request Schemas
 class SoloRegistrationRequest(BaseModel):
     """Schema for solo player registration to a league."""
@@ -124,8 +126,6 @@ class MyGroupResponse(BaseModel):
     is_organizer: bool
     members: List[GroupMemberDetail]
 
-
-from app.api.schemas.common import SuccessResponse  # noqa: F401 — re-export for backward compat
 
 
 class TeamMemberPublic(BaseModel):
