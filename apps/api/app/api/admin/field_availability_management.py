@@ -29,9 +29,13 @@ def _build_response(avail, field_name: str | None) -> FieldAvailabilityResponse:
     return resp
 
 
-def _resolve_field_name(db: Session, field_id: UUID) -> str | None:
-    field = db.query(Field).filter(Field.id == field_id).first()
-    return field.name if field else None
+def _build_field_name_map(db: Session, availabilities) -> dict[UUID, str | None]:
+    """Batch-load field names for a list of availability records."""
+    field_ids = {a.field_id for a in availabilities}
+    if not field_ids:
+        return {}
+    fields = db.query(Field.id, Field.name).filter(Field.id.in_(field_ids)).all()
+    return {fid: name for fid, name in fields}
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +66,7 @@ async def create_field_availability_global(
         )
         db.commit()
         db.refresh(avail)
-        field_name = _resolve_field_name(db, avail.field_id)
+        field_name = _build_field_name_map(db, [avail]).get(avail.field_id)
         return _build_response(avail, field_name)
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -87,8 +91,9 @@ async def get_all_field_availability(
     availabilities = field_svc.list_availabilities(
         db, field_id=field_id, is_active=is_active, skip=skip, limit=limit,
     )
+    name_map = _build_field_name_map(db, availabilities)
     return [
-        _build_response(a, _resolve_field_name(db, a.field_id))
+        _build_response(a, name_map.get(a.field_id))
         for a in availabilities
     ]
 
@@ -106,8 +111,9 @@ async def get_field_availability_for_league(
         availabilities = field_svc.list_league_availabilities(db, league_id, is_active=is_active)
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
+    name_map = _build_field_name_map(db, availabilities)
     return [
-        _build_response(a, _resolve_field_name(db, a.field_id))
+        _build_response(a, name_map.get(a.field_id))
         for a in availabilities
     ]
 
@@ -124,7 +130,7 @@ async def get_field_availability_by_id(
         avail = field_svc.get_availability(db, availability_id)
     except NotFoundError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
-    return _build_response(avail, _resolve_field_name(db, avail.field_id))
+    return _build_response(avail, _build_field_name_map(db, [avail]).get(avail.field_id))
 
 
 @router.put("/field-availability/{availability_id}", response_model=FieldAvailabilityResponse, summary="Update field availability record")
@@ -141,7 +147,7 @@ async def update_field_availability_global(
         avail = field_svc.update_availability(db, availability_id, **updates)
         db.commit()
         db.refresh(avail)
-        return _build_response(avail, _resolve_field_name(db, avail.field_id))
+        return _build_response(avail, _build_field_name_map(db, [avail]).get(avail.field_id))
     except (NotFoundError, ServiceError) as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
     except Exception as e:

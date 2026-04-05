@@ -51,8 +51,8 @@ def test_get_my_profile_success(client, db):
     assert data["first_name"] == "John"
     assert data["last_name"] == "Doe"
     assert data["email"] == "john@example.com"
-    assert "paymentStatus" not in data
-    assert "waiverStatus" not in data
+    assert "payment_status" not in data
+    assert "waiver_status" not in data
 
 
 def test_get_my_profile_not_found(client, db):

@@ -84,7 +84,7 @@ def test_contact_missing_contact_email(mock_recaptcha, client):
     """Returns 500 when CONTACT_EMAIL is empty."""
     resp = client.post("/contact", json=CONTACT_PAYLOAD)
     assert resp.status_code == 500
-    assert "not configured" in resp.json()["detail"].lower()
+    assert "error" in resp.json()["detail"].lower()
 
 
 @patch(

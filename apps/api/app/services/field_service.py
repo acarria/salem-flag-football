@@ -68,10 +68,18 @@ def list_fields(
     return query.order_by(Field.name).all()
 
 
+_FIELD_MUTABLE = frozenset({
+    "name", "field_number", "street_address", "city", "state",
+    "zip_code", "country", "facility_name", "additional_notes", "is_active",
+})
+
+
 def update_field(db: Session, field_id: UUID, **updates) -> Field:
     """Apply keyword updates to a field and return it."""
     field = get_field(db, field_id)
     for key, value in updates.items():
+        if key not in _FIELD_MUTABLE:
+            raise ServiceError(f"Cannot update field attribute: {key}")
         setattr(field, key, value)
     return field
 
@@ -201,6 +209,11 @@ def create_availability(
     if not field.is_active:
         raise NotFoundError("Field not found")
 
+    if end_time <= start_time:
+        raise ServiceError("end_time must be after start_time")
+    if day_of_week is not None and not (0 <= day_of_week <= 6):
+        raise ServiceError("day_of_week must be between 0 (Monday) and 6 (Sunday)")
+
     availability = FieldAvailability(
         field_id=field_id,
         is_recurring=is_recurring,
@@ -274,11 +287,22 @@ def get_availability(db: Session, availability_id: UUID) -> FieldAvailability:
     return availability
 
 
+_AVAILABILITY_MUTABLE = frozenset({
+    "field_id", "is_recurring", "day_of_week", "recurrence_start_date",
+    "recurrence_end_date", "custom_date", "start_time", "end_time",
+    "notes", "is_active",
+})
+
+
 def update_availability(
     db: Session, availability_id: UUID, **updates
 ) -> FieldAvailability:
     """Apply keyword updates to an availability record."""
     availability = get_availability(db, availability_id)
+
+    for key in updates:
+        if key not in _AVAILABILITY_MUTABLE:
+            raise ServiceError(f"Cannot update availability attribute: {key}")
 
     # If changing field, verify the new field exists and is active
     new_field_id = updates.get("field_id")
@@ -293,6 +317,11 @@ def update_availability(
     if "start_time" in updates or "end_time" in updates:
         if end_time <= start_time:
             raise ServiceError("end_time must be after start_time")
+
+    # Validate day_of_week range
+    day_of_week = updates.get("day_of_week")
+    if day_of_week is not None and not (0 <= day_of_week <= 6):
+        raise ServiceError("day_of_week must be between 0 (Monday) and 6 (Sunday)")
 
     for key, value in updates.items():
         setattr(availability, key, value)
@@ -311,19 +340,16 @@ def soft_delete_availability(db: Session, availability_id: UUID) -> None:
 
 
 def get_field_availability_scoped(
-    db: Session, field_id: UUID
+    db: Session, field_id: UUID, *, is_active: Optional[bool] = True
 ) -> tuple[Field, list[FieldAvailability]]:
-    """Return a field and its active availability records."""
+    """Return a field and its availability records, filtered by is_active."""
     field = get_field(db, field_id)
-    availabilities = (
-        db.query(FieldAvailability)
-        .filter(
-            FieldAvailability.field_id == field_id,
-            FieldAvailability.is_active == True,  # noqa: E712
-        )
-        .all()
+    query = db.query(FieldAvailability).filter(
+        FieldAvailability.field_id == field_id,
     )
-    return field, availabilities
+    if is_active is not None:
+        query = query.filter(FieldAvailability.is_active == is_active)  # noqa: E712
+    return field, query.all()
 
 
 def get_scoped_availability(

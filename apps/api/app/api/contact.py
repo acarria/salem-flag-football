@@ -26,7 +26,7 @@ async def contact(request: Request, body: ContactRequest):
         raise HTTPException(status_code=400, detail="reCAPTCHA verification failed")
 
     if not settings.CONTACT_EMAIL:
-        raise HTTPException(status_code=500, detail="Contact email not configured")
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     loop = asyncio.get_running_loop()
     try:

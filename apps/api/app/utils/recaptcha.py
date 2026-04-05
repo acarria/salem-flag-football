@@ -20,7 +20,7 @@ async def verify_recaptcha(token: str) -> bool:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data.get("success", False) and data.get("score", 1.0) >= 0.5
+            return data.get("success", False) and data.get("score", 0.0) >= 0.5
     except httpx.TimeoutException:
         logger.error("reCAPTCHA verification timed out")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable.")
