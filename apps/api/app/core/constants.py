@@ -37,6 +37,16 @@ GAME_CANCELLED = "cancelled"
 # League.format
 FORMAT_7V7 = "7v7"
 FORMAT_5V5 = "5v5"
+VALID_FORMATS = frozenset({FORMAT_7V7, FORMAT_5V5})
+
+# League.tournament_format
+TOURNAMENT_ROUND_ROBIN = "round_robin"
+TOURNAMENT_SWISS = "swiss"
+VALID_TOURNAMENT_FORMATS = frozenset({TOURNAMENT_ROUND_ROBIN, TOURNAMENT_SWISS})
 
 # Players per team by format (replaces _PLAYERS_PER_TEAM)
 PLAYERS_PER_TEAM: dict[str, int] = {FORMAT_7V7: 7, FORMAT_5V5: 5}
+
+# Pagination defaults
+DEFAULT_PAGE_LIMIT = 50
+MAX_PAGE_LIMIT = 100

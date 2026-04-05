@@ -140,7 +140,7 @@ def test_associate_field_duplicate(client, db):
     _admin_setup()
     resp = client.post(f"/admin/leagues/{league.id}/fields/{field.id}")
     _admin_teardown()
-    assert resp.status_code == 400
+    assert resp.status_code == 409
 
 
 def test_associate_field_league_not_found(client, db):
@@ -211,31 +211,19 @@ def test_get_league_fields_empty(client, db):
     assert resp.json() == []
 
 
-def test_get_league_field_by_id(client, db):
-    league = make_league(db)
+def test_get_field_by_id(client, db):
     field = make_field(db)
-    make_league_field(db, league.id, field.id)
     _admin_setup()
-    resp = client.get(f"/admin/leagues/{league.id}/fields/{field.id}")
+    resp = client.get(f"/admin/fields/{field.id}")
     _admin_teardown()
     assert resp.status_code == 200
+    assert resp.json()["name"] == field.name
 
 
-def test_get_league_field_not_associated(client, db):
-    league = make_league(db)
-    field = make_field(db)
-    _admin_setup()
-    resp = client.get(f"/admin/leagues/{league.id}/fields/{field.id}")
-    _admin_teardown()
-    assert resp.status_code == 404
-
-
-def test_update_league_field(client, db):
-    league = make_league(db)
+def test_update_field_global(client, db):
     field = make_field(db, name="Old")
-    make_league_field(db, league.id, field.id)
     _admin_setup()
-    resp = client.put(f"/admin/leagues/{league.id}/fields/{field.id}", json={"name": "Updated"})
+    resp = client.put(f"/admin/fields/{field.id}", json={"name": "Updated"})
     _admin_teardown()
     assert resp.status_code == 200
     assert resp.json()["name"] == "Updated"
@@ -540,31 +528,9 @@ def test_delete_league_field_league_not_found(client, db):
     assert resp.status_code == 404
 
 
-def test_update_league_field_league_not_found(client, db):
-    _admin_setup()
-    resp = client.put(f"/admin/leagues/{uuid4()}/fields/{uuid4()}", json={"name": "X"})
-    _admin_teardown()
-    assert resp.status_code == 404
-
-
-def test_update_league_field_field_not_found(client, db):
-    league = make_league(db)
-    _admin_setup()
-    resp = client.put(f"/admin/leagues/{league.id}/fields/{uuid4()}", json={"name": "X"})
-    _admin_teardown()
-    assert resp.status_code == 404
-
-
 def test_get_league_fields_league_not_found(client, db):
     _admin_setup()
     resp = client.get(f"/admin/leagues/{uuid4()}/fields")
-    _admin_teardown()
-    assert resp.status_code == 404
-
-
-def test_get_league_field_league_not_found(client, db):
-    _admin_setup()
-    resp = client.get(f"/admin/leagues/{uuid4()}/fields/{uuid4()}")
     _admin_teardown()
     assert resp.status_code == 404
 

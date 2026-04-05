@@ -114,13 +114,13 @@ export default function ProfilePage() {
             setOriginalPhoneDigits(parsed.localDigits);
           } else {
             const defaultProfile: UserProfile = {
-              firstName: user.firstName || '',
-              lastName: user.lastName || '',
+              first_name: user.firstName || '',
+              last_name: user.lastName || '',
               email: user.primaryEmailAddress?.emailAddress || '',
               phone: '',
-              dateOfBirth: '',
+              date_of_birth: '',
               gender: '',
-              communicationsAccepted: false,
+              communications_accepted: false,
             };
             setProfile(defaultProfile);
             setOriginalProfile(defaultProfile);
@@ -130,13 +130,13 @@ export default function ProfilePage() {
           setError('Failed to load profile. Please try again.');
 
           const defaultProfile: UserProfile = {
-            firstName: user.firstName || '',
-            lastName: user.lastName || '',
+            first_name: user.firstName || '',
+            last_name: user.lastName || '',
             email: user.primaryEmailAddress?.emailAddress || '',
             phone: '',
-            dateOfBirth: '',
+            date_of_birth: '',
             gender: '',
-            communicationsAccepted: false,
+            communications_accepted: false,
           };
           setProfile(defaultProfile);
           setOriginalProfile(defaultProfile);
@@ -392,8 +392,8 @@ export default function ProfilePage() {
               <label className={labelCls}>First Name</label>
               <input
                 type="text"
-                name="firstName"
-                value={profile.firstName}
+                name="first_name"
+                value={profile.first_name}
                 onChange={handleInputChange}
                 disabled={!isEditing}
                 className={isEditing ? inputCls : inputDisabledCls}
@@ -403,8 +403,8 @@ export default function ProfilePage() {
               <label className={labelCls}>Last Name</label>
               <input
                 type="text"
-                name="lastName"
-                value={profile.lastName}
+                name="last_name"
+                value={profile.last_name}
                 onChange={handleInputChange}
                 disabled={!isEditing}
                 className={isEditing ? inputCls : inputDisabledCls}
@@ -483,8 +483,8 @@ export default function ProfilePage() {
               <label className={labelCls}>Date of Birth</label>
               <input
                 type="date"
-                name="dateOfBirth"
-                value={profile.dateOfBirth}
+                name="date_of_birth"
+                value={profile.date_of_birth}
                 onChange={handleInputChange}
                 disabled={!isEditing}
                 className={isEditing ? inputCls : inputDisabledCls}
@@ -512,8 +512,8 @@ export default function ProfilePage() {
             <label className={`flex items-start gap-3 ${isEditing ? 'cursor-pointer' : 'cursor-default'}`}>
               <input
                 type="checkbox"
-                name="communicationsAccepted"
-                checked={profile.communicationsAccepted}
+                name="communications_accepted"
+                checked={profile.communications_accepted}
                 onChange={handleInputChange}
                 disabled={!isEditing}
                 className={`mt-0.5 w-4 h-4 rounded accent-accent flex-shrink-0 ${!isEditing ? 'opacity-50' : ''}`}
@@ -608,14 +608,14 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {profile.registrationDate && (
+        {profile.registration_date && (
           <div className="border-t border-white/5 mt-10 pt-8">
             <div className="section-label mb-4">LEAGUE INFORMATION</div>
             <div className="space-y-0">
               <div className="border-b border-white/5 py-3 flex justify-between items-center">
                 <span className="text-xs text-[#A0A0A0]">Registration Date</span>
                 <span className="text-sm text-white">
-                  {new Date(profile.registrationDate).toLocaleDateString()}
+                  {new Date(profile.registration_date).toLocaleDateString()}
                 </span>
               </div>
               <div className="border-b border-white/5 py-3 flex justify-between items-center">

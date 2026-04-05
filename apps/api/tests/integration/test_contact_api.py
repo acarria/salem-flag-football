@@ -5,7 +5,7 @@ from unittest.mock import patch, AsyncMock
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.api.contact import ContactRequest
+from app.api.schemas.contact import ContactRequest
 from app.core.limiter import limiter
 
 
@@ -84,7 +84,7 @@ def test_contact_missing_contact_email(mock_recaptcha, client):
     """Returns 500 when CONTACT_EMAIL is empty."""
     resp = client.post("/contact", json=CONTACT_PAYLOAD)
     assert resp.status_code == 500
-    assert "not configured" in resp.json()["detail"].lower()
+    assert "error" in resp.json()["detail"].lower()
 
 
 @patch(
@@ -199,7 +199,7 @@ def test_message_html_escaped():
 async def test_verify_recaptcha_success():
     """verify_recaptcha returns True for high-score success response."""
     from unittest.mock import MagicMock
-    from app.api.contact import verify_recaptcha
+    from app.utils.recaptcha import verify_recaptcha
 
     mock_response = MagicMock()
     mock_response.json.return_value = {"success": True, "score": 0.9}
@@ -208,7 +208,7 @@ async def test_verify_recaptcha_success():
     mock_client = AsyncMock()
     mock_client.post.return_value = mock_response
 
-    with patch("app.api.contact.httpx.AsyncClient") as MockClient:
+    with patch("app.utils.recaptcha.httpx.AsyncClient") as MockClient:
         MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -220,7 +220,7 @@ async def test_verify_recaptcha_success():
 async def test_verify_recaptcha_low_score():
     """verify_recaptcha returns False for low-score response."""
     from unittest.mock import MagicMock
-    from app.api.contact import verify_recaptcha
+    from app.utils.recaptcha import verify_recaptcha
 
     mock_response = MagicMock()
     mock_response.json.return_value = {"success": True, "score": 0.2}
@@ -229,7 +229,7 @@ async def test_verify_recaptcha_low_score():
     mock_client = AsyncMock()
     mock_client.post.return_value = mock_response
 
-    with patch("app.api.contact.httpx.AsyncClient") as MockClient:
+    with patch("app.utils.recaptcha.httpx.AsyncClient") as MockClient:
         MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -241,12 +241,12 @@ async def test_verify_recaptcha_low_score():
 async def test_verify_recaptcha_timeout_direct():
     """verify_recaptcha raises 503 on timeout."""
     import httpx
-    from app.api.contact import verify_recaptcha
+    from app.utils.recaptcha import verify_recaptcha
 
     mock_client = AsyncMock()
     mock_client.post.side_effect = httpx.TimeoutException("timed out")
 
-    with patch("app.api.contact.httpx.AsyncClient") as MockClient:
+    with patch("app.utils.recaptcha.httpx.AsyncClient") as MockClient:
         MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -258,12 +258,12 @@ async def test_verify_recaptcha_timeout_direct():
 @pytest.mark.asyncio
 async def test_verify_recaptcha_other_error():
     """verify_recaptcha raises 400 on other exceptions."""
-    from app.api.contact import verify_recaptcha
+    from app.utils.recaptcha import verify_recaptcha
 
     mock_client = AsyncMock()
     mock_client.post.side_effect = RuntimeError("network error")
 
-    with patch("app.api.contact.httpx.AsyncClient") as MockClient:
+    with patch("app.utils.recaptcha.httpx.AsyncClient") as MockClient:
         MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 

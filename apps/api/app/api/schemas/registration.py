@@ -3,21 +3,23 @@ from typing import List, Optional
 from datetime import date
 from uuid import UUID
 
+from app.api.schemas.common import SuccessResponse  # noqa: F401 — re-export for backward compat
+
 # Registration Request Schemas
 class SoloRegistrationRequest(BaseModel):
     """Schema for solo player registration to a league."""
     league_id: UUID
-    firstName: str = Field(..., max_length=100)
-    lastName: str = Field(..., max_length=100)
+    first_name: str = Field(..., max_length=100)
+    last_name: str = Field(..., max_length=100)
     email: EmailStr
     phone: str = Field(..., max_length=20)
-    dateOfBirth: date
+    date_of_birth: date
     gender: str = Field(..., max_length=20)
-    termsAccepted: bool
-    communicationsAccepted: bool
-    groupName: Optional[str] = Field(None, max_length=100)
+    terms_accepted: bool
+    communications_accepted: bool
+    group_name: Optional[str] = Field(None, max_length=100)
 
-    @field_validator('termsAccepted')
+    @field_validator('terms_accepted')
     @classmethod
     def validate_terms_accepted(cls, v):
         """Validate that terms are accepted."""
@@ -27,8 +29,8 @@ class SoloRegistrationRequest(BaseModel):
 
 class GroupPlayerInfo(BaseModel):
     """Schema for an invitee in a group registration."""
-    firstName: str = Field(..., max_length=100)
-    lastName: str = Field(..., max_length=100)
+    first_name: str = Field(..., max_length=100)
+    last_name: str = Field(..., max_length=100)
     email: EmailStr
 
 class GroupRegistrationRequest(BaseModel):
@@ -38,12 +40,12 @@ class GroupRegistrationRequest(BaseModel):
     `players` contains only the invitees — not the organizer.
     """
     league_id: UUID
-    groupName: str = Field(..., max_length=100)
+    group_name: str = Field(..., max_length=100)
     players: List[GroupPlayerInfo] = Field(..., max_length=10)
-    termsAccepted: bool
-    communicationsAccepted: bool
+    terms_accepted: bool
+    communications_accepted: bool
 
-    @field_validator('termsAccepted')
+    @field_validator('terms_accepted')
     @classmethod
     def validate_terms_accepted(cls, v):
         if not v:
@@ -124,10 +126,6 @@ class MyGroupResponse(BaseModel):
     is_organizer: bool
     members: List[GroupMemberDetail]
 
-
-class SuccessResponse(BaseModel):
-    success: bool
-    message: str
 
 
 class TeamMemberPublic(BaseModel):

@@ -13,14 +13,14 @@ CLERK_USER_ID = "clerk_integration_test_user"
 USER_DATA = {"id": CLERK_USER_ID, "email": "alice@example.com"}
 
 VALID_PAYLOAD = {
-    "firstName": "Alice",
-    "lastName": "Smith",
+    "first_name": "Alice",
+    "last_name": "Smith",
     "email": "alice@example.com",
     "phone": "555-1234",
-    "dateOfBirth": "1990-05-15",
+    "date_of_birth": "1990-05-15",
     "gender": "female",
-    "termsAccepted": True,
-    "communicationsAccepted": False,
+    "terms_accepted": True,
+    "communications_accepted": False,
 }
 
 
@@ -112,7 +112,7 @@ def test_solo_register_already_registered(client, db):
 
 def test_solo_register_invalid_dob_format(client, db):
     league = make_league(db)
-    payload = {**VALID_PAYLOAD, "league_id": str(league.id), "dateOfBirth": "not-a-date"}
+    payload = {**VALID_PAYLOAD, "league_id": str(league.id), "date_of_birth": "not-a-date"}
     resp = client.post("/registration/player", json=payload)
     # Pydantic v2 fires a 422 before the handler runs.
     # Pydantic v2 includes the input value in its built-in validation response,
@@ -138,12 +138,12 @@ def test_group_register_success(client, db):
 
     payload = {
         "league_id": str(league.id),
-        "groupName": "Cool Group",
-        "termsAccepted": True,
-        "communicationsAccepted": False,
+        "group_name": "Cool Group",
+        "terms_accepted": True,
+        "communications_accepted": False,
         "players": [
-            {"firstName": "Bob", "lastName": "Jones", "email": "bob@example.com"},
-            {"firstName": "Carol", "lastName": "King", "email": "carol@example.com"},
+            {"first_name": "Bob", "last_name": "Jones", "email": "bob@example.com"},
+            {"first_name": "Carol", "last_name": "King", "email": "carol@example.com"},
         ],
     }
     resp = client.post("/registration/group", json=payload)
@@ -174,14 +174,14 @@ def test_group_register_too_many_invitees(client, db):
     db.commit()
 
     invitees = [
-        {"firstName": f"P{i}", "lastName": "L", "email": f"p{i}@example.com"}
+        {"first_name": f"P{i}", "last_name": "L", "email": f"p{i}@example.com"}
         for i in range(7)  # 7 invitees + organizer = 8, exceeds 7
     ]
     payload = {
         "league_id": str(league.id),
-        "groupName": "Big Group",
-        "termsAccepted": True,
-        "communicationsAccepted": False,
+        "group_name": "Big Group",
+        "terms_accepted": True,
+        "communications_accepted": False,
         "players": invitees,
     }
     resp = client.post("/registration/group", json=payload)
@@ -193,9 +193,9 @@ def test_group_register_too_many_invitees(client, db):
 # ---------------------------------------------------------------------------
 
 def test_solo_reg_with_group_name(client, db):
-    """Solo registration with groupName creates/joins a group."""
+    """Solo registration with group_name creates/joins a group."""
     league = make_league(db, format="7v7", max_teams=4)
-    payload = {**VALID_PAYLOAD, "league_id": str(league.id), "groupName": "My Group"}
+    payload = {**VALID_PAYLOAD, "league_id": str(league.id), "group_name": "My Group"}
     resp = client.post("/registration/player", json=payload)
     assert resp.status_code == 200
     assert resp.json()["registration"]["group_name"] == "My Group"
@@ -207,10 +207,10 @@ def test_group_reg_organizer_no_profile(client, db):
     # Don't create a player for CLERK_USER_ID
     payload = {
         "league_id": str(league.id),
-        "groupName": "G",
-        "termsAccepted": True,
-        "communicationsAccepted": False,
-        "players": [{"firstName": "B", "lastName": "C", "email": "b@c.com"}],
+        "group_name": "G",
+        "terms_accepted": True,
+        "communications_accepted": False,
+        "players": [{"first_name": "B", "last_name": "C", "email": "b@c.com"}],
     }
     resp = client.post("/registration/group", json=payload)
     assert resp.status_code == 400
@@ -224,10 +224,10 @@ def test_group_reg_organizer_already_registered(client, db):
     db.commit()
     payload = {
         "league_id": str(league.id),
-        "groupName": "G",
-        "termsAccepted": True,
-        "communicationsAccepted": False,
-        "players": [{"firstName": "B", "lastName": "C", "email": "b@c.com"}],
+        "group_name": "G",
+        "terms_accepted": True,
+        "communications_accepted": False,
+        "players": [{"first_name": "B", "last_name": "C", "email": "b@c.com"}],
     }
     resp = client.post("/registration/group", json=payload)
     assert resp.status_code == 400
@@ -245,10 +245,10 @@ def test_group_reg_not_enough_spots(client, db):
     db.commit()
     payload = {
         "league_id": str(league.id),
-        "groupName": "G",
-        "termsAccepted": True,
-        "communicationsAccepted": False,
-        "players": [{"firstName": "B", "lastName": "C", "email": "b@c.com"}],
+        "group_name": "G",
+        "terms_accepted": True,
+        "communications_accepted": False,
+        "players": [{"first_name": "B", "last_name": "C", "email": "b@c.com"}],
     }
     resp = client.post("/registration/group", json=payload)
     assert resp.status_code == 400

@@ -33,15 +33,15 @@ const mockUseAuth = useAuth as jest.Mock;
 const mockUseUser = useUser as jest.Mock;
 
 const mockProfile = {
-  firstName: 'Jane',
-  lastName: 'Doe',
+  first_name: 'Jane',
+  last_name: 'Doe',
   email: 'jane@example.com',
   phone: '+1 555-123-4567',
-  dateOfBirth: '1990-05-15',
+  date_of_birth: '1990-05-15',
   gender: 'female',
-  communicationsAccepted: true,
-  paymentStatus: 'pending',
-  waiverStatus: 'pending',
+  communications_accepted: true,
+  payment_status: 'pending',
+  waiver_status: 'pending',
 };
 
 beforeEach(() => {

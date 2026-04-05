@@ -3,6 +3,7 @@
 import asyncio
 import functools
 import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from app.core.limiter import limiter
 from app.db.db import get_db
 from app.models.league import League
 from app.models.player import Player
+from app.models.waiver import WaiverSignature
 from app.utils.clerk_jwt import get_current_user, get_optional_user
 from app.services.exceptions import ServiceError
 import app.services.waiver_service as waiver_svc
@@ -169,7 +171,6 @@ async def get_waiver_status(
     if not player:
         raise HTTPException(status_code=404, detail="Player profile not found")
 
-    from dataclasses import asdict
     result = waiver_svc.get_waiver_status(db, player.id, league_id)
     return WaiverStatusResponse(**asdict(result))
 
@@ -193,7 +194,6 @@ async def get_my_signatures(
     if not player:
         return []
 
-    from dataclasses import asdict
     signatures = waiver_svc.get_player_signatures(db, player.id)
     return [SignedWaiverSummaryResponse(**asdict(s)) for s in signatures]
 
@@ -218,7 +218,6 @@ async def get_my_signature_detail(
     if not detail:
         raise HTTPException(status_code=404, detail="Signature not found")
 
-    from dataclasses import asdict
     return SignedWaiverDetailResponse(**asdict(detail))
 
 
@@ -238,7 +237,6 @@ async def get_my_signature_pdf(
     if not player:
         raise HTTPException(status_code=404, detail="PDF not available")
 
-    from app.models.waiver import WaiverSignature
     sig = db.query(WaiverSignature).filter(
         WaiverSignature.id == signature_id,
         WaiverSignature.player_id == player.id,

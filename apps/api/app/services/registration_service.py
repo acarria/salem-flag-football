@@ -227,7 +227,7 @@ def register_group(
     *,
     league_id: UUID,
     group_name: str,
-    players: list,  # list of dicts with email/firstName/lastName
+    players: list,  # list of dicts with email/first_name/last_name
     invitation_expiry_days: int,
 ) -> GroupRegistrationResult:
     """Group registration: lock league, create group + organizer LP + invitations.
@@ -269,8 +269,8 @@ def register_group(
     for invitee in players:
         token = secrets.token_urlsafe(32)
         inv_email = invitee["email"].lower().strip()
-        inv_first = invitee["firstName"]
-        inv_last = invitee["lastName"]
+        inv_first = invitee["first_name"]
+        inv_last = invitee["last_name"]
         invitation = GroupInvitation(
             group_id=group.id,
             league_id=league_id,

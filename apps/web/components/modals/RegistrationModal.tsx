@@ -30,7 +30,7 @@ type RegistrationType = 'solo' | 'group';
 const MIN_GROUP_SIZE = 1;
 
 function getInitialGroup() {
-  return Array.from({ length: MIN_GROUP_SIZE }, () => ({ firstName: '', lastName: '', email: '' }));
+  return Array.from({ length: MIN_GROUP_SIZE }, () => ({ first_name: '', last_name: '', email: '' }));
 }
 
 type EmailErrorType = string | { message: string; suggestion: string };
@@ -49,16 +49,16 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [countryIso, setCountryIso] = useState('US');
   const [solo, setSolo] = useState({
-    firstName: '',
-    lastName: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
-    dateOfBirth: '',
+    date_of_birth: '',
     gender: '',
-    termsAccepted: false,
-    communicationsAccepted: false,
+    terms_accepted: false,
+    communications_accepted: false,
   });
-  const [groupName, setGroupName] = useState('');
+  const [group_name, setGroupName] = useState('');
   const [group, setGroup] = useState(getInitialGroup());
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -92,20 +92,20 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
             const rawPhone = normalizePhoneDigits(profile.phone || '', 'US');
             setSolo(prev => ({
               ...prev,
-              firstName: profile.firstName || user.firstName || '',
-              lastName: profile.lastName || user.lastName || '',
+              first_name: profile.first_name || user.firstName || '',
+              last_name: profile.last_name || user.lastName || '',
               email: profile.email || user.primaryEmailAddress?.emailAddress || '',
               phone: rawPhone,
-              dateOfBirth: profile.dateOfBirth || '',
+              date_of_birth: profile.date_of_birth || '',
               gender: profile.gender || '',
-              communicationsAccepted: profile.communicationsAccepted || false,
-              termsAccepted: false,
+              communications_accepted: profile.communications_accepted || false,
+              terms_accepted: false,
             }));
           } else if (user && type === 'solo') {
             setSolo(prev => ({
               ...prev,
-              firstName: user.firstName || '',
-              lastName: user.lastName || '',
+              first_name: user.firstName || '',
+              last_name: user.lastName || '',
               email: user.primaryEmailAddress?.emailAddress || '',
             }));
           }
@@ -125,26 +125,26 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
   const validateSolo = () => {
     const errors: { [key: string]: string | EmailErrorType } = {};
     if (!selectedLeague) errors.league = 'Please select a league.';
-    if (!solo.firstName) errors.firstName = 'First name is required.';
-    if (!solo.lastName) errors.lastName = 'Last name is required.';
+    if (!solo.first_name) errors.first_name = 'First name is required.';
+    if (!solo.last_name) errors.last_name = 'Last name is required.';
     const emailError = getEmailError(solo.email);
     if (emailError) errors.email = emailError;
     const phoneError = getPhoneErrorForCountry(solo.phone, countryIso);
     if (phoneError) errors.phone = phoneError;
-    if (!solo.dateOfBirth) errors.dateOfBirth = 'Date of birth is required.';
+    if (!solo.date_of_birth) errors.date_of_birth = 'Date of birth is required.';
     if (!solo.gender) errors.gender = 'Gender is required.';
-    if (!solo.termsAccepted) errors.termsAccepted = 'You must accept the terms of service.';
+    if (!solo.terms_accepted) errors.terms_accepted = 'You must accept the terms of service.';
     return errors;
   };
 
   const validateGroup = () => {
     const errors: { [key: string]: string | EmailErrorType } = {};
     if (!selectedLeague) errors.league = 'Please select a league.';
-    if (!groupName) errors.groupName = 'Group name is required.';
+    if (!group_name) errors.group_name = 'Group name is required.';
     if (group.length < MIN_GROUP_SIZE) errors.group = 'A group must have at least 2 players.';
     group.forEach((player, idx) => {
-      if (!player.firstName) errors[`player${idx}_firstName`] = 'First name required.';
-      if (!player.lastName) errors[`player${idx}_lastName`] = 'Last name required.';
+      if (!player.first_name) errors[`player${idx}_first_name`] = 'First name required.';
+      if (!player.last_name) errors[`player${idx}_last_name`] = 'Last name required.';
       const emailError = getEmailError(player.email);
       if (emailError) errors[`player${idx}_email`] = emailError;
     });
@@ -158,16 +158,16 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
       setFieldErrors(validateGroup());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solo, group, groupName, selectedLeague, countryIso, type]);
+  }, [solo, group, group_name, selectedLeague, countryIso, type]);
 
   if (!isOpen) return null;
 
   const checkLeagueRegistrationStatus = async (leagueId: string) => {
     if (!user) return;
     try {
-      const result = await authenticatedRequest<{ isRegistered: boolean }>(`/user/profile/${user.id}/registered/${leagueId}`);
-      setIsLeagueRegistered(result.isRegistered);
-      if (result.isRegistered) {
+      const result = await authenticatedRequest<{ is_registered: boolean }>(`/user/profile/${user.id}/registered/${leagueId}`);
+      setIsLeagueRegistered(result.is_registered);
+      if (result.is_registered) {
         setError('You are already registered for this league. You cannot register twice.');
       } else {
         setError('');
@@ -225,7 +225,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
 
   const handleAddPlayer = () => {
     if (group.length < maxInvitees) {
-      setGroup([...group, { firstName: '', lastName: '', email: '' }]);
+      setGroup([...group, { first_name: '', last_name: '', email: '' }]);
     }
   };
 
@@ -244,13 +244,13 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
     if (type !== 'solo') return [];
     const labels: { [key: string]: string } = {
       league: 'League selection',
-      firstName: 'First name',
-      lastName: 'Last name',
+      first_name: 'First name',
+      last_name: 'Last name',
       email: 'Valid email address',
       phone: 'Valid phone number',
-      dateOfBirth: 'Date of birth',
+      date_of_birth: 'Date of birth',
       gender: 'Gender',
-      termsAccepted: 'Terms of service acceptance',
+      terms_accepted: 'Terms of service acceptance',
     };
     return Object.keys(fieldErrors)
       .filter(k => labels[k])
@@ -283,14 +283,14 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           method: 'POST',
           body: JSON.stringify({
             league_id: selectedLeague,
-            firstName: solo.firstName,
-            lastName: solo.lastName,
+            first_name: solo.first_name,
+            last_name: solo.last_name,
             email: solo.email,
             phone: getFullPhoneDisplay(solo.phone, countryIso),
-            dateOfBirth: solo.dateOfBirth,
+            date_of_birth: solo.date_of_birth,
             gender: solo.gender,
-            termsAccepted: solo.termsAccepted,
-            communicationsAccepted: solo.communicationsAccepted,
+            terms_accepted: solo.terms_accepted,
+            communications_accepted: solo.communications_accepted,
           }),
         });
         const selectedLeagueData = leagues.find(l => l.id === selectedLeague);
@@ -326,10 +326,10 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
           method: 'POST',
           body: JSON.stringify({
             league_id: selectedLeague,
-            groupName,
-            players: group.map(p => ({ firstName: p.firstName, lastName: p.lastName, email: p.email })),
-            termsAccepted: true,
-            communicationsAccepted: true,
+            group_name,
+            players: group.map(p => ({ first_name: p.first_name, last_name: p.last_name, email: p.email })),
+            terms_accepted: true,
+            communications_accepted: true,
           }),
         });
         setSuccess(`Group registered! Invitations sent to ${group.length} player(s). Redirecting to sign your waiver...`);
@@ -460,7 +460,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistrationCompl
             />
           ) : (
             <GroupRegistrationForm
-              groupName={groupName}
+              group_name={group_name}
               group={group}
               maxInvitees={maxInvitees}
               fieldErrors={fieldErrors}

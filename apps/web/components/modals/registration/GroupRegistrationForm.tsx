@@ -5,10 +5,10 @@ import { inputCls, inputErrCls, labelCls } from '@/utils/formStyles';
 
 type EmailErrorType = string | { message: string; suggestion: string };
 
-type GroupPlayer = { firstName: string; lastName: string; email: string };
+type GroupPlayer = { first_name: string; last_name: string; email: string };
 
 interface GroupRegistrationFormProps {
-  groupName: string;
+  group_name: string;
   group: GroupPlayer[];
   maxInvitees: number;
   fieldErrors: { [key: string]: string | EmailErrorType };
@@ -25,7 +25,7 @@ interface GroupRegistrationFormProps {
 const MIN_GROUP_SIZE = 1;
 
 export default function GroupRegistrationForm({
-  groupName,
+  group_name,
   group,
   maxInvitees,
   fieldErrors,
@@ -46,19 +46,19 @@ export default function GroupRegistrationForm({
   return (
     <>
       <div>
-        <label htmlFor="groupName" className={labelCls}>Group Name</label>
+        <label htmlFor="group_name" className={labelCls}>Group Name</label>
         <input
-          id="groupName"
-          className={getVisibleError('groupName') ? inputErrCls : inputCls}
-          name="groupName"
+          id="group_name"
+          className={getVisibleError('group_name') ? inputErrCls : inputCls}
+          name="group_name"
           placeholder="e.g. The Friends, Work Buddies"
-          value={groupName}
+          value={group_name}
           onChange={e => onGroupNameChange(e.target.value)}
-          onBlur={() => onBlur('groupName')}
+          onBlur={() => onBlur('group_name')}
           autoComplete="off"
         />
-        {getVisibleError('groupName') && (
-          <p className="text-red-400 text-xs mt-1">{getVisibleError('groupName') as string}</p>
+        {getVisibleError('group_name') && (
+          <p className="text-red-400 text-xs mt-1">{getVisibleError('group_name') as string}</p>
         )}
       </div>
 
@@ -67,35 +67,35 @@ export default function GroupRegistrationForm({
           <div className="section-label">Invitee {idx + 1}</div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={`invitee-${idx}-firstName`} className={labelCls}>First Name</label>
+              <label htmlFor={`invitee-${idx}-first_name`} className={labelCls}>First Name</label>
               <input
-                id={`invitee-${idx}-firstName`}
-                className={getVisibleError(`player${idx}_firstName`) ? inputErrCls : inputCls}
-                name="firstName"
+                id={`invitee-${idx}-first_name`}
+                className={getVisibleError(`player${idx}_first_name`) ? inputErrCls : inputCls}
+                name="first_name"
                 placeholder="First"
-                value={player.firstName}
+                value={player.first_name}
                 onChange={e => onInput(e, idx)}
-                onBlur={() => onBlur(`player${idx}_firstName`)}
+                onBlur={() => onBlur(`player${idx}_first_name`)}
                 autoComplete="off"
               />
-              {getVisibleError(`player${idx}_firstName`) && (
-                <p className="text-red-400 text-xs mt-1">{getVisibleError(`player${idx}_firstName`) as string}</p>
+              {getVisibleError(`player${idx}_first_name`) && (
+                <p className="text-red-400 text-xs mt-1">{getVisibleError(`player${idx}_first_name`) as string}</p>
               )}
             </div>
             <div>
-              <label htmlFor={`invitee-${idx}-lastName`} className={labelCls}>Last Name</label>
+              <label htmlFor={`invitee-${idx}-last_name`} className={labelCls}>Last Name</label>
               <input
-                id={`invitee-${idx}-lastName`}
-                className={getVisibleError(`player${idx}_lastName`) ? inputErrCls : inputCls}
-                name="lastName"
+                id={`invitee-${idx}-last_name`}
+                className={getVisibleError(`player${idx}_last_name`) ? inputErrCls : inputCls}
+                name="last_name"
                 placeholder="Last"
-                value={player.lastName}
+                value={player.last_name}
                 onChange={e => onInput(e, idx)}
-                onBlur={() => onBlur(`player${idx}_lastName`)}
+                onBlur={() => onBlur(`player${idx}_last_name`)}
                 autoComplete="off"
               />
-              {getVisibleError(`player${idx}_lastName`) && (
-                <p className="text-red-400 text-xs mt-1">{getVisibleError(`player${idx}_lastName`) as string}</p>
+              {getVisibleError(`player${idx}_last_name`) && (
+                <p className="text-red-400 text-xs mt-1">{getVisibleError(`player${idx}_last_name`) as string}</p>
               )}
             </div>
           </div>

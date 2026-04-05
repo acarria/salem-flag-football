@@ -14,8 +14,14 @@ from app.models.league_player import LeaguePlayer
 from app.models.player import Player
 from app.models.team import Team
 from app.models.game import Game
-from app.api.schemas.league import PublicLeagueResponse
+from app.api.schemas.league import (
+    GameScheduleEntry,
+    LeagueScheduleResponse,
+    PublicLeagueResponse,
+    TeamStandingEntry,
+)
 from app.services.league_service import get_player_cap
+from app.services.schedule_service import calculate_team_standings
 from app.core.constants import REG_CONFIRMED, INVITE_PENDING
 from app.utils.clerk_jwt import get_optional_user
 
@@ -138,12 +144,10 @@ async def get_public_leagues(
     ]
 
 
-@router.get("/{league_id}/standings", summary="Get standings for a specific league")
+@router.get("/{league_id}/standings", response_model=list[TeamStandingEntry], summary="Get standings for a specific league")
 @limiter.limit("60/minute")
 async def get_league_standings(request: Request, league_id: UUID, db: Session = Depends(get_db)):
     """Return real standings computed from completed game results for a league."""
-    from app.services.schedule_service import calculate_team_standings
-
     league = db.query(League).filter(League.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
@@ -153,24 +157,22 @@ async def get_league_standings(request: Request, league_id: UUID, db: Session = 
     team_ids = [team_id for team_id, _ in standings]
     teams_by_id = {t.id: t for t in db.query(Team).filter(Team.id.in_(team_ids)).all()}
 
-    result = []
-    for rank, (team_id, stats) in enumerate(standings, 1):
-        team = teams_by_id.get(team_id)
-        result.append({
-            "rank": rank,
-            "team_id": str(team_id),
-            "team_name": team.name if team else "Unknown",
-            "wins": stats["wins"],
-            "losses": stats["losses"],
-            "points_for": stats["points_for"],
-            "points_against": stats["points_against"],
-            "win_percentage": round(stats["win_percentage"], 3),
-        })
-
-    return result
+    return [
+        TeamStandingEntry(
+            rank=rank,
+            team_id=team_id,
+            team_name=teams_by_id[team_id].name if team_id in teams_by_id else "Unknown",
+            wins=stats["wins"],
+            losses=stats["losses"],
+            points_for=stats["points_for"],
+            points_against=stats["points_against"],
+            win_percentage=round(stats["win_percentage"], 3),
+        )
+        for rank, (team_id, stats) in enumerate(standings, 1)
+    ]
 
 
-@router.get("/{league_id}/schedule", summary="Get schedule for a specific league")
+@router.get("/{league_id}/schedule", response_model=LeagueScheduleResponse, summary="Get schedule for a specific league")
 @limiter.limit("60/minute")
 async def get_public_league_schedule(request: Request, league_id: UUID, db: Session = Depends(get_db)):
     """Return the full schedule for a league, grouped by week."""
@@ -186,7 +188,7 @@ async def get_public_league_schedule(request: Request, league_id: UUID, db: Sess
     team_ids = {g.team1_id for g in games} | {g.team2_id for g in games}
     teams_by_id = {t.id: t for t in db.query(Team).filter(Team.id.in_(team_ids)).all()}
 
-    schedule_by_week: dict = {}
+    schedule_by_week: dict[int, list[GameScheduleEntry]] = {}
     for game in games:
         week = game.week
         if week not in schedule_by_week:
@@ -195,27 +197,27 @@ async def get_public_league_schedule(request: Request, league_id: UUID, db: Sess
         team1 = teams_by_id.get(game.team1_id)
         team2 = teams_by_id.get(game.team2_id)
 
-        schedule_by_week[week].append({
-            "game_id": str(game.id),
-            "team1_id": str(game.team1_id),
-            "team1_name": team1.name if team1 else "TBD",
-            "team2_id": str(game.team2_id),
-            "team2_name": team2.name if team2 else "TBD",
-            "date": game.game_date.isoformat(),
-            "time": game.game_time,
-            "status": game.status,
-            "phase": game.phase,
-            "team1_score": game.team1_score,
-            "team2_score": game.team2_score,
-            "winner_id": str(game.winner_id) if game.winner_id else None,
-        })
+        schedule_by_week[week].append(GameScheduleEntry(
+            game_id=game.id,
+            team1_id=game.team1_id,
+            team1_name=team1.name if team1 else "TBD",
+            team2_id=game.team2_id,
+            team2_name=team2.name if team2 else "TBD",
+            date=game.game_date,
+            time=game.game_time,
+            status=game.status,
+            phase=game.phase,
+            team1_score=game.team1_score,
+            team2_score=game.team2_score,
+            winner_id=game.winner_id,
+        ))
 
-    return {
-        "league_id": str(league_id),
-        "league_name": league.name,
-        "total_games": len(games),
-        "schedule_by_week": schedule_by_week,
-    }
+    return LeagueScheduleResponse(
+        league_id=league_id,
+        league_name=league.name,
+        total_games=len(games),
+        schedule_by_week=schedule_by_week,
+    )
 
 
 @router.get("/{league_id}", response_model=PublicLeagueResponse, summary="Get a single league (public view)")

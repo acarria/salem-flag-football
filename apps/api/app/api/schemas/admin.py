@@ -4,6 +4,11 @@ from datetime import datetime, date, time, timezone
 from decimal import Decimal
 from uuid import UUID
 
+from app.core.constants import (
+    GAME_CANCELLED, GAME_COMPLETED, GAME_IN_PROGRESS, GAME_SCHEDULED,
+    VALID_FORMATS, VALID_TOURNAMENT_FORMATS,
+)
+
 class LeagueSettings(BaseModel):
     """Typed settings for league configuration. Rejects unknown keys."""
     model_config = ConfigDict(extra="forbid")
@@ -37,17 +42,15 @@ class LeagueCreateRequest(BaseModel):
     @field_validator('tournament_format')
     @classmethod
     def validate_tournament_format(cls, v):
-        valid_formats = ['round_robin', 'swiss']
-        if v not in valid_formats:
-            raise ValueError(f'tournament_format must be one of {valid_formats}')
+        if v not in VALID_TOURNAMENT_FORMATS:
+            raise ValueError(f'tournament_format must be one of {sorted(VALID_TOURNAMENT_FORMATS)}')
         return v
 
     @field_validator('format')
     @classmethod
     def validate_format(cls, v):
-        valid_formats = ['7v7', '5v5']
-        if v not in valid_formats:
-            raise ValueError(f'format must be one of {valid_formats}')
+        if v not in VALID_FORMATS:
+            raise ValueError(f'format must be one of {sorted(VALID_FORMATS)}')
         return v
 
     @field_validator('max_teams')
@@ -96,19 +99,15 @@ class LeagueUpdateRequest(BaseModel):
     @field_validator('format')
     @classmethod
     def validate_format(cls, v):
-        if v is not None:
-            valid_formats = ['7v7', '5v5']
-            if v not in valid_formats:
-                raise ValueError(f'format must be one of {valid_formats}')
+        if v is not None and v not in VALID_FORMATS:
+            raise ValueError(f'format must be one of {sorted(VALID_FORMATS)}')
         return v
 
     @field_validator('tournament_format')
     @classmethod
     def validate_tournament_format(cls, v):
-        if v is not None:
-            valid_formats = ['round_robin', 'swiss']
-            if v not in valid_formats:
-                raise ValueError(f'tournament_format must be one of {valid_formats}')
+        if v is not None and v not in VALID_TOURNAMENT_FORMATS:
+            raise ValueError(f'tournament_format must be one of {sorted(VALID_TOURNAMENT_FORMATS)}')
         return v
 
     @field_validator('max_teams')
@@ -421,8 +420,9 @@ class GameUpdateRequest(BaseModel):
     @field_validator('status')
     @classmethod
     def validate_status(cls, v):
-        if v is not None and v not in ('scheduled', 'in_progress', 'completed', 'cancelled'):
-            raise ValueError('status must be one of: scheduled, in_progress, completed, cancelled')
+        valid = (GAME_SCHEDULED, GAME_IN_PROGRESS, GAME_COMPLETED, GAME_CANCELLED)
+        if v is not None and v not in valid:
+            raise ValueError(f'status must be one of: {", ".join(valid)}')
         return v
 
     @field_validator('game_time')
@@ -433,3 +433,13 @@ class GameUpdateRequest(BaseModel):
             if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
                 raise ValueError('game_time must be in HH:MM format')
         return v
+
+
+class GameUpdateResponse(BaseModel):
+    success: bool
+    message: str
+    game_id: UUID
+    status: Optional[str] = None
+    team1_score: Optional[int] = None
+    team2_score: Optional[int] = None
+    winner_id: Optional[UUID] = None

@@ -21,6 +21,7 @@ from app.models.league_player import LeaguePlayer
 from app.api.schemas.admin import (
     LeagueCreateRequest, LeagueUpdateRequest, LeagueResponse, LeagueStatsResponse
 )
+from app.api.schemas.common import SuccessResponse
 from app.api.admin.dependencies import get_admin_user
 from app.services.league_service import get_player_cap, get_occupied_spots
 from app.core.config import settings as app_settings
@@ -244,7 +245,7 @@ async def update_league(
         logger.exception("Failed to update league: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
-@router.delete("/leagues/{league_id}", summary="Delete league")
+@router.delete("/leagues/{league_id}", response_model=SuccessResponse, summary="Delete league")
 @limiter.limit("30/minute")
 async def delete_league(
     request: Request,
@@ -287,7 +288,7 @@ async def delete_league(
         ).update({"status": INVITE_EXPIRED}, synchronize_session="fetch")
 
         db.commit()
-        return {"message": f"League '{league.name}' has been deleted"}
+        return SuccessResponse(success=True, message=f"League '{league.name}' has been deleted")
     except Exception as e:
         db.rollback()
         logger.exception("Failed to delete league: %s", e)

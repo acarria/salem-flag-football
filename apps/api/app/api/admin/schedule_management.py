@@ -9,8 +9,8 @@ from app.models.league import League
 from app.models.team import Team
 from app.models.game import Game
 from app.api.schemas.admin import (
+    GameUpdateRequest, GameUpdateResponse,
     ScheduleGenerationRequest, ScheduleGenerationResponse,
-    GameUpdateRequest
 )
 from app.api.admin.dependencies import get_admin_user
 from app.core.constants import GAME_COMPLETED
@@ -243,7 +243,7 @@ async def get_league_schedule(
         "schedule_by_week": schedule_by_week
     }
 
-@router.put("/leagues/{league_id}/games/{game_id}", summary="Update a game's score or details")
+@router.put("/leagues/{league_id}/games/{game_id}", response_model=GameUpdateResponse, summary="Update a game's score or details")
 @limiter.limit("30/minute")
 async def update_game(
     request: Request,
@@ -302,14 +302,15 @@ async def update_game(
     try:
         db.commit()
         db.refresh(game)
-        return {
-            "message": "Game updated successfully",
-            "game_id": str(game.id),
-            "status": game.status,
-            "team1_score": game.team1_score,
-            "team2_score": game.team2_score,
-            "winner_id": str(game.winner_id) if game.winner_id else None,
-        }
+        return GameUpdateResponse(
+            success=True,
+            message="Game updated successfully",
+            game_id=game.id,
+            status=game.status,
+            team1_score=game.team1_score,
+            team2_score=game.team2_score,
+            winner_id=game.winner_id,
+        )
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update game: %s", e)
